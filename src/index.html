@@ -162,14 +162,30 @@ var state = { runs: [], progress: [] };
 
 /* ---------- data loading ---------- */
 
+// Anonymous JSON endpoint, used when this page is hosted outside Apps Script
+// (e.g. GitHub Pages). fetch() sends no Google cookies, so Workspace session
+// restrictions cannot interfere.
+var API_URL = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec?format=json';
+
 function load() {
   if (typeof google !== 'undefined' && google.script) {
     google.script.run
       .withSuccessHandler(onData)
       .withFailureHandler(onError)
       .getData();
+  } else if (location.protocol.indexOf('http') === 0) {
+    fetch(API_URL)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.error) throw new Error(data.error);
+        onData(data);
+      })
+      .catch(onError);
   } else {
-    // Local preview fallback (no Apps Script runtime): mock data.
+    // Local file preview (no Apps Script runtime, no network): mock data.
     onData(mockData());
   }
 }

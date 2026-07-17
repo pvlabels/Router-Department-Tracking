@@ -36,3 +36,29 @@ jobs:
       - name: Redeploy web app
         if: ${{ vars.DEPLOYMENT_ID != '' }}
         run: clasp deploy -i "${{ vars.DEPLOYMENT_ID }}" -d "GitHub ${{ github.sha }}"
+
+  # Publishes the dashboard page to GitHub Pages. Viewers load the page from
+  # github.io and it fetches data from the Apps Script JSON endpoint without
+  # Google cookies — immune to Workspace session restrictions on script.google.com.
+  pages:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp src/index.html _site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

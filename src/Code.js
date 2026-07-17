@@ -17,8 +17,19 @@ var CONFIG = {
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
 
-/** Entry point for the web app. */
-function doGet() {
+/** Entry point for the web app. Serves the dashboard, or bare JSON for the
+ * GitHub Pages front-end (?format=json). */
+function doGet(e) {
+  if (e && e.parameter && e.parameter.format === 'json') {
+    var out;
+    try {
+      out = getData();
+    } catch (err) {
+      out = { error: String((err && err.message) || err) };
+    }
+    return ContentService.createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Router Department Tracking')
