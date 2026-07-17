@@ -75,6 +75,7 @@ function handleAction(p) {
     if (!p || !p.action) throw new Error('Missing action.');
     if (p.action === 'saveJob') return saveJob(p.job);
     if (p.action === 'stopJob') return stopJob(p.name);
+    if (p.action === 'reorderJobs') return reorderJobs(p.order);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -214,7 +215,54 @@ function readJobs(ss) {
       pieces: pieces
     });
   }
+
+  // Attach queue order + a stable color index (0–7) from Script Properties.
+  // Backfill any job missing metadata (once) so legacy jobs get assigned.
+  var meta = getJobMeta();
+  var missing = jobs.filter(function (j) { return !meta[j.name]; });
+  if (missing.length) {
+    var lock = LockService.getScriptLock();
+    if (lock.tryLock(5000)) {
+      try {
+        meta = getJobMeta();                              // re-read under lock
+        var maxOrder = -1, used = {};
+        for (var k in meta) { maxOrder = Math.max(maxOrder, meta[k].o); used[meta[k].c] = true; }
+        jobs.forEach(function (j) {
+          if (meta[j.name]) return;
+          meta[j.name] = { o: ++maxOrder, c: nextColor(used) };
+          used[meta[j.name].c] = true;
+        });
+        setJobMeta(meta);
+      } finally {
+        lock.releaseLock();
+      }
+    }
+  }
+
+  jobs.forEach(function (j) {
+    var m = meta[j.name] || { o: 9999, c: 0 };
+    j.order = m.o;
+    j.color = m.c;
+  });
+  jobs.sort(function (a, b) { return a.order - b.order; });
   return jobs;
+}
+
+/* ---- job metadata (queue order + color), stored in Script Properties ---- */
+
+function getJobMeta() {
+  var raw = PropertiesService.getScriptProperties().getProperty('JOB_META');
+  if (!raw) return {};
+  try { return JSON.parse(raw) || {}; } catch (err) { return {}; }
+}
+function setJobMeta(meta) {
+  PropertiesService.getScriptProperties().setProperty('JOB_META', JSON.stringify(meta));
+}
+/** Lowest palette index 0–7 not already in `used`; wraps once all are taken. */
+function nextColor(used) {
+  for (var i = 0; i < 8; i++) { if (!used[i]) return i; }
+  var n = 0; for (var k in used) n++;
+  return n % 8;
 }
 
 function saveJob(job) {
@@ -242,6 +290,34 @@ function saveJob(job) {
     } else {
       sheet.appendRow(rowData);
     }
+    // New job: assign a queue slot at the end and a distinct color.
+    var meta = getJobMeta();
+    if (!meta[name]) {
+      var maxOrder = -1, used = {};
+      for (var k in meta) { maxOrder = Math.max(maxOrder, meta[k].o); used[meta[k].c] = true; }
+      meta[name] = { o: maxOrder + 1, c: nextColor(used) };
+      setJobMeta(meta);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+/** Rewrites queue order from an array of job names (index = position). */
+function reorderJobs(order) {
+  if (!Array.isArray(order)) throw new Error('order must be an array of job names.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var meta = getJobMeta();
+    order.forEach(function (name, i) {
+      name = String(name || '').trim();
+      if (!name) return;
+      if (!meta[name]) meta[name] = { o: i, c: nextColor({}) };
+      else meta[name].o = i;
+    });
+    setJobMeta(meta);
   } finally {
     lock.releaseLock();
   }
