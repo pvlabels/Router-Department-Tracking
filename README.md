@@ -1,9 +1,10 @@
-# Live Sheets Dashboard
+# Router Department Tracking
 
-A live dashboard served by **Google Apps Script**, reading straight from a Google
-Sheet. The source of truth lives in **GitHub** — every push to `main` is synced to
-Apps Script (via [clasp](https://github.com/google/clasp)) and redeployed
-automatically by GitHub Actions.
+A live dashboard for the MultiCam router department, served by **Google Apps
+Script** and reading straight from the tracking spreadsheet. The source of truth
+lives in **GitHub** — every push to `main` is synced to Apps Script (via
+[clasp](https://github.com/google/clasp)) and redeployed automatically by GitHub
+Actions.
 
 ```
 Google Sheet ──(read server-side)──> Apps Script web app ──> browser dashboard
@@ -19,26 +20,28 @@ publicly and no API keys appear in the client.
 
 | Path | Purpose |
 |---|---|
-| `src/Code.js` | Backend: serves the page, reads the Sheet (`CONFIG` at the top) |
-| `src/index.html` | The dashboard UI — stat tiles, trend chart, table; auto-refreshes every 60 s |
+| `src/Code.js` | Backend: serves the page, reads the run log + job progress from the Sheet |
+| `src/index.html` | The dashboard UI — today/this-week tiles, job progress, runs-per-day chart, recent runs; auto-refreshes every 60 s |
 | `src/appsscript.json` | Apps Script manifest (web app runs as you, access: only you) |
 | `.clasp.json` | Links this repo to your Apps Script project (`scriptId`) |
 | `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script and redeploys on every push to `main` |
 
-The dashboard auto-adapts to whatever the Sheet contains: row 1 is treated as
-headers, the first column as the x-axis (dates are formatted), and numeric
-columns become stat tiles + chart series (up to 4). Opening `src/index.html`
-directly in a browser shows it with mock data.
+The backend finds the spreadsheet tabs by **header signature**, not by name or
+position, so renaming/reordering tabs is safe:
+
+- **Run log** — the tab whose header row has `Job Name` + `Start Time`
+  (Date, Start/End Time, Job Name, Total Time, Machine, Status). Runs that are
+  double-logged (same job + start time) are deduped, keeping the longer entry.
+- **Job progress** — the tab with `Job File` + `Target Runs`
+  (target/completed runs, %, avg run time, machine time left, est. finish).
+
+Opening `src/index.html` directly in a browser shows the UI with mock data.
 
 ## One-time setup
 
-### 1. Point it at your Sheet
+The spreadsheet ID is already set in `CONFIG.SHEET_ID` in `src/Code.js`.
 
-Copy the spreadsheet ID from the sheet URL
-(`https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`) and paste it into
-`SHEET_ID` in `src/Code.js`. Optionally set `SHEET_NAME` to a specific tab.
-
-### 2. Create the Apps Script project (locally, once)
+### 1. Create the Apps Script project (locally, once)
 
 ```sh
 npm install -g @google/clasp@2.4.2
@@ -50,7 +53,7 @@ Then enable the Apps Script API for your account at
 root:
 
 ```sh
-clasp create --type webapp --title "Live Dashboard" --rootDir src
+clasp create --type webapp --title "Router Department Tracking" --rootDir src
 clasp push -f
 clasp open
 ```
@@ -59,7 +62,7 @@ clasp open
 change. (If it also created a `src/appsscript.json` conflict prompt, keep the
 one from this repo.)
 
-### 3. Deploy the web app (once, in the editor)
+### 2. Deploy the web app (once, in the editor)
 
 In the Apps Script editor (`clasp open`):
 **Deploy → New deployment → Web app** → Execute as **Me**, access **Only myself**
@@ -69,15 +72,15 @@ In the Apps Script editor (`clasp open`):
 - Copy the **deployment ID** (starts with `AKfycb…`) — CI needs it to update
   this same deployment in place, so the URL never changes.
 
-### 4. Wire up GitHub
+### 3. Wire up GitHub
 
-Create a GitHub repo and push this project, then add:
+In the repo (github.com/pvlabels/Router-Department-Tracking), add:
 
 - **Secret** `CLASPRC_JSON` (Settings → Secrets and variables → Actions →
   *Secrets*): the full contents of your local `~/.clasprc.json` (created by
   `clasp login`). This is a credential — keep it a secret, never commit it.
 - **Variable** `DEPLOYMENT_ID` (same page, *Variables* tab): the deployment ID
-  from step 3.
+  from step 2.
 
 ## Day-to-day
 

@@ -70,16 +70,14 @@
   .banner.error { display: block; }
   .banner strong { color: var(--text-primary); }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .tile {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 14px 16px 12px;
   }
   .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
   .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
-  .tile .delta { font-size: 12px; margin-top: 2px; color: var(--text-muted); }
-  .tile .delta.up   { color: var(--delta-good); }
-  .tile .delta.down { color: var(--delta-bad); }
+  .tile .note { font-size: 12px; margin-top: 2px; color: var(--text-muted); }
 
   .card {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
@@ -96,13 +94,23 @@
     position: absolute; pointer-events: none; display: none; z-index: 5;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.12);
-    padding: 8px 10px; font-size: 12px; min-width: 140px;
+    padding: 8px 10px; font-size: 12px; min-width: 150px;
   }
   .tooltip .t-x { color: var(--text-secondary); margin-bottom: 4px; }
   .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
   .tooltip .t-row .chip { width: 8px; height: 8px; border-radius: 2px; flex: none; }
   .tooltip .t-row .name { color: var(--text-secondary); flex: 1; padding-right: 10px; }
   .tooltip .t-row .val { font-variant-numeric: tabular-nums; }
+  .tooltip .t-total { border-top: 1px solid var(--grid); margin-top: 4px; padding-top: 4px; }
+
+  .job { margin-bottom: 14px; }
+  .job:last-child { margin-bottom: 2px; }
+  .job .head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .job .name { font-weight: 600; }
+  .job .counts { color: var(--text-secondary); font-size: 13px; }
+  .job .meta { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+  .bar { height: 8px; border-radius: 4px; background: var(--grid); margin-top: 6px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 4px; background: var(--series-1); }
 
   .tablewrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
@@ -116,7 +124,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1 id="title">Live Dashboard</h1>
+    <h1>Router Department</h1>
     <span class="sub" id="subtitle"></span>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading…</span></span>
@@ -127,8 +135,13 @@
 
   <div class="tiles" id="tiles"></div>
 
+  <div class="card" id="progresscard" style="display:none">
+    <h2>Active job progress</h2>
+    <div id="progresslist"></div>
+  </div>
+
   <div class="card" id="chartcard" style="display:none">
-    <h2 id="charttitle">Trend</h2>
+    <h2>Runs per day — last 14 days</h2>
     <div class="legend" id="legend"></div>
     <div class="chartbox" id="chartbox">
       <div class="tooltip" id="tooltip"></div>
@@ -136,7 +149,7 @@
   </div>
 
   <div class="card" id="tablecard" style="display:none">
-    <h2>Latest rows</h2>
+    <h2>Recent runs</h2>
     <div class="tablewrap"><table id="datatable"></table></div>
     <div class="rowcount" id="rowcount"></div>
   </div>
@@ -145,7 +158,7 @@
 <script>
 var REFRESH_MS = 60000;
 var SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
-var state = { headers: [], rows: [] };
+var state = { runs: [], progress: [] };
 
 /* ---------- data loading ---------- */
 
@@ -163,8 +176,10 @@ function load() {
 
 function onData(data) {
   state = data;
+  state.runs.forEach(function (r) { r.when = new Date(r.start); });
   document.getElementById('banner').className = 'banner';
-  document.getElementById('subtitle').textContent = data.sheetName ? 'from sheet "' + data.sheetName + '"' : '';
+  var machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean));
+  document.getElementById('subtitle').textContent = machines.length === 1 ? machines[0] : '';
   document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   document.getElementById('livedot').className = 'dot';
   render();
@@ -178,228 +193,264 @@ function onError(err) {
   document.getElementById('updated').textContent = 'load failed';
 }
 
-/* ---------- column analysis ---------- */
+/* ---------- date helpers ---------- */
 
-function toNumber(v) {
-  if (typeof v === 'number' && isFinite(v)) return v;
-  if (typeof v === 'string') {
-    var s = v.replace(/[$,%\s,]/g, '');
-    if (s !== '' && !isNaN(s)) return parseFloat(s);
-  }
-  return null;
+function dayKey(d) {
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
-
-function isEmpty(v) { return v === '' || v === null || v === undefined; }
-
-function numericColumns() {
-  var cols = [];
-  for (var c = 0; c < state.headers.length; c++) {
-    var nonEmpty = 0, numeric = 0;
-    for (var r = 0; r < state.rows.length; r++) {
-      var v = state.rows[r][c];
-      if (isEmpty(v)) continue;
-      nonEmpty++;
-      if (toNumber(v) !== null) numeric++;
-    }
-    if (nonEmpty > 0 && numeric / nonEmpty >= 0.6 && c > 0) cols.push(c);
-  }
-  return cols;
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function startOfDay(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function mondayOfWeek(d) {
+  var x = startOfDay(d);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x;
 }
-
-function xLabel(row) {
-  var v = row[0];
-  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-    var d = new Date(v);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
-  return String(v);
+function fmtDur(s) {
+  if (s === null || s === undefined) return '—';
+  s = Math.round(s);
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h > 0) return h + 'h ' + pad2(m) + 'm';
+  if (m > 0) return m + 'm ' + pad2(s % 60) + 's';
+  return (s % 60) + 's';
 }
-
-function fmt(n) {
-  if (n === null || n === undefined) return '—';
-  var abs = Math.abs(n);
-  var opts = abs >= 100 ? { maximumFractionDigits: 0 } : { maximumFractionDigits: 2 };
-  return n.toLocaleString(undefined, opts);
+function fmtDay(d) { return d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' }); }
+function unique(arr) {
+  return arr.filter(function (v, i) { return arr.indexOf(v) === i; });
 }
 
 /* ---------- render ---------- */
 
 function render() {
-  var numCols = numericColumns().slice(0, 4);
-  renderTiles(numCols);
-  renderChart(numCols);
+  renderTiles();
+  renderProgress();
+  renderChart();
   renderTable();
 }
 
-function renderTiles(numCols) {
-  var el = document.getElementById('tiles');
-  el.innerHTML = '';
-  if (state.rows.length === 0) return;
-  numCols.forEach(function (c) {
-    var vals = state.rows.map(function (r) { return toNumber(r[c]); }).filter(function (v) { return v !== null; });
-    if (vals.length === 0) return;
-    var latest = vals[vals.length - 1];
-    var prev = vals.length > 1 ? vals[vals.length - 2] : null;
-    var deltaHtml = '';
-    if (prev !== null && prev !== 0) {
-      var pct = ((latest - prev) / Math.abs(prev)) * 100;
-      var cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : '');
-      var arrow = pct > 0 ? '↑' : (pct < 0 ? '↓' : '→');
-      deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '% vs prev</div>';
-    }
-    var div = document.createElement('div');
-    div.className = 'tile';
-    div.innerHTML = '<div class="label">' + escapeHtml(state.headers[c]) + '</div>'
-      + '<div class="value">' + fmt(latest) + '</div>' + deltaHtml;
-    el.appendChild(div);
+function renderTiles() {
+  var now = new Date();
+  var today = startOfDay(now), monday = mondayOfWeek(now);
+  var todayRuns = 0, todaySec = 0, weekRuns = 0, weekSec = 0;
+  state.runs.forEach(function (r) {
+    if (r.when >= monday) { weekRuns++; weekSec += r.seconds; }
+    if (r.when >= today) { todayRuns++; todaySec += r.seconds; }
   });
+
+  var tiles = [
+    { label: 'Runs today', value: String(todayRuns) },
+    { label: 'Machine time today', value: fmtDur(todaySec) },
+    { label: 'Runs this week', value: String(weekRuns), note: 'since ' + fmtDay(monday) },
+    { label: 'Machine time this week', value: fmtDur(weekSec) }
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(function (t) {
+    return '<div class="tile"><div class="label">' + escapeHtml(t.label) + '</div>'
+      + '<div class="value">' + escapeHtml(t.value) + '</div>'
+      + (t.note ? '<div class="note">' + escapeHtml(t.note) + '</div>' : '')
+      + '</div>';
+  }).join('');
 }
 
-function renderChart(numCols) {
+function renderProgress() {
+  var card = document.getElementById('progresscard');
+  var list = document.getElementById('progresslist');
+  var jobs = (state.progress || []).filter(function (p) { return p.target; });
+  if (jobs.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  list.innerHTML = jobs.map(function (p) {
+    var pct = p.pct !== null && p.pct !== undefined ? p.pct : (p.completed / p.target) * 100;
+    pct = Math.max(0, Math.min(100, pct));
+    var finish = p.estFinish;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(finish)) {
+      finish = new Date(finish).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+    var meta = [];
+    if (p.avgSeconds) meta.push('avg run ' + fmtDur(p.avgSeconds));
+    if (p.leftSeconds) meta.push(fmtDur(p.leftSeconds) + ' left');
+    if (finish) meta.push('est. finish ' + finish);
+    return '<div class="job">'
+      + '<div class="head"><span class="name">' + escapeHtml(p.job) + '</span>'
+      + '<span class="counts">' + p.completed + ' / ' + p.target + ' runs (' + Math.round(pct) + '%)</span>'
+      + '<span class="meta">' + escapeHtml(meta.join(' · ')) + '</span></div>'
+      + '<div class="bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>'
+      + '</div>';
+  }).join('');
+}
+
+function renderChart() {
   var card = document.getElementById('chartcard');
   var box = document.getElementById('chartbox');
   var old = box.querySelector('svg');
   if (old) old.remove();
-
-  if (numCols.length === 0 || state.rows.length < 2) { card.style.display = 'none'; return; }
+  if (state.runs.length === 0) { card.style.display = 'none'; return; }
   card.style.display = '';
 
-  var W = 1040, H = 300, padL = 52, padR = 16, padT = 12, padB = 28;
-  var rows = state.rows;
-  var series = numCols.map(function (c, i) {
-    return {
-      name: state.headers[c],
-      color: SERIES_COLORS[i],
-      points: rows.map(function (r) { return toNumber(r[c]); })
-    };
+  var DAYS = 14;
+  var end = startOfDay(new Date());
+  var days = [];
+  for (var i = DAYS - 1; i >= 0; i--) {
+    var d = new Date(end); d.setDate(d.getDate() - i);
+    days.push({ date: d, key: dayKey(d), byJob: {}, total: 0 });
+  }
+  var dayIdx = {};
+  days.forEach(function (d, i) { dayIdx[d.key] = i; });
+
+  // Top 3 jobs in the window get their own series (fixed colors); rest fold into Other.
+  var windowCounts = {};
+  state.runs.forEach(function (r) {
+    var k = dayKey(r.when);
+    if (k in dayIdx) windowCounts[r.job] = (windowCounts[r.job] || 0) + 1;
+  });
+  var topJobs = Object.keys(windowCounts)
+    .sort(function (a, b) { return windowCounts[b] - windowCounts[a]; })
+    .slice(0, 3);
+  var seriesNames = topJobs.slice();
+  var hasOther = Object.keys(windowCounts).length > topJobs.length;
+  if (hasOther) seriesNames.push('Other');
+
+  state.runs.forEach(function (r) {
+    var k = dayKey(r.when);
+    if (!(k in dayIdx)) return;
+    var name = topJobs.indexOf(r.job) >= 0 ? r.job : 'Other';
+    var d = days[dayIdx[k]];
+    d.byJob[name] = (d.byJob[name] || 0) + 1;
+    d.total++;
   });
 
-  // legend (always present for >=2 series; single series is named by the title)
+  // legend (single series needs none — the title carries it)
   var legend = document.getElementById('legend');
   legend.innerHTML = '';
-  document.getElementById('charttitle').textContent = series.length === 1 ? series[0].name : 'Trend';
-  if (series.length >= 2) {
-    series.forEach(function (s) {
-      var d = document.createElement('div');
-      d.className = 'item';
-      d.innerHTML = '<span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name);
-      legend.appendChild(d);
+  if (seriesNames.length >= 2) {
+    seriesNames.forEach(function (name, i) {
+      var el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = '<span class="chip" style="background:' + SERIES_COLORS[i] + '"></span>' + escapeHtml(name);
+      legend.appendChild(el);
     });
   }
 
-  var all = [];
-  series.forEach(function (s) { s.points.forEach(function (p) { if (p !== null) all.push(p); }); });
-  var min = Math.min.apply(null, all), max = Math.max.apply(null, all);
-  if (min > 0 && min / (max || 1) < 0.5) min = 0;      // anchor to zero when it's nearby
-  if (min === max) { max = min + 1; }
-  var span = max - min;
-  var padded = min - span * 0.05;
-  min = (min >= 0 && padded < 0) ? 0 : padded;         // never pad a non-negative range below zero
-  max += span * 0.05;
+  var W = 1040, H = 280, padL = 40, padR = 16, padT = 12, padB = 26;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  var maxTotal = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.total; })));
+  var tickCount = Math.min(4, maxTotal);
+  var yMax = Math.ceil(maxTotal * 1.08 / tickCount) * tickCount;   // even integer ticks
+  var y = function (v) { return padT + (1 - v / yMax) * plotH; };
+  var slot = plotW / DAYS;
+  var barW = Math.min(46, slot * 0.58);
 
-  var x = function (i) { return padL + (i / (rows.length - 1)) * (W - padL - padR); };
-  var y = function (v) { return padT + (1 - (v - min) / (max - min)) * (H - padT - padB); };
+  var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H });
 
-  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-
-  // gridlines + y ticks (recessive)
-  var ticks = 4;
+  // gridlines + integer y ticks (recessive)
+  var ticks = Math.min(4, yMax);
   for (var t = 0; t <= ticks; t++) {
-    var v = min + (t / ticks) * (max - min);
+    var v = Math.round((t / ticks) * yMax);
     var gy = y(v);
     svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, stroke: 'var(--grid)', 'stroke-width': 1 }));
     var lbl = svgEl('text', { x: padL - 8, y: gy + 4, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 11 });
-    lbl.textContent = fmt(v);
+    lbl.textContent = v;
     svg.appendChild(lbl);
   }
-  // baseline
-  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: H - padB, y2: H - padB, stroke: 'var(--baseline)', 'stroke-width': 1 }));
+  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y(0), y2: y(0), stroke: 'var(--baseline)', 'stroke-width': 1 }));
 
-  // x labels: first, middle, last
-  [0, Math.floor((rows.length - 1) / 2), rows.length - 1].forEach(function (i, k, arr) {
-    if (arr.indexOf(i) !== k) return;
-    var lbl = svgEl('text', {
-      x: x(i), y: H - padB + 18,
-      'text-anchor': k === 0 ? 'start' : (k === arr.length - 1 ? 'end' : 'middle'),
-      fill: 'var(--text-muted)', 'font-size': 11
+  days.forEach(function (d, i) {
+    var cx = padL + slot * i + slot / 2;
+
+    // x label every other day
+    if (i % 2 === 1 || DAYS < 8) {
+      var lbl = svgEl('text', { x: cx, y: H - padB + 18, 'text-anchor': 'middle', fill: 'var(--text-muted)', 'font-size': 11 });
+      lbl.textContent = (d.date.getMonth() + 1) + '/' + d.date.getDate();
+      svg.appendChild(lbl);
+    }
+
+    // stacked segments, bottom-up, 2px surface gap between; rounded top on the topmost
+    var stack = seriesNames
+      .map(function (name, si) { return { count: d.byJob[name] || 0, color: SERIES_COLORS[si] }; })
+      .filter(function (s) { return s.count > 0; });
+    var cum = 0;
+    stack.forEach(function (s, si) {
+      var y0 = y(cum), y1 = y(cum + s.count);
+      var top = si === stack.length - 1;
+      var gap = si > 0 ? 1 : 0;                     // 2px total gap shared between neighbors
+      var hgt = Math.max(1, y0 - y1 - gap - (top ? 0 : 1));
+      var yTop = y1 + (top ? 0 : 1);
+      var xL = cx - barW / 2;
+      if (top) {
+        var r = Math.min(4, barW / 2, hgt);
+        svg.appendChild(svgEl('path', {
+          d: 'M' + xL + ' ' + (yTop + hgt)
+            + 'L' + xL + ' ' + (yTop + r)
+            + 'Q' + xL + ' ' + yTop + ' ' + (xL + r) + ' ' + yTop
+            + 'L' + (xL + barW - r) + ' ' + yTop
+            + 'Q' + (xL + barW) + ' ' + yTop + ' ' + (xL + barW) + ' ' + (yTop + r)
+            + 'L' + (xL + barW) + ' ' + (yTop + hgt) + 'Z',
+          fill: s.color
+        }));
+      } else {
+        svg.appendChild(svgEl('rect', { x: xL, y: yTop, width: barW, height: hgt, fill: s.color }));
+      }
+      cum += s.count;
     });
-    lbl.textContent = xLabel(rows[i]);
-    svg.appendChild(lbl);
+
+    // hover hit area — full column, bigger than the mark
+    var hit = svgEl('rect', { x: padL + slot * i, y: padT, width: slot, height: plotH, fill: 'transparent' });
+    hit.addEventListener('mousemove', function () { showTooltip(d, seriesNames, cx, W); });
+    svg.appendChild(hit);
   });
 
-  // series lines (2px)
-  series.forEach(function (s) {
-    var d = '';
-    s.points.forEach(function (p, i) {
-      if (p === null) return;
-      d += (d === '' ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(p).toFixed(1);
-    });
-    svg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-  });
-
-  // crosshair + hover markers
-  var cross = svgEl('line', { x1: 0, x2: 0, y1: padT, y2: H - padB, stroke: 'var(--baseline)', 'stroke-width': 1, opacity: 0 });
-  svg.appendChild(cross);
-  var dots = series.map(function (s) {
-    var d = svgEl('circle', { r: 4.5, fill: s.color, stroke: 'var(--surface-1)', 'stroke-width': 2, opacity: 0 });
-    svg.appendChild(d);
-    return d;
-  });
-
-  var tooltip = document.getElementById('tooltip');
-  svg.addEventListener('mousemove', function (ev) {
-    var rect = svg.getBoundingClientRect();
-    var px = (ev.clientX - rect.left) / rect.width * W;
-    var i = Math.round((px - padL) / (W - padL - padR) * (rows.length - 1));
-    i = Math.max(0, Math.min(rows.length - 1, i));
-    var cx = x(i);
-    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('opacity', 1);
-    var html = '<div class="t-x">' + escapeHtml(xLabel(rows[i])) + '</div>';
-    series.forEach(function (s, k) {
-      var p = s.points[i];
-      if (p === null) { dots[k].setAttribute('opacity', 0); return; }
-      dots[k].setAttribute('cx', cx); dots[k].setAttribute('cy', y(p)); dots[k].setAttribute('opacity', 1);
-      html += '<div class="t-row"><span class="chip" style="background:' + s.color + '"></span>'
-        + '<span class="name">' + escapeHtml(s.name) + '</span><span class="val">' + fmt(p) + '</span></div>';
-    });
-    tooltip.innerHTML = html;
-    tooltip.style.display = 'block';
-    var bx = box.getBoundingClientRect();
-    var tx = (cx / W) * bx.width;
-    tooltip.style.left = Math.min(tx + 14, bx.width - tooltip.offsetWidth - 4) + 'px';
-    tooltip.style.top = '10px';
-  });
   svg.addEventListener('mouseleave', function () {
-    cross.setAttribute('opacity', 0);
-    dots.forEach(function (d) { d.setAttribute('opacity', 0); });
-    tooltip.style.display = 'none';
+    document.getElementById('tooltip').style.display = 'none';
   });
 
   box.appendChild(svg);
 }
 
+function showTooltip(d, seriesNames, cx, W) {
+  var tooltip = document.getElementById('tooltip');
+  var box = document.getElementById('chartbox');
+  var html = '<div class="t-x">' + escapeHtml(fmtDay(d.date)) + '</div>';
+  seriesNames.forEach(function (name, i) {
+    var c = d.byJob[name];
+    if (!c) return;
+    html += '<div class="t-row"><span class="chip" style="background:' + SERIES_COLORS[i] + '"></span>'
+      + '<span class="name">' + escapeHtml(name) + '</span><span class="val">' + c + '</span></div>';
+  });
+  html += '<div class="t-row t-total"><span class="name">Total runs</span><span class="val">' + d.total + '</span></div>';
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  var bx = box.getBoundingClientRect();
+  var tx = (cx / W) * bx.width;
+  tooltip.style.left = Math.max(0, Math.min(tx + 14, bx.width - tooltip.offsetWidth - 4)) + 'px';
+  tooltip.style.top = '8px';
+}
+
 function renderTable() {
   var card = document.getElementById('tablecard');
   var table = document.getElementById('datatable');
-  if (state.rows.length === 0) { card.style.display = 'none'; return; }
+  if (state.runs.length === 0) { card.style.display = 'none'; return; }
   card.style.display = '';
 
-  var MAX = 25;
-  var recent = state.rows.slice(-MAX).reverse();
-  var html = '<thead><tr>' + state.headers.map(function (h) {
-    return '<th>' + escapeHtml(h) + '</th>';
-  }).join('') + '</tr></thead><tbody>';
+  var machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean));
+  var showMachine = machines.length > 1;
+  var MAX = 15;
+  var recent = state.runs.slice(-MAX).reverse();
+
+  var heads = ['Date', 'Start', 'Job', 'Run time'].concat(showMachine ? ['Machine'] : []).concat(['Status']);
+  var html = '<thead><tr>' + heads.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
   recent.forEach(function (r) {
-    html += '<tr>' + r.map(function (v, c) {
-      var display = (c === 0) ? xLabel(r) : (isEmpty(v) ? '' : String(v));
-      return '<td>' + escapeHtml(display) + '</td>';
-    }).join('') + '</tr>';
+    var cells = [
+      r.when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      r.when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+      r.job,
+      fmtDur(r.seconds)
+    ];
+    if (showMachine) cells.push(r.machine);
+    cells.push(r.status.replace(/\.$/, ''));
+    html += '<tr>' + cells.map(function (c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
   });
   html += '</tbody>';
   table.innerHTML = html;
   document.getElementById('rowcount').textContent =
-    'Showing ' + recent.length + ' of ' + state.rows.length + ' rows (newest first)';
+    'Showing ' + recent.length + ' of ' + state.runs.length + ' runs (newest first, doubles removed)';
 }
 
 /* ---------- helpers ---------- */
@@ -417,17 +468,36 @@ function escapeHtml(s) {
 }
 
 function mockData() {
-  var headers = ['Date', 'Sessions', 'Conversions', 'Revenue'];
-  var rows = [];
-  var base = new Date('2026-06-17T00:00:00Z').getTime();
-  var s = 320, c = 24, rev = 1450;
-  for (var i = 0; i < 30; i++) {
-    s = Math.max(50, s + Math.round(Math.sin(i / 3) * 40 + (i % 7 === 0 ? 60 : 0)));
-    c = Math.max(2, c + Math.round(Math.sin(i / 4) * 5));
-    rev = Math.max(100, rev + Math.round(Math.sin(i / 5) * 220 + 30));
-    rows.push([new Date(base + i * 86400000).toISOString(), s, c, rev]);
+  var jobs = ['PS-24x18-18x12.cnc', 'PS-A.cnc', 'TR-7843.cnc', 'CR-0118.cnc', 'PS-24x18-EHOL-FIX.cnc'];
+  var runs = [];
+  var now = new Date();
+  for (var d = 13; d >= 0; d--) {
+    var day = new Date(now); day.setDate(day.getDate() - d); day.setHours(7, 0, 0, 0);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    var n = 6 + ((d * 7) % 8);
+    var t = day.getTime();
+    for (var i = 0; i < n; i++) {
+      var job = jobs[(d + i) % (i % 4 === 3 ? 5 : 2)];
+      var secs = 900 + ((d * 131 + i * 977) % 2400);
+      t += (secs + 600) * 1000;
+      if (d === 0 && new Date(t) > now) break;
+      runs.push({
+        start: new Date(t).toISOString(),
+        job: job,
+        seconds: secs,
+        machine: 'MultiCam 3-205-R16 (41334)',
+        status: 'Job completed.'
+      });
+    }
   }
-  return { headers: headers, rows: rows, sheetName: 'Mock (local preview)', updatedAt: new Date().toISOString() };
+  return {
+    runs: runs,
+    progress: [{
+      job: 'PS-24x18-18x12.cnc', target: 96, completed: 41, pct: 43,
+      avgSeconds: 2640, leftSeconds: 145200, estFinish: 'Tue, Jul 28'
+    }],
+    updatedAt: new Date().toISOString()
+  };
 }
 
 load();
