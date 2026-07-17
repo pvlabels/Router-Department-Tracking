@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --delta-good:     #006300;
+    --delta-bad:      #d03b3b;
+    --series-1:       #2a78d6;
+    --series-2:       #1baf7a;
+    --series-3:       #eda100;
+    --series-4:       #4a3aa7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --delta-good:     #0ca30c;
+      --delta-bad:      #e66767;
+      --series-1:       #3987e5;
+      --series-2:       #199e70;
+      --series-3:       #c98500;
+      --series-4:       #9085e9;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  header h1 { font-size: 20px; font-weight: 650; margin: 0; }
+  .sub { color: var(--text-secondary); font-size: 13px; }
+  .spacer { flex: 1; }
+  .updated { color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--delta-good); }
+  .dot.stale { background: var(--text-muted); }
+  button.refresh {
+    font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-1);
+    color: var(--text-primary); cursor: pointer;
+  }
+  button.refresh:hover { border-color: var(--baseline); }
+
+  .banner {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 16px; color: var(--text-secondary); display: none;
+  }
+  .banner.error { display: block; }
+  .banner strong { color: var(--text-primary); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px 12px;
+  }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
+  .tile .delta { font-size: 12px; margin-top: 2px; color: var(--text-muted); }
+  .tile .delta.up   { color: var(--delta-good); }
+  .tile .delta.down { color: var(--delta-bad); }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 10px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend .chip { width: 10px; height: 10px; border-radius: 3px; }
+
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    padding: 8px 10px; font-size: 12px; min-width: 140px;
+  }
+  .tooltip .t-x { color: var(--text-secondary); margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
+  .tooltip .t-row .chip { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .tooltip .t-row .name { color: var(--text-secondary); flex: 1; padding-right: 10px; }
+  .tooltip .t-row .val { font-variant-numeric: tabular-nums; }
+
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--baseline); }
+  td { border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .rowcount { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Live Dashboard</h1>
+    <span class="sub" id="subtitle"></span>
+    <span class="spacer"></span>
+    <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading…</span></span>
+    <button class="refresh" onclick="load()">Refresh</button>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card" id="chartcard" style="display:none">
+    <h2 id="charttitle">Trend</h2>
+    <div class="legend" id="legend"></div>
+    <div class="chartbox" id="chartbox">
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+  </div>
+
+  <div class="card" id="tablecard" style="display:none">
+    <h2>Latest rows</h2>
+    <div class="tablewrap"><table id="datatable"></table></div>
+    <div class="rowcount" id="rowcount"></div>
+  </div>
+</div>
+
+<script>
+var REFRESH_MS = 60000;
+var SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
+var state = { headers: [], rows: [] };
+
+/* ---------- data loading ---------- */
+
+function load() {
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run
+      .withSuccessHandler(onData)
+      .withFailureHandler(onError)
+      .getData();
+  } else {
+    // Local preview fallback (no Apps Script runtime): mock data.
+    onData(mockData());
+  }
+}
+
+function onData(data) {
+  state = data;
+  document.getElementById('banner').className = 'banner';
+  document.getElementById('subtitle').textContent = data.sheetName ? 'from sheet "' + data.sheetName + '"' : '';
+  document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
+  document.getElementById('livedot').className = 'dot';
+  render();
+}
+
+function onError(err) {
+  var b = document.getElementById('banner');
+  b.className = 'banner error';
+  b.innerHTML = '<strong>Could not load data.</strong> ' + escapeHtml(err && err.message || String(err));
+  document.getElementById('livedot').className = 'dot stale';
+  document.getElementById('updated').textContent = 'load failed';
+}
+
+/* ---------- column analysis ---------- */
+
+function toNumber(v) {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (typeof v === 'string') {
+    var s = v.replace(/[$,%\s,]/g, '');
+    if (s !== '' && !isNaN(s)) return parseFloat(s);
+  }
+  return null;
+}
+
+function isEmpty(v) { return v === '' || v === null || v === undefined; }
+
+function numericColumns() {
+  var cols = [];
+  for (var c = 0; c < state.headers.length; c++) {
+    var nonEmpty = 0, numeric = 0;
+    for (var r = 0; r < state.rows.length; r++) {
+      var v = state.rows[r][c];
+      if (isEmpty(v)) continue;
+      nonEmpty++;
+      if (toNumber(v) !== null) numeric++;
+    }
+    if (nonEmpty > 0 && numeric / nonEmpty >= 0.6 && c > 0) cols.push(c);
+  }
+  return cols;
+}
+
+function xLabel(row) {
+  var v = row[0];
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+    var d = new Date(v);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return String(v);
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  var abs = Math.abs(n);
+  var opts = abs >= 100 ? { maximumFractionDigits: 0 } : { maximumFractionDigits: 2 };
+  return n.toLocaleString(undefined, opts);
+}
+
+/* ---------- render ---------- */
+
+function render() {
+  var numCols = numericColumns().slice(0, 4);
+  renderTiles(numCols);
+  renderChart(numCols);
+  renderTable();
+}
+
+function renderTiles(numCols) {
+  var el = document.getElementById('tiles');
+  el.innerHTML = '';
+  if (state.rows.length === 0) return;
+  numCols.forEach(function (c) {
+    var vals = state.rows.map(function (r) { return toNumber(r[c]); }).filter(function (v) { return v !== null; });
+    if (vals.length === 0) return;
+    var latest = vals[vals.length - 1];
+    var prev = vals.length > 1 ? vals[vals.length - 2] : null;
+    var deltaHtml = '';
+    if (prev !== null && prev !== 0) {
+      var pct = ((latest - prev) / Math.abs(prev)) * 100;
+      var cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : '');
+      var arrow = pct > 0 ? '↑' : (pct < 0 ? '↓' : '→');
+      deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '% vs prev</div>';
+    }
+    var div = document.createElement('div');
+    div.className = 'tile';
+    div.innerHTML = '<div class="label">' + escapeHtml(state.headers[c]) + '</div>'
+      + '<div class="value">' + fmt(latest) + '</div>' + deltaHtml;
+    el.appendChild(div);
+  });
+}
+
+function renderChart(numCols) {
+  var card = document.getElementById('chartcard');
+  var box = document.getElementById('chartbox');
+  var old = box.querySelector('svg');
+  if (old) old.remove();
+
+  if (numCols.length === 0 || state.rows.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  var W = 1040, H = 300, padL = 52, padR = 16, padT = 12, padB = 28;
+  var rows = state.rows;
+  var series = numCols.map(function (c, i) {
+    return {
+      name: state.headers[c],
+      color: SERIES_COLORS[i],
+      points: rows.map(function (r) { return toNumber(r[c]); })
+    };
+  });
+
+  // legend (always present for >=2 series; single series is named by the title)
+  var legend = document.getElementById('legend');
+  legend.innerHTML = '';
+  document.getElementById('charttitle').textContent = series.length === 1 ? series[0].name : 'Trend';
+  if (series.length >= 2) {
+    series.forEach(function (s) {
+      var d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = '<span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name);
+      legend.appendChild(d);
+    });
+  }
+
+  var all = [];
+  series.forEach(function (s) { s.points.forEach(function (p) { if (p !== null) all.push(p); }); });
+  var min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+  if (min > 0 && min / (max || 1) < 0.5) min = 0;      // anchor to zero when it's nearby
+  if (min === max) { max = min + 1; }
+  var span = max - min;
+  var padded = min - span * 0.05;
+  min = (min >= 0 && padded < 0) ? 0 : padded;         // never pad a non-negative range below zero
+  max += span * 0.05;
+
+  var x = function (i) { return padL + (i / (rows.length - 1)) * (W - padL - padR); };
+  var y = function (v) { return padT + (1 - (v - min) / (max - min)) * (H - padT - padB); };
+
+  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  // gridlines + y ticks (recessive)
+  var ticks = 4;
+  for (var t = 0; t <= ticks; t++) {
+    var v = min + (t / ticks) * (max - min);
+    var gy = y(v);
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, stroke: 'var(--grid)', 'stroke-width': 1 }));
+    var lbl = svgEl('text', { x: padL - 8, y: gy + 4, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 11 });
+    lbl.textContent = fmt(v);
+    svg.appendChild(lbl);
+  }
+  // baseline
+  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: H - padB, y2: H - padB, stroke: 'var(--baseline)', 'stroke-width': 1 }));
+
+  // x labels: first, middle, last
+  [0, Math.floor((rows.length - 1) / 2), rows.length - 1].forEach(function (i, k, arr) {
+    if (arr.indexOf(i) !== k) return;
+    var lbl = svgEl('text', {
+      x: x(i), y: H - padB + 18,
+      'text-anchor': k === 0 ? 'start' : (k === arr.length - 1 ? 'end' : 'middle'),
+      fill: 'var(--text-muted)', 'font-size': 11
+    });
+    lbl.textContent = xLabel(rows[i]);
+    svg.appendChild(lbl);
+  });
+
+  // series lines (2px)
+  series.forEach(function (s) {
+    var d = '';
+    s.points.forEach(function (p, i) {
+      if (p === null) return;
+      d += (d === '' ? 'M' : 'L') + x(i).toFixed(1) + ' ' + y(p).toFixed(1);
+    });
+    svg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  });
+
+  // crosshair + hover markers
+  var cross = svgEl('line', { x1: 0, x2: 0, y1: padT, y2: H - padB, stroke: 'var(--baseline)', 'stroke-width': 1, opacity: 0 });
+  svg.appendChild(cross);
+  var dots = series.map(function (s) {
+    var d = svgEl('circle', { r: 4.5, fill: s.color, stroke: 'var(--surface-1)', 'stroke-width': 2, opacity: 0 });
+    svg.appendChild(d);
+    return d;
+  });
+
+  var tooltip = document.getElementById('tooltip');
+  svg.addEventListener('mousemove', function (ev) {
+    var rect = svg.getBoundingClientRect();
+    var px = (ev.clientX - rect.left) / rect.width * W;
+    var i = Math.round((px - padL) / (W - padL - padR) * (rows.length - 1));
+    i = Math.max(0, Math.min(rows.length - 1, i));
+    var cx = x(i);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('opacity', 1);
+    var html = '<div class="t-x">' + escapeHtml(xLabel(rows[i])) + '</div>';
+    series.forEach(function (s, k) {
+      var p = s.points[i];
+      if (p === null) { dots[k].setAttribute('opacity', 0); return; }
+      dots[k].setAttribute('cx', cx); dots[k].setAttribute('cy', y(p)); dots[k].setAttribute('opacity', 1);
+      html += '<div class="t-row"><span class="chip" style="background:' + s.color + '"></span>'
+        + '<span class="name">' + escapeHtml(s.name) + '</span><span class="val">' + fmt(p) + '</span></div>';
+    });
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+    var bx = box.getBoundingClientRect();
+    var tx = (cx / W) * bx.width;
+    tooltip.style.left = Math.min(tx + 14, bx.width - tooltip.offsetWidth - 4) + 'px';
+    tooltip.style.top = '10px';
+  });
+  svg.addEventListener('mouseleave', function () {
+    cross.setAttribute('opacity', 0);
+    dots.forEach(function (d) { d.setAttribute('opacity', 0); });
+    tooltip.style.display = 'none';
+  });
+
+  box.appendChild(svg);
+}
+
+function renderTable() {
+  var card = document.getElementById('tablecard');
+  var table = document.getElementById('datatable');
+  if (state.rows.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  var MAX = 25;
+  var recent = state.rows.slice(-MAX).reverse();
+  var html = '<thead><tr>' + state.headers.map(function (h) {
+    return '<th>' + escapeHtml(h) + '</th>';
+  }).join('') + '</tr></thead><tbody>';
+  recent.forEach(function (r) {
+    html += '<tr>' + r.map(function (v, c) {
+      var display = (c === 0) ? xLabel(r) : (isEmpty(v) ? '' : String(v));
+      return '<td>' + escapeHtml(display) + '</td>';
+    }).join('') + '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+  document.getElementById('rowcount').textContent =
+    'Showing ' + recent.length + ' of ' + state.rows.length + ' rows (newest first)';
+}
+
+/* ---------- helpers ---------- */
+
+function svgEl(tag, attrs) {
+  var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (var k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (ch) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+  });
+}
+
+function mockData() {
+  var headers = ['Date', 'Sessions', 'Conversions', 'Revenue'];
+  var rows = [];
+  var base = new Date('2026-06-17T00:00:00Z').getTime();
+  var s = 320, c = 24, rev = 1450;
+  for (var i = 0; i < 30; i++) {
+    s = Math.max(50, s + Math.round(Math.sin(i / 3) * 40 + (i % 7 === 0 ? 60 : 0)));
+    c = Math.max(2, c + Math.round(Math.sin(i / 4) * 5));
+    rev = Math.max(100, rev + Math.round(Math.sin(i / 5) * 220 + 30));
+    rows.push([new Date(base + i * 86400000).toISOString(), s, c, rev]);
+  }
+  return { headers: headers, rows: rows, sheetName: 'Mock (local preview)', updatedAt: new Date().toISOString() };
+}
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
