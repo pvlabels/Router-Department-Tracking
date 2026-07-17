@@ -135,7 +135,46 @@
   th { color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--baseline); }
   td { border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
   tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; }
+  tfoot td { border-top: 1px solid var(--baseline); border-bottom: none; font-weight: 650; }
   .rowcount { color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+
+  /* page tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); margin-bottom: 16px; }
+  .tab {
+    font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px;
+    border: none; background: none; color: var(--text-secondary); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--text-primary); border-bottom-color: var(--series-1); }
+
+  /* summary period control */
+  .sumbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--baseline); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: 13px; padding: 6px 13px; border: none; cursor: pointer;
+    background: var(--surface-1); color: var(--text-secondary); border-left: 1px solid var(--baseline);
+  }
+  .seg button:first-child { border-left: none; }
+  .seg button:hover { color: var(--text-primary); }
+  .seg button.on { background: var(--series-1); color: #fff; }
+  .navbar { display: flex; align-items: center; gap: 8px; }
+  .navbar #periodlabel { font-weight: 650; min-width: 190px; text-align: center; }
+  .navbar button { font: inherit; font-size: 15px; line-height: 1; padding: 4px 11px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    border-radius: 7px; cursor: pointer; }
+  .navbar button:hover { border-color: var(--baseline); }
+  .navbar button.today { font-size: 12px; }
+  .navbar button:disabled { opacity: 0.35; cursor: default; }
+
+  .sumtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .sumtile { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .sumtile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 3px; }
+  .sumtile .value { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+  .util { height: 6px; border-radius: 3px; background: var(--grid); margin-top: 8px; overflow: hidden; }
+  .util .fill { height: 100%; background: var(--series-2); }
+  .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -145,50 +184,80 @@
     <span class="sub" id="subtitle"></span>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading…</span></span>
-    <button class="refresh" onclick="openForm()">+ Track job</button>
     <button class="refresh" onclick="load()">Refresh</button>
   </header>
 
+  <nav class="tabs">
+    <button class="tab active" id="tab-jobs" onclick="showPage('jobs')">Jobs</button>
+    <button class="tab" id="tab-summary" onclick="showPage('summary')">Summary</button>
+  </nav>
+
   <div class="banner" id="banner"></div>
 
-  <div class="card" id="formcard" style="display:none">
-    <h2 id="formtitle">Track a job</h2>
-    <div class="frow">
-      <label for="f_name">Job name</label>
-      <input id="f_name" list="joblist" placeholder="exact name from the Job Log">
-      <datalist id="joblist"></datalist>
+  <!-- ===== Jobs page ===== -->
+  <div id="page-jobs">
+    <div style="margin-bottom:14px">
+      <button class="refresh" onclick="openForm()">+ Track job</button>
     </div>
-    <div class="frow">
-      <label for="f_target">Sheets to cut</label>
-      <input id="f_target" type="number" min="1" step="1">
+
+    <div class="card" id="formcard" style="display:none">
+      <h2 id="formtitle">Track a job</h2>
+      <div class="frow">
+        <label for="f_name">Job name</label>
+        <input id="f_name" list="joblist" placeholder="exact name from the Job Log">
+        <datalist id="joblist"></datalist>
+      </div>
+      <div class="frow">
+        <label for="f_target">Sheets to cut</label>
+        <input id="f_target" type="number" min="1" step="1">
+      </div>
+      <div class="frow">
+        <label for="f_start">Start date</label>
+        <input id="f_start" type="date">
+      </div>
+      <div class="frow" style="align-items:flex-start">
+        <label style="padding-top:7px">Pieces per sheet</label>
+        <div id="piecerows" style="flex:1"></div>
+      </div>
+      <div class="formnote">Optional — what each sheet yields, e.g. size 24x18, quantity 4. Add a row per size.</div>
+      <div class="frow" style="margin-top:12px">
+        <label></label>
+        <button class="primary" onclick="submitForm()">Save</button>
+        <button class="small" onclick="closeForm()">Cancel</button>
+        <span class="formerr" id="f_err"></span>
+      </div>
     </div>
-    <div class="frow">
-      <label for="f_start">Start date</label>
-      <input id="f_start" type="date">
-    </div>
-    <div class="frow" style="align-items:flex-start">
-      <label style="padding-top:7px">Pieces per sheet</label>
-      <div id="piecerows" style="flex:1"></div>
-    </div>
-    <div class="formnote">Optional — what each sheet yields, e.g. size 24x18, quantity 4. Add a row per size.</div>
-    <div class="frow">
-      <label for="f_pin">Edit PIN</label>
-      <input id="f_pin" type="password" autocomplete="off" style="width:120px">
-    </div>
-    <div class="frow" style="margin-top:12px">
-      <label></label>
-      <button class="primary" onclick="submitForm()">Save</button>
-      <button class="small" onclick="closeForm()">Cancel</button>
-      <span class="formerr" id="f_err"></span>
+
+    <div id="jobcards"></div>
+
+    <div class="card" id="tablecard" style="display:none">
+      <h2>Recent runs</h2>
+      <div class="tablewrap"><table id="datatable"></table></div>
+      <div class="rowcount" id="rowcount"></div>
     </div>
   </div>
 
-  <div id="jobcards"></div>
-
-  <div class="card" id="tablecard" style="display:none">
-    <h2>Recent runs</h2>
-    <div class="tablewrap"><table id="datatable"></table></div>
-    <div class="rowcount" id="rowcount"></div>
+  <!-- ===== Summary page ===== -->
+  <div id="page-summary" style="display:none">
+    <div class="card">
+      <div class="sumbar">
+        <div class="seg" id="periodseg">
+          <button data-p="day" onclick="setPeriod('day')">Daily</button>
+          <button data-p="week" class="on" onclick="setPeriod('week')">Weekly</button>
+          <button data-p="month" onclick="setPeriod('month')">Monthly</button>
+          <button data-p="year" onclick="setPeriod('year')">Yearly</button>
+        </div>
+        <div class="navbar">
+          <button onclick="periodStep(-1)" title="Previous">‹</button>
+          <span id="periodlabel"></span>
+          <button id="periodnext" onclick="periodStep(1)" title="Next">›</button>
+          <button class="today" onclick="periodToday()">Today</button>
+        </div>
+      </div>
+      <div class="sumtiles" id="sumtiles"></div>
+      <div class="tablewrap"><table id="sumtable"></table></div>
+      <div class="rowcount" id="sumnote"></div>
+    </div>
   </div>
 </div>
 
@@ -206,11 +275,12 @@ var PACE_DAYS = 5;
 // Anonymous endpoint, used when this page is hosted outside Apps Script
 // (e.g. GitHub Pages). fetch() sends no Google cookies, so Workspace session
 // restrictions cannot interfere. Writes POST JSON as text/plain (no CORS
-// preflight) and are PIN-protected server-side.
+// preflight).
 var API_BASE = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec';
 var API_URL = API_BASE + '?format=json';
 
-var state = { runs: [], jobs: [] };
+var state = { runs: [], jobs: [], daily: {} };
+var currentPage = 'jobs';
 
 /* ---------- data loading ---------- */
 
@@ -240,6 +310,17 @@ function load() {
 function onData(data) {
   state = data;
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
+  // Fallback: derive daily aggregates from runs if the backend didn't send them
+  // (e.g. local mock). The real backend always includes full-history `daily`.
+  if (!state.daily) {
+    state.daily = {};
+    state.runs.forEach(function (r) {
+      var k = dayKey(r.when);
+      var day = state.daily[k] || (state.daily[k] = {});
+      var a = day[r.job] || (day[r.job] = { r: 0, s: 0 });
+      a.r += 1; a.s += r.seconds;
+    });
+  }
   document.getElementById('banner').className = 'banner';
   var machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean));
   document.getElementById('subtitle').textContent = machines.length === 1 ? machines[0] : '';
@@ -349,6 +430,165 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 function render() {
   renderJobs();
   renderTable();
+  if (currentPage === 'summary') renderSummary();
+}
+
+/* ---------- page switching ---------- */
+
+function showPage(name) {
+  currentPage = name;
+  document.getElementById('page-jobs').style.display = name === 'jobs' ? '' : 'none';
+  document.getElementById('page-summary').style.display = name === 'summary' ? '' : 'none';
+  document.getElementById('tab-jobs').className = 'tab' + (name === 'jobs' ? ' active' : '');
+  document.getElementById('tab-summary').className = 'tab' + (name === 'summary' ? ' active' : '');
+  if (name === 'summary') renderSummary();
+}
+
+/* ---------- summary page ---------- */
+
+var summaryPeriod = 'week';
+var summaryAnchor = startOfDay(new Date());   // a date inside the shown period
+
+function setPeriod(p) {
+  summaryPeriod = p;
+  Array.prototype.forEach.call(document.querySelectorAll('#periodseg button'), function (b) {
+    b.className = b.getAttribute('data-p') === p ? 'on' : '';
+  });
+  renderSummary();
+}
+function periodStep(delta) {
+  var d = new Date(summaryAnchor);
+  if (summaryPeriod === 'day') d.setDate(d.getDate() + delta);
+  else if (summaryPeriod === 'week') d.setDate(d.getDate() + delta * 7);
+  else if (summaryPeriod === 'month') d.setMonth(d.getMonth() + delta);
+  else d.setFullYear(d.getFullYear() + delta);
+  summaryAnchor = startOfDay(d);
+  renderSummary();
+}
+function periodToday() { summaryAnchor = startOfDay(new Date()); renderSummary(); }
+
+/** [start, end) date bounds + a human label for the current period. */
+function periodRange() {
+  var a = summaryAnchor, start, end, label;
+  if (summaryPeriod === 'day') {
+    start = startOfDay(a);
+    end = new Date(start); end.setDate(end.getDate() + 1);
+    label = start.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  } else if (summaryPeriod === 'week') {
+    start = startOfDay(a); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday
+    end = new Date(start); end.setDate(end.getDate() + 7);
+    var last = new Date(end); last.setDate(last.getDate() - 1);
+    label = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' – '
+      + last.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } else if (summaryPeriod === 'month') {
+    start = new Date(a.getFullYear(), a.getMonth(), 1);
+    end = new Date(a.getFullYear(), a.getMonth() + 1, 1);
+    label = start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  } else {
+    start = new Date(a.getFullYear(), 0, 1);
+    end = new Date(a.getFullYear() + 1, 0, 1);
+    label = String(a.getFullYear());
+  }
+  return { start: start, end: end, label: label };
+}
+
+/**
+ * Scheduled shift time and weekday downtime within [start, end], counting only
+ * Mon–Fri 6 AM–5 PM shifts up to the current moment. Downtime is summed per day
+ * (idle = shift − that day's machine time) so a busy day can't mask an idle one.
+ */
+function scheduleStats(start, end, machineByDay) {
+  var now = new Date();
+  var cap = end < now ? end : now;
+  var scheduled = 0, downtime = 0, weekdayMachine = 0;
+  var d = startOfDay(new Date(start));
+  while (d < cap) {
+    var dow = d.getDay();
+    if (dow >= 1 && dow <= 5) {
+      var shiftStart = new Date(d); shiftStart.setHours(WORK_START_HOUR, 0, 0, 0);
+      var shiftEnd = new Date(d); shiftEnd.setHours(WORK_END_HOUR, 0, 0, 0);
+      var to = shiftEnd < now ? shiftEnd : now;
+      var sched = to > shiftStart ? (to - shiftStart) / 1000 : 0;
+      var machine = machineByDay[dayKey(d)] || 0;
+      scheduled += sched;
+      weekdayMachine += machine;
+      downtime += Math.max(0, sched - machine);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return { scheduled: scheduled, downtime: downtime, weekdayMachine: weekdayMachine };
+}
+
+function renderSummary() {
+  var range = periodRange();
+  document.getElementById('periodlabel').textContent = range.label;
+  document.getElementById('periodnext').disabled = range.end > new Date();
+
+  // Aggregate per job from full-history daily data within [start, end).
+  var perJob = {}, machineByDay = {};
+  var totalRuns = 0, totalSecs = 0;
+  var daily = state.daily || {};
+  for (var k in daily) {
+    var d = parseLocalDate(k);
+    if (d < range.start || d >= range.end) continue;
+    var jobs = daily[k];
+    for (var job in jobs) {
+      var a = jobs[job];
+      var pj = perJob[job] || (perJob[job] = { runs: 0, secs: 0 });
+      pj.runs += a.r; pj.secs += a.s;
+      machineByDay[k] = (machineByDay[k] || 0) + a.s;
+      totalRuns += a.r; totalSecs += a.s;
+    }
+  }
+
+  var sched = scheduleStats(range.start, range.end, machineByDay);
+  var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
+
+  var tilesEl = document.getElementById('sumtiles');
+  var tableEl = document.getElementById('sumtable');
+  var noteEl = document.getElementById('sumnote');
+
+  var rows = Object.keys(perJob).map(function (job) {
+    return { job: job, runs: perJob[job].runs, secs: perJob[job].secs };
+  }).sort(function (a, b) { return b.secs - a.secs; });
+
+  if (rows.length === 0) {
+    tilesEl.style.display = 'none';
+    tableEl.innerHTML = '';
+    noteEl.innerHTML = '<div class="empty">No runs in this period.</div>';
+    return;
+  }
+  tilesEl.style.display = '';
+
+  var tiles = [
+    { label: 'Total runs', value: totalRuns.toLocaleString() },
+    { label: 'Machine time', value: fmtDur(totalSecs) },
+    { label: 'Machine downtime', value: fmtDur(sched.downtime) },
+    { label: 'Utilization', value: Math.round(util) + '%', bar: util }
+  ];
+  tilesEl.innerHTML = tiles.map(function (t) {
+    return '<div class="sumtile"><div class="label">' + t.label + '</div>'
+      + '<div class="value">' + t.value + '</div>'
+      + (t.bar !== undefined ? '<div class="util"><div class="fill" style="width:' + t.bar.toFixed(1) + '%"></div></div>' : '')
+      + '</div>';
+  }).join('');
+
+  var html = '<thead><tr><th>Job</th><th class="num">Runs</th><th class="num">Machine time</th>'
+    + '<th class="num">Avg / run</th><th class="num">Share</th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    var share = totalSecs > 0 ? (r.secs / totalSecs) * 100 : 0;
+    html += '<tr><td>' + escapeHtml(r.job) + '</td>'
+      + '<td class="num">' + r.runs.toLocaleString() + '</td>'
+      + '<td class="num">' + fmtDur(r.secs) + '</td>'
+      + '<td class="num">' + fmtDur(r.runs ? r.secs / r.runs : 0) + '</td>'
+      + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
+  });
+  html += '</tbody><tfoot><tr><td>All jobs</td><td class="num">' + totalRuns.toLocaleString() + '</td>'
+    + '<td class="num">' + fmtDur(totalSecs) + '</td><td class="num">—</td><td class="num">100%</td></tr></tfoot>';
+  tableEl.innerHTML = html;
+
+  noteEl.textContent = 'Downtime = idle time during scheduled shifts (Mon–Fri, 6 AM–5 PM), '
+    + 'summed per day up to now. Weekend runs count toward machine time but not the shift schedule.';
 }
 
 function renderJobs() {
@@ -454,9 +694,6 @@ function api(payload, cb) {
   }
 }
 
-function storedPin() { try { return localStorage.getItem('editKey') || ''; } catch (e) { return ''; } }
-function rememberPin(pin) { try { localStorage.setItem('editKey', pin); } catch (e) {} }
-
 function openForm(jobName) {
   var editing = null;
   if (jobName) {
@@ -467,7 +704,6 @@ function openForm(jobName) {
   document.getElementById('f_target').value = editing ? editing.target : '';
   document.getElementById('f_start').value = editing ? editing.startDate
     : dayKey(new Date());
-  document.getElementById('f_pin').value = storedPin();
   document.getElementById('f_err').textContent = '';
 
   var rows = document.getElementById('piecerows');
@@ -516,11 +752,9 @@ function submitForm() {
   var name = document.getElementById('f_name').value.trim();
   var target = parseInt(document.getElementById('f_target').value, 10);
   var startDate = document.getElementById('f_start').value;
-  var pin = document.getElementById('f_pin').value;
   if (!name) { err.textContent = 'Job name is required.'; return; }
   if (!(target > 0)) { err.textContent = 'Sheets to cut must be a positive number.'; return; }
   if (!startDate) { err.textContent = 'Start date is required.'; return; }
-  if (!pin) { err.textContent = 'Enter the edit PIN.'; return; }
 
   var pieces = [];
   var rows = document.querySelectorAll('#piecerows .prow');
@@ -532,9 +766,8 @@ function submitForm() {
   }
 
   err.textContent = 'Saving…';
-  api({ action: 'saveJob', key: pin, job: { name: name, target: target, startDate: startDate, pieces: pieces } }, function (res) {
+  api({ action: 'saveJob', job: { name: name, target: target, startDate: startDate, pieces: pieces } }, function (res) {
     if (res && res.ok) {
-      rememberPin(pin);
       closeForm();
       load();
     } else {
@@ -557,13 +790,9 @@ function stopClicked(name) {
     return;
   }
   stopArmed[name] = false;
-  var pin = storedPin();
-  if (!pin) { pin = window.prompt('Edit PIN:') || ''; }
-  if (!pin) return;
   if (btn) btn.textContent = 'Stopping…';
-  api({ action: 'stopJob', key: pin, name: name }, function (res) {
+  api({ action: 'stopJob', name: name }, function (res) {
     if (res && res.ok) {
-      rememberPin(pin);
       load();
     } else {
       onError(new Error((res && res.error) || 'Stop failed.'));

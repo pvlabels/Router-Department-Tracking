@@ -73,29 +73,12 @@ function apiCall(payload) {
 function handleAction(p) {
   try {
     if (!p || !p.action) throw new Error('Missing action.');
-
-    if (p.action === 'setup') {
-      // One-time: sets the edit PIN if none exists yet.
-      var props = PropertiesService.getScriptProperties();
-      if (props.getProperty('EDIT_KEY')) throw new Error('Edit PIN is already set.');
-      if (!p.key || String(p.key).length < 4) throw new Error('PIN too short.');
-      props.setProperty('EDIT_KEY', String(p.key));
-      return { ok: true };
-    }
-
-    requireKey(p.key);
     if (p.action === 'saveJob') return saveJob(p.job);
     if (p.action === 'stopJob') return stopJob(p.name);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
   }
-}
-
-function requireKey(key) {
-  var stored = PropertiesService.getScriptProperties().getProperty('EDIT_KEY');
-  if (!stored) throw new Error('Editing is not set up yet.');
-  if (String(key || '') !== stored) throw new Error('Wrong edit PIN.');
 }
 
 /* ---------- read ---------- */
@@ -107,16 +90,25 @@ function getData() {
     throw new Error('Tab "' + CONFIG.LOG_SHEET_NAME + '" not found in the spreadsheet.');
   }
 
+  var log = readLog(logSheet);
   return {
-    runs: readRuns(logSheet),
+    runs: log.runs,
+    daily: log.daily,
     jobs: readJobs(ss),
     updatedAt: new Date().toISOString()
   };
 }
 
-function readRuns(sheet) {
+/**
+ * Reads and dedupes the Job Log, returning:
+ *   runs  — the most recent CONFIG.MAX_RUNS deduped runs (for job cards/table)
+ *   daily — per-day, per-job aggregates over the ENTIRE log, so the Summary
+ *           page stays accurate for month/year periods without shipping every
+ *           row. Shape: { "YYYY-MM-DD": { "<job>": { r: runs, s: seconds } } }
+ */
+function readLog(sheet) {
   var values = sheet.getDataRange().getValues();
-  if (values.length < 2) return [];
+  if (values.length < 2) return { runs: [], daily: {} };
   var head = values[0].map(function (v) { return String(v).trim(); });
   var col = {
     start: head.indexOf('Start Time'),
@@ -157,16 +149,34 @@ function readRuns(sheet) {
         seconds: seconds || 0,
         machine: col.machine >= 0 ? String(row[col.machine] || '') : '',
         status: col.status >= 0 ? String(row[col.status] || '') : '',
-        _t: start.getTime()
+        _t: start.getTime(),
+        _d: dayKeyLocal(start)
       };
     }
   }
 
-  var runs = Object.keys(byKey).map(function (k) { return byKey[k]; });
-  runs.sort(function (a, b) { return a._t - b._t; });
-  if (runs.length > CONFIG.MAX_RUNS) runs = runs.slice(runs.length - CONFIG.MAX_RUNS);
-  runs.forEach(function (r) { delete r._t; });
-  return runs;
+  var all = Object.keys(byKey).map(function (k) { return byKey[k]; });
+  all.sort(function (a, b) { return a._t - b._t; });
+
+  // Full-history daily aggregates.
+  var daily = {};
+  all.forEach(function (run) {
+    var day = daily[run._d] || (daily[run._d] = {});
+    var agg = day[run.job] || (day[run.job] = { r: 0, s: 0 });
+    agg.r += 1;
+    agg.s += run.seconds;
+  });
+
+  // Capped runs list for the cards/table.
+  var runs = all.slice(all.length > CONFIG.MAX_RUNS ? all.length - CONFIG.MAX_RUNS : 0);
+  runs.forEach(function (r) { delete r._t; delete r._d; });
+
+  return { runs: runs, daily: daily };
+}
+
+/** Local-time YYYY-MM-DD for a Date (the spreadsheet's timezone). */
+function dayKeyLocal(d) {
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
 
 /* ---------- tracked-job storage ---------- */
