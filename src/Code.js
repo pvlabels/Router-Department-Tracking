@@ -1,17 +1,27 @@
 /**
  * Router Department Tracking — Apps Script backend.
  *
- * Reads the MultiCam run log and job-progress tables from the tracking
- * spreadsheet and serves the dashboard. Source of truth is the GitHub repo
- * (pushed via clasp).
+ * Reads run history from the "Job Log" tab (only — all other tabs are
+ * ignored) and serves the job-progress dashboard. Source of truth is the
+ * GitHub repo (pushed via clasp).
  */
 
 var CONFIG = {
   // https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit
   SHEET_ID: '1532iOs5fdQxJQyeQUatdDDq5jIEVKLYdYh-tRfXkXIc',
 
+  // The only tab the dashboard reads.
+  LOG_SHEET_NAME: 'Job Log',
+
+  // Jobs to track on the dashboard. Edit this list (and git push) when a new
+  // job starts: name must match the Job Name column exactly; startDate is the
+  // first day whose runs count toward the target.
+  JOBS: [
+    { name: 'PS-24x18-18x12.cnc', target: 96, startDate: '2026-07-10' }
+  ],
+
   // Cap on deduped runs returned to the browser (most recent win).
-  MAX_RUNS: 1500
+  MAX_RUNS: 2000
 };
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
@@ -37,36 +47,28 @@ function doGet(e) {
 }
 
 /**
- * Called from the browser via google.script.run.
- * Locates the run-log and progress tabs by their header signatures (robust to
- * tab renames/reordering), dedupes double-logged runs (same job + start time
- * appears twice; keep the longer entry), and returns JSON-safe data.
+ * Returns the deduped run history from the Job Log tab plus the tracked-job
+ * config. Runs that are double-logged (same job + start time) keep the longer
+ * entry; durations are End − Start (the logger's Total Time column is
+ * unreliable — sometimes written with a fixed +3h offset).
  */
 function getData() {
   var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  var logSheet = null, progressSheet = null;
-
-  ss.getSheets().forEach(function (sh) {
-    if (sh.getLastRow() < 1) return;
-    var head = sh.getRange(1, 1, 1, Math.min(12, sh.getMaxColumns()))
-      .getValues()[0].map(function (v) { return String(v).trim(); });
-    if (!logSheet && head.indexOf('Job Name') >= 0 && head.indexOf('Start Time') >= 0) logSheet = sh;
-    if (!progressSheet && head.indexOf('Job File') >= 0 && head.indexOf('Target Runs') >= 0) progressSheet = sh;
-  });
-
-  if (!logSheet) {
-    throw new Error('Could not find the run-log tab (looking for headers "Job Name" + "Start Time").');
+  var sheet = ss.getSheetByName(CONFIG.LOG_SHEET_NAME);
+  if (!sheet) {
+    throw new Error('Tab "' + CONFIG.LOG_SHEET_NAME + '" not found in the spreadsheet.');
   }
 
   return {
-    runs: readRuns(logSheet),
-    progress: progressSheet ? readProgress(progressSheet) : [],
+    runs: readRuns(sheet),
+    jobs: CONFIG.JOBS,
     updatedAt: new Date().toISOString()
   };
 }
 
 function readRuns(sheet) {
   var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
   var head = values[0].map(function (v) { return String(v).trim(); });
   var col = {
     start: head.indexOf('Start Time'),
@@ -76,9 +78,10 @@ function readRuns(sheet) {
     machine: head.indexOf('Machine'),
     status: head.indexOf('Status')
   };
+  if (col.start < 0 || col.job < 0) {
+    throw new Error('Tab "' + CONFIG.LOG_SHEET_NAME + '" is missing the "Start Time" / "Job Name" columns.');
+  }
 
-  // Dedupe: the log records each run twice (same job + start time); keep the
-  // entry with the longer duration.
   var byKey = {};
   for (var r = 1; r < values.length; r++) {
     var row = values[r];
@@ -87,15 +90,12 @@ function readRuns(sheet) {
     var start = row[col.start];
     if (!(start instanceof Date)) continue;
 
-    // End − Start is the reliable duration; the logger's Total Time column is
-    // sometimes written with a fixed +3h offset. Fall back to it only when the
-    // end timestamp is missing or nonsensical.
     var seconds = null;
-    if (row[col.end] instanceof Date) {
+    if (col.end >= 0 && row[col.end] instanceof Date) {
       seconds = Math.round((row[col.end].getTime() - start.getTime()) / 1000);
     }
     if (seconds === null || seconds < 0) {
-      seconds = toSeconds(row[col.total]);
+      seconds = toSeconds(col.total >= 0 ? row[col.total] : null);
     }
 
     var key = job + '|' + start.getTime();
@@ -116,44 +116,6 @@ function readRuns(sheet) {
   if (runs.length > CONFIG.MAX_RUNS) runs = runs.slice(runs.length - CONFIG.MAX_RUNS);
   runs.forEach(function (r) { delete r._t; });
   return runs;
-}
-
-function readProgress(sheet) {
-  var values = sheet.getDataRange().getValues();
-  var head = values[0].map(function (v) { return String(v).trim(); });
-  var col = {
-    job: head.indexOf('Job File'),
-    startDate: head.indexOf('Start Date'),
-    target: head.indexOf('Target Runs'),
-    completed: head.indexOf('Completed'),
-    pct: head.indexOf('%'),
-    avg: head.indexOf('Avg Run Time'),
-    left: head.indexOf('Machine Time Left'),
-    finish: head.indexOf('Est. Finish')
-  };
-
-  var out = [];
-  for (var r = 1; r < values.length; r++) {
-    var row = values[r];
-    var job = String(row[col.job] || '').trim();
-    if (!job) continue;
-    var pct = row[col.pct];
-    if (typeof pct === 'number') pct = pct <= 1 ? pct * 100 : pct;
-    else pct = parseFloat(String(pct).replace('%', '')) || null;
-
-    out.push({
-      job: job,
-      target: Number(row[col.target]) || null,
-      completed: Number(row[col.completed]) || 0,
-      pct: pct,
-      avgSeconds: toSeconds(row[col.avg]),
-      leftSeconds: toSeconds(row[col.left]),
-      estFinish: row[col.finish] instanceof Date
-        ? row[col.finish].toISOString()
-        : String(row[col.finish] || '')
-    });
-  }
-  return out;
 }
 
 /** Duration cell → whole seconds. Handles Date-typed durations (including >24h), "h:mm:ss" strings, and day-fraction numbers. */
