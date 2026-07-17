@@ -28,7 +28,7 @@ publicly and no API keys appear in the client.
 | Path | Purpose |
 |---|---|
 | `src/Code.js` | Backend: reads the `Job Log` tab, stores tracked jobs in a `Dashboard Jobs` tab, serves the JSON read API and the PIN-protected write API |
-| `src/index.html` | The dashboard UI — **Jobs** page (progress cards, finish estimates, weekend what-ifs, job management) and **Summary** page (Day/Week/Month/Year breakdown); auto-refreshes every 60 s |
+| `src/index.html` | The dashboard UI — one page: a reorderable **Job queue** of collapsible colored progress bars (expand for finish estimates, pieces, weekend what-ifs), an inline **Summary** (Day/Week/Month/Year), and collapsible **Recent runs**; auto-refreshes every 60 s |
 | `src/appsscript.json` | Apps Script manifest (anonymous web app, runs as the deploying account) |
 | `.clasp.json` | Links this repo to the Apps Script project (`scriptId`) |
 | `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script, redeploys the web app, and publishes the page to GitHub Pages on every push to `main` |
@@ -44,7 +44,13 @@ Sheet usage:
   ("+ Track job" / Edit / Stop tracking) or by hand in Sheets. All other tabs
   are ignored.
 
-The **Summary** page aggregates the log over a chosen day, week, month, or year
+Each tracked job is a collapsed colored progress bar in the **Job queue**;
+click it to expand its full ticket (pace, pieces cut, estimated finish, weekend
+what-ifs, per-day strip). Drag the ⠿ handle or use ▲▼ to reorder the queue into
+cut priority — the order and each job's color persist server-side (in the Apps
+Script project's properties) so everyone sees the same queue.
+
+The inline **Summary** aggregates the log over a chosen day, week, month, or year
 (with prev/next navigation): per-job runs, machine time, and average per run,
 plus machine downtime — idle time within scheduled Mon–Fri 6 AM–5 PM shifts,
 summed per day up to now. The read endpoint returns full-history per-day/per-job
