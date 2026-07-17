@@ -97,6 +97,38 @@
 
   .done { color: var(--delta-good); font-weight: 650; font-size: 18px; margin-top: 12px; }
 
+  .pieces { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+  .pieces .pline { padding: 1px 0; }
+  .pieces .pdone { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  button.small {
+    font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-secondary); cursor: pointer;
+  }
+  button.small:hover { border-color: var(--baseline); color: var(--text-primary); }
+  button.small.danger { color: var(--delta-bad); }
+  button.primary {
+    font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 7px;
+    border: 1px solid var(--series-1); background: var(--series-1);
+    color: #fff; cursor: pointer; font-weight: 600;
+  }
+  .jobbtns { margin-left: auto; display: flex; gap: 8px; }
+
+  .frow { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+  .frow label { width: 120px; flex: none; font-size: 13px; color: var(--text-secondary); }
+  .frow input {
+    font: inherit; font-size: 13.5px; padding: 6px 9px; border-radius: 7px;
+    border: 1px solid var(--baseline); background: var(--page); color: var(--text-primary);
+  }
+  .frow input:focus { outline: 2px solid var(--series-1); outline-offset: -1px; }
+  #f_name { width: 280px; }
+  #f_target { width: 100px; }
+  .prow input.psize { width: 140px; }
+  .prow input.pqty { width: 90px; }
+  .formerr { color: var(--delta-bad); font-size: 13px; margin-left: 10px; }
+  .formnote { color: var(--text-muted); font-size: 12px; margin: 4px 0 0 130px; }
+
   .tablewrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { text-align: left; padding: 7px 10px; white-space: nowrap; }
@@ -113,10 +145,43 @@
     <span class="sub" id="subtitle"></span>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading…</span></span>
+    <button class="refresh" onclick="openForm()">+ Track job</button>
     <button class="refresh" onclick="load()">Refresh</button>
   </header>
 
   <div class="banner" id="banner"></div>
+
+  <div class="card" id="formcard" style="display:none">
+    <h2 id="formtitle">Track a job</h2>
+    <div class="frow">
+      <label for="f_name">Job name</label>
+      <input id="f_name" list="joblist" placeholder="exact name from the Job Log">
+      <datalist id="joblist"></datalist>
+    </div>
+    <div class="frow">
+      <label for="f_target">Sheets to cut</label>
+      <input id="f_target" type="number" min="1" step="1">
+    </div>
+    <div class="frow">
+      <label for="f_start">Start date</label>
+      <input id="f_start" type="date">
+    </div>
+    <div class="frow" style="align-items:flex-start">
+      <label style="padding-top:7px">Pieces per sheet</label>
+      <div id="piecerows" style="flex:1"></div>
+    </div>
+    <div class="formnote">Optional — what each sheet yields, e.g. size 24x18, quantity 4. Add a row per size.</div>
+    <div class="frow">
+      <label for="f_pin">Edit PIN</label>
+      <input id="f_pin" type="password" autocomplete="off" style="width:120px">
+    </div>
+    <div class="frow" style="margin-top:12px">
+      <label></label>
+      <button class="primary" onclick="submitForm()">Save</button>
+      <button class="small" onclick="closeForm()">Cancel</button>
+      <span class="formerr" id="f_err"></span>
+    </div>
+  </div>
 
   <div id="jobcards"></div>
 
@@ -138,10 +203,12 @@ var HOURS_PER_DAY = WORK_END_HOUR - WORK_START_HOUR;
 // How many recent active days feed the pace estimate.
 var PACE_DAYS = 5;
 
-// Anonymous JSON endpoint, used when this page is hosted outside Apps Script
+// Anonymous endpoint, used when this page is hosted outside Apps Script
 // (e.g. GitHub Pages). fetch() sends no Google cookies, so Workspace session
-// restrictions cannot interfere.
-var API_URL = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec?format=json';
+// restrictions cannot interfere. Writes POST JSON as text/plain (no CORS
+// preflight) and are PIN-protected server-side.
+var API_BASE = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec';
+var API_URL = API_BASE + '?format=json';
 
 var state = { runs: [], jobs: [] };
 
@@ -288,7 +355,8 @@ function renderJobs() {
   var host = document.getElementById('jobcards');
   host.innerHTML = '';
 
-  (state.jobs || []).forEach(function (jobCfg) {
+  var active = (state.jobs || []).filter(function (j) { return j.active !== false; });
+  active.forEach(function (jobCfg) {
     var since = parseLocalDate(jobCfg.startDate || '2000-01-01');
     var runs = state.runs.filter(function (r) {
       return r.job === jobCfg.name && r.when >= since;
@@ -306,13 +374,30 @@ function renderJobs() {
     card.className = 'card';
 
     var html = '<div class="jobhead"><span class="name">' + escapeHtml(jobCfg.name) + '</span>'
-      + '<span class="counts">' + completed + ' / ' + jobCfg.target + ' runs · ' + Math.round(pct) + '%</span></div>'
+      + '<span class="counts">' + completed + ' / ' + jobCfg.target + ' sheets · ' + Math.round(pct) + '%</span>'
+      + '<span class="jobbtns">'
+      + '<button class="small" onclick="openForm(' + jsStr(jobCfg.name) + ')">Edit</button>'
+      + '<button class="small danger" id="stop-' + cssId(jobCfg.name) + '" onclick="stopClicked(' + jsStr(jobCfg.name) + ')">Stop tracking</button>'
+      + '</span></div>'
       + '<div class="bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>';
 
-    var meta = [remaining + ' runs remaining'];
-    if (medianRun) meta.push('typical run ' + fmtDur(medianRun));
-    if (pace) meta.push('pace ~' + (pace.perDay % 1 ? pace.perDay.toFixed(1) : pace.perDay) + ' runs/day (median of last ' + pace.sampleDays + ' working day' + (pace.sampleDays > 1 ? 's' : '') + ')');
+    var meta = [remaining + ' sheets remaining'];
+    if (medianRun) meta.push('typical sheet ' + fmtDur(medianRun));
+    if (pace) meta.push('pace ~' + (pace.perDay % 1 ? pace.perDay.toFixed(1) : pace.perDay) + ' sheets/day (median of last ' + pace.sampleDays + ' working day' + (pace.sampleDays > 1 ? 's' : '') + ')');
     html += '<div class="jobmeta">' + escapeHtml(meta.join(' · ')) + '</div>';
+
+    var pieces = Array.isArray(jobCfg.pieces) ? jobCfg.pieces : [];
+    if (pieces.length) {
+      html += '<div class="pieces">';
+      html += '<div class="pline">Each sheet yields: ' + pieces.map(function (p) {
+        return escapeHtml(p.qty + ' × ' + p.size);
+      }).join(', ') + '</div>';
+      html += '<div class="pline">Pieces cut so far: ' + pieces.map(function (p) {
+        return escapeHtml(p.size) + ' <span class="pdone">' + (p.qty * completed).toLocaleString() + ' / '
+          + (p.qty * jobCfg.target).toLocaleString() + '</span>';
+      }).join(' · ') + '</div>';
+      html += '</div>';
+    }
 
     if (remaining === 0) {
       html += '<div class="done">Complete ✓</div>';
@@ -340,10 +425,152 @@ function renderJobs() {
     host.appendChild(card);
   });
 
-  if ((state.jobs || []).length === 0) {
-    host.innerHTML = '<div class="card"><h2>No jobs configured</h2>'
-      + '<div class="jobmeta">Add jobs to CONFIG.JOBS in Code.js (name, target runs, start date) and push.</div></div>';
+  if (active.length === 0) {
+    host.innerHTML = '<div class="card"><h2>No jobs being tracked</h2>'
+      + '<div class="jobmeta">Click “+ Track job” above to start tracking a job from the log.</div></div>';
   }
+}
+
+/* ---------- job management (form + API) ---------- */
+
+function jsStr(s) {
+  return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;') + "'";
+}
+function cssId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '_'); }
+
+function api(payload, cb) {
+  if (typeof google !== 'undefined' && google.script) {
+    google.script.run
+      .withSuccessHandler(cb)
+      .withFailureHandler(function (e) { cb({ error: (e && e.message) || String(e) }); })
+      .apiCall(payload);
+  } else if (location.protocol.indexOf('http') === 0) {
+    fetch(API_BASE, { method: 'POST', body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(cb)
+      .catch(function (e) { cb({ error: (e && e.message) || String(e) }); });
+  } else {
+    cb({ ok: true, mock: true });
+  }
+}
+
+function storedPin() { try { return localStorage.getItem('editKey') || ''; } catch (e) { return ''; } }
+function rememberPin(pin) { try { localStorage.setItem('editKey', pin); } catch (e) {} }
+
+function openForm(jobName) {
+  var editing = null;
+  if (jobName) {
+    editing = (state.jobs || []).filter(function (j) { return j.name === jobName; })[0] || null;
+  }
+  document.getElementById('formtitle').textContent = editing ? 'Edit job' : 'Track a job';
+  document.getElementById('f_name').value = editing ? editing.name : '';
+  document.getElementById('f_target').value = editing ? editing.target : '';
+  document.getElementById('f_start').value = editing ? editing.startDate
+    : dayKey(new Date());
+  document.getElementById('f_pin').value = storedPin();
+  document.getElementById('f_err').textContent = '';
+
+  var rows = document.getElementById('piecerows');
+  rows.innerHTML = '';
+  var pieces = (editing && Array.isArray(editing.pieces)) ? editing.pieces : [];
+  pieces.forEach(function (p) { addPieceRow(p.size, p.qty); });
+  addPieceRow('', '');
+
+  // Job-name suggestions from the run log.
+  var dl = document.getElementById('joblist');
+  dl.innerHTML = '';
+  unique(state.runs.map(function (r) { return r.job; })).forEach(function (name) {
+    var opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  });
+
+  document.getElementById('formcard').style.display = '';
+  document.getElementById('f_name').focus();
+}
+
+function closeForm() { document.getElementById('formcard').style.display = 'none'; }
+
+function addPieceRow(size, qty) {
+  var rows = document.getElementById('piecerows');
+  var div = document.createElement('div');
+  div.className = 'frow prow';
+  div.style.margin = '4px 0';
+  div.innerHTML = '<input class="psize" placeholder="size (e.g. 24x18)" value="' + escapeHtml(size || '') + '">'
+    + '<input class="pqty" type="number" min="1" step="1" placeholder="qty / sheet" value="' + escapeHtml(qty || '') + '">'
+    + '<button class="small" onclick="this.parentNode.remove()">×</button>';
+  var addBtn = document.getElementById('addpiece');
+  if (addBtn) addBtn.remove();
+  rows.appendChild(div);
+  var btn = document.createElement('button');
+  btn.className = 'small';
+  btn.id = 'addpiece';
+  btn.textContent = '+ Add size';
+  btn.onclick = function () { addPieceRow('', ''); };
+  rows.appendChild(btn);
+}
+
+function submitForm() {
+  var err = document.getElementById('f_err');
+  err.textContent = '';
+  var name = document.getElementById('f_name').value.trim();
+  var target = parseInt(document.getElementById('f_target').value, 10);
+  var startDate = document.getElementById('f_start').value;
+  var pin = document.getElementById('f_pin').value;
+  if (!name) { err.textContent = 'Job name is required.'; return; }
+  if (!(target > 0)) { err.textContent = 'Sheets to cut must be a positive number.'; return; }
+  if (!startDate) { err.textContent = 'Start date is required.'; return; }
+  if (!pin) { err.textContent = 'Enter the edit PIN.'; return; }
+
+  var pieces = [];
+  var rows = document.querySelectorAll('#piecerows .prow');
+  for (var i = 0; i < rows.length; i++) {
+    var size = rows[i].querySelector('.psize').value.trim();
+    var qty = parseInt(rows[i].querySelector('.pqty').value, 10);
+    if (size && qty > 0) pieces.push({ size: size, qty: qty });
+    else if (size || qty) { err.textContent = 'Each piece row needs both a size and a quantity.'; return; }
+  }
+
+  err.textContent = 'Saving…';
+  api({ action: 'saveJob', key: pin, job: { name: name, target: target, startDate: startDate, pieces: pieces } }, function (res) {
+    if (res && res.ok) {
+      rememberPin(pin);
+      closeForm();
+      load();
+    } else {
+      err.textContent = (res && res.error) || 'Save failed.';
+    }
+  });
+}
+
+var stopArmed = {};
+function stopClicked(name) {
+  var btn = document.getElementById('stop-' + cssId(name));
+  if (!stopArmed[name]) {
+    stopArmed[name] = true;
+    if (btn) btn.textContent = 'Confirm stop?';
+    setTimeout(function () {
+      stopArmed[name] = false;
+      var b = document.getElementById('stop-' + cssId(name));
+      if (b) b.textContent = 'Stop tracking';
+    }, 4000);
+    return;
+  }
+  stopArmed[name] = false;
+  var pin = storedPin();
+  if (!pin) { pin = window.prompt('Edit PIN:') || ''; }
+  if (!pin) return;
+  if (btn) btn.textContent = 'Stopping…';
+  api({ action: 'stopJob', key: pin, name: name }, function (res) {
+    if (res && res.ok) {
+      rememberPin(pin);
+      load();
+    } else {
+      onError(new Error((res && res.error) || 'Stop failed.'));
+      var b = document.getElementById('stop-' + cssId(name));
+      if (b) b.textContent = 'Stop tracking';
+    }
+  });
 }
 
 function scenarioRow(label, when, base) {
@@ -468,7 +695,13 @@ function mockData() {
   }
   return {
     runs: runs,
-    jobs: [{ name: 'PS-24x18-18x12.cnc', target: Math.max(96, completed + 54), startDate: dayKey(new Date(now.getTime() - 12 * 86400000)) }],
+    jobs: [{
+      name: 'PS-24x18-18x12.cnc',
+      target: Math.max(96, completed + 54),
+      startDate: dayKey(new Date(now.getTime() - 12 * 86400000)),
+      active: true,
+      pieces: [{ size: '24x18', qty: 4 }, { size: '18x12', qty: 6 }]
+    }],
     updatedAt: new Date().toISOString()
   };
 }
