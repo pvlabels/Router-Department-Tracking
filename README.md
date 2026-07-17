@@ -27,20 +27,26 @@ publicly and no API keys appear in the client.
 
 | Path | Purpose |
 |---|---|
-| `src/Code.js` | Backend: serves the page, reads the run log + job progress from the Sheet |
-| `src/index.html` | The dashboard UI — today/this-week tiles, job progress, runs-per-day chart, recent runs; auto-refreshes every 60 s |
-| `src/appsscript.json` | Apps Script manifest (web app runs as you, access: only you) |
-| `.clasp.json` | Links this repo to your Apps Script project (`scriptId`) |
-| `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script and redeploys on every push to `main` |
+| `src/Code.js` | Backend: reads the `Job Log` tab, stores tracked jobs in a `Dashboard Jobs` tab, serves the JSON read API and the PIN-protected write API |
+| `src/index.html` | The dashboard UI — per-job progress cards, schedule-aware finish estimates, weekend what-ifs, job management form; auto-refreshes every 60 s |
+| `src/appsscript.json` | Apps Script manifest (anonymous web app, runs as the deploying account) |
+| `.clasp.json` | Links this repo to the Apps Script project (`scriptId`) |
+| `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script, redeploys the web app, and publishes the page to GitHub Pages on every push to `main` |
 
-The backend finds the spreadsheet tabs by **header signature**, not by name or
-position, so renaming/reordering tabs is safe:
+Sheet usage:
 
-- **Run log** — the tab whose header row has `Job Name` + `Start Time`
-  (Date, Start/End Time, Job Name, Total Time, Machine, Status). Runs that are
-  double-logged (same job + start time) are deduped, keeping the longer entry.
-- **Job progress** — the tab with `Job File` + `Target Runs`
-  (target/completed runs, %, avg run time, machine time left, est. finish).
+- **`Job Log`** (read-only): Date, Start/End Time, Job Name, Total Time,
+  Machine, Status. Double-logged runs (same job + start time) are deduped
+  keeping the longer entry; durations are End − Start because the logger's
+  Total Time column is unreliable (+3 h offset on recent rows).
+- **`Dashboard Jobs`** (owned by the dashboard, auto-created): Job Name,
+  Sheets to Cut, Start Date, Active, Pieces (JSON). Managed from the dashboard
+  ("+ Track job" / Edit / Stop tracking) or by hand in Sheets. All other tabs
+  are ignored.
+
+Editing from the dashboard requires the **edit PIN** (stored in Apps Script
+Script Properties as `EDIT_KEY`; the browser remembers it after first use).
+Viewing requires nothing.
 
 Opening `src/index.html` directly in a browser shows the UI with mock data.
 
