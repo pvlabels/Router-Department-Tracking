@@ -28,7 +28,7 @@ publicly and no API keys appear in the client.
 | Path | Purpose |
 |---|---|
 | `src/Code.js` | Backend: reads the `Job Log` tab, stores tracked jobs in a `Dashboard Jobs` tab, serves the JSON read API and the PIN-protected write API |
-| `src/index.html` | The dashboard UI — per-job progress cards, schedule-aware finish estimates, weekend what-ifs, job management form; auto-refreshes every 60 s |
+| `src/index.html` | The dashboard UI — **Jobs** page (progress cards, finish estimates, weekend what-ifs, job management) and **Summary** page (Day/Week/Month/Year breakdown); auto-refreshes every 60 s |
 | `src/appsscript.json` | Apps Script manifest (anonymous web app, runs as the deploying account) |
 | `.clasp.json` | Links this repo to the Apps Script project (`scriptId`) |
 | `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script, redeploys the web app, and publishes the page to GitHub Pages on every push to `main` |
@@ -44,9 +44,14 @@ Sheet usage:
   ("+ Track job" / Edit / Stop tracking) or by hand in Sheets. All other tabs
   are ignored.
 
-Editing from the dashboard requires the **edit PIN** (stored in Apps Script
-Script Properties as `EDIT_KEY`; the browser remembers it after first use).
-Viewing requires nothing.
+The **Summary** page aggregates the log over a chosen day, week, month, or year
+(with prev/next navigation): per-job runs, machine time, and average per run,
+plus machine downtime — idle time within scheduled Mon–Fri 6 AM–5 PM shifts,
+summed per day up to now. The read endpoint returns full-history per-day/per-job
+aggregates so month/year totals stay accurate beyond the capped run list.
+
+Anyone with the link can view **and** edit tracked jobs — there is no edit PIN.
+(The page is public; keep it to a trusted audience.)
 
 Opening `src/index.html` directly in a browser shows the UI with mock data.
 
