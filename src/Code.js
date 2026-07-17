@@ -76,9 +76,15 @@ function readRuns(sheet) {
     var start = row[col.start];
     if (!(start instanceof Date)) continue;
 
-    var seconds = toSeconds(row[col.total]);
-    if (seconds === null && row[col.end] instanceof Date) {
+    // End − Start is the reliable duration; the logger's Total Time column is
+    // sometimes written with a fixed +3h offset. Fall back to it only when the
+    // end timestamp is missing or nonsensical.
+    var seconds = null;
+    if (row[col.end] instanceof Date) {
       seconds = Math.round((row[col.end].getTime() - start.getTime()) / 1000);
+    }
+    if (seconds === null || seconds < 0) {
+      seconds = toSeconds(row[col.total]);
     }
 
     var key = job + '|' + start.getTime();
