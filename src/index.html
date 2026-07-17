@@ -260,14 +260,33 @@ function renderProgress() {
   list.innerHTML = jobs.map(function (p) {
     var pct = p.pct !== null && p.pct !== undefined ? p.pct : (p.completed / p.target) * 100;
     pct = Math.max(0, Math.min(100, pct));
-    var finish = p.estFinish;
-    if (/^\d{4}-\d{2}-\d{2}T/.test(finish)) {
-      finish = new Date(finish).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+    // Derive avg/left/finish from the (corrected) run log rather than the
+    // sheet's progress tab, whose figures inherit the logger's Total Time bug.
+    var stats = jobStats(p.job);
+    var remaining = p.target ? Math.max(0, p.target - p.completed) : 0;
+    var avg = stats.avgSeconds !== null ? stats.avgSeconds : p.avgSeconds;
+    var left = avg !== null ? remaining * avg : p.leftSeconds;
+    var finish = '';
+    if (remaining === 0) {
+      finish = 'complete';
+    } else if (stats.runsPerDay) {
+      var days = Math.ceil(remaining / stats.runsPerDay);
+      var d = new Date();
+      while (days > 0) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) days--;
+      }
+      finish = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    } else if (/^\d{4}-\d{2}-\d{2}T/.test(p.estFinish)) {
+      finish = new Date(p.estFinish).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    } else {
+      finish = p.estFinish;
     }
     var meta = [];
-    if (p.avgSeconds) meta.push('avg run ' + fmtDur(p.avgSeconds));
-    if (p.leftSeconds) meta.push(fmtDur(p.leftSeconds) + ' left');
-    if (finish) meta.push('est. finish ' + finish);
+    if (avg) meta.push('avg run ' + fmtDur(avg));
+    if (left) meta.push(fmtDur(left) + ' left');
+    if (finish) meta.push(finish === 'complete' ? 'complete' : 'est. finish ' + finish);
     return '<div class="job">'
       + '<div class="head"><span class="name">' + escapeHtml(p.job) + '</span>'
       + '<span class="counts">' + p.completed + ' / ' + p.target + ' runs (' + Math.round(pct) + '%)</span>'
@@ -275,6 +294,18 @@ function renderProgress() {
       + '<div class="bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>'
       + '</div>';
   }).join('');
+}
+
+/** Median duration and typical runs-per-active-day for a job, from the log. */
+function jobStats(job) {
+  var runs = state.runs.filter(function (r) { return r.job === job; });
+  if (runs.length === 0) return { avgSeconds: null, runsPerDay: null };
+  var secs = runs.map(function (r) { return r.seconds; }).sort(function (a, b) { return a - b; });
+  var avgSeconds = secs[Math.floor(secs.length / 2)];
+  var perDay = {};
+  runs.forEach(function (r) { var k = dayKey(r.when); perDay[k] = (perDay[k] || 0) + 1; });
+  var counts = Object.keys(perDay).map(function (k) { return perDay[k]; }).sort(function (a, b) { return a - b; });
+  return { avgSeconds: avgSeconds, runsPerDay: counts[Math.floor(counts.length / 2)] };
 }
 
 function renderChart() {
