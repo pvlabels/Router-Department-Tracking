@@ -1,10 +1,17 @@
 # Router Department Tracking
 
-A live dashboard for the MultiCam router department, served by **Google Apps
-Script** and reading straight from the tracking spreadsheet. The source of truth
-lives in **GitHub** — every push to `main` is synced to Apps Script (via
-[clasp](https://github.com/google/clasp)) and redeployed automatically by GitHub
-Actions.
+A live dashboard for the MultiCam router department, reading straight from the
+tracking spreadsheet. The source of truth lives in **GitHub** — every push to
+`main` is synced to Apps Script (via [clasp](https://github.com/google/clasp))
+and redeployed automatically by GitHub Actions.
+
+**Dashboard: <https://pvlabels.github.io/Router-Department-Tracking/>**
+
+The page is hosted on GitHub Pages and fetches data from an anonymous Apps
+Script JSON endpoint (`doGet?format=json`). Viewers never open a
+`script.google.com` URL, so Google Workspace policies that block Apps Script
+apps for signed-in company accounts can't interfere. (The Apps Script-served
+page at the `/exec` URL still works too, for signed-out visitors.)
 
 ```
 Google Sheet ──(read server-side)──> Apps Script web app ──> browser dashboard
