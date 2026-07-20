@@ -148,6 +148,7 @@
   #f_target { width: 100px; }
   .prow input.psize { width: 140px; }
   .prow input.pqty { width: 90px; }
+  .prow input.pcut { width: 90px; }
   .formerr { color: var(--delta-bad); font-size: 13px; margin-left: 10px; }
   .formnote { color: var(--text-muted); font-size: 12px; margin: 4px 0 0 130px; }
 
@@ -228,7 +229,8 @@
         <label style="padding-top:7px">Pieces per sheet</label>
         <div id="piecerows" style="flex:1"></div>
       </div>
-      <div class="formnote">Optional — what each sheet yields, e.g. size 24x18, quantity 4. Add a row per size.</div>
+      <div class="formnote">Optional — what each sheet yields, e.g. size 24x18, quantity 4. Add a row per size.<br>
+        “Already cut” keeps pieces made so far; changing “qty / sheet” applies only to sheets cut from here on.</div>
       <div class="frow" style="margin-top:12px">
         <label></label>
         <button class="primary" onclick="submitForm()">Save</button>
@@ -435,6 +437,21 @@ function activeJobs() {
   return (state.jobs || []).filter(function (j) { return j.active !== false; });
 }
 
+/** Sheets completed for a job (deduped runs on/after its start date). */
+function completedFor(name, startDate) {
+  var since = parseLocalDate(startDate || '2000-01-01');
+  return state.runs.filter(function (r) { return r.job === name && r.when >= since; }).length;
+}
+
+/** Pieces of a size cut so far: frozen baseline + new rate × sheets since. */
+function piecesCut(p, baseSheets, completed) {
+  return (p.cut || 0) + p.qty * Math.max(0, completed - (baseSheets || 0));
+}
+/** Projected total pieces of a size at the job's sheet target. */
+function piecesTotal(p, baseSheets, target) {
+  return (p.cut || 0) + p.qty * Math.max(0, target - (baseSheets || 0));
+}
+
 function renderQueue() {
   var host = document.getElementById('jobqueue');
   host.innerHTML = '';
@@ -529,11 +546,12 @@ function jobDetail(job, runs, completed, remaining) {
 
   var pieces = Array.isArray(job.pieces) ? job.pieces : [];
   if (pieces.length) {
+    var base = job.baseSheets || 0;
     html += '<div class="pieces"><div class="pline">Each sheet yields: '
       + pieces.map(function (p) { return escapeHtml(p.qty + ' × ' + p.size); }).join(', ') + '</div>';
     html += '<div class="pline">Pieces cut so far: ' + pieces.map(function (p) {
-      return escapeHtml(p.size) + ' <span class="pdone">' + (p.qty * completed).toLocaleString()
-        + ' / ' + (p.qty * job.target).toLocaleString() + '</span>';
+      return escapeHtml(p.size) + ' <span class="pdone">' + piecesCut(p, base, completed).toLocaleString()
+        + ' / ' + piecesTotal(p, base, job.target).toLocaleString() + '</span>';
     }).join(' · ') + '</div></div>';
   }
 
@@ -880,8 +898,12 @@ function openForm(jobName) {
 
   var rows = document.getElementById('piecerows');
   rows.innerHTML = '';
-  ((editing && Array.isArray(editing.pieces)) ? editing.pieces : []).forEach(function (p) { addPieceRow(p.size, p.qty); });
-  addPieceRow('', '');
+  var completed = editing ? completedFor(editing.name, editing.startDate) : 0;
+  var base = editing ? (editing.baseSheets || 0) : 0;
+  ((editing && Array.isArray(editing.pieces)) ? editing.pieces : []).forEach(function (p) {
+    addPieceRow(p.size, p.qty, piecesCut(p, base, completed));
+  });
+  addPieceRow('', '', '');
 
   var dl = document.getElementById('joblist');
   dl.innerHTML = '';
@@ -894,12 +916,14 @@ function openForm(jobName) {
 }
 function closeForm() { document.getElementById('formcard').style.display = 'none'; }
 
-function addPieceRow(size, qty) {
+function addPieceRow(size, qty, cut) {
   var rows = document.getElementById('piecerows');
   var div = document.createElement('div');
   div.className = 'frow prow'; div.style.margin = '4px 0';
   div.innerHTML = '<input class="psize" placeholder="size (e.g. 24x18)" value="' + escapeHtml(size || '') + '">'
     + '<input class="pqty" type="number" min="1" step="1" placeholder="qty / sheet" value="' + escapeHtml(qty || '') + '">'
+    + '<span style="color:var(--text-muted);font-size:12px">already cut</span>'
+    + '<input class="pcut" type="number" min="0" step="1" placeholder="0" value="' + escapeHtml((cut === 0 || cut) ? String(cut) : '') + '">'
     + '<button class="small" onclick="this.parentNode.remove()">×</button>';
   var addBtn = document.getElementById('addpiece');
   if (addBtn) addBtn.remove();
@@ -925,12 +949,18 @@ function submitForm() {
   for (var i = 0; i < rows.length; i++) {
     var size = rows[i].querySelector('.psize').value.trim();
     var qty = parseInt(rows[i].querySelector('.pqty').value, 10);
-    if (size && qty > 0) pieces.push({ size: size, qty: qty });
+    var cut = parseInt(rows[i].querySelector('.pcut').value, 10);
+    if (!(cut >= 0)) cut = 0;
+    if (size && qty > 0) pieces.push({ size: size, qty: qty, cut: cut });
     else if (size || qty) { err.textContent = 'Each piece row needs both a size and a quantity.'; return; }
   }
 
+  // Freeze "already cut" as of the current sheet count: the new per-sheet
+  // quantity applies only to sheets cut beyond this point.
+  var baseSheets = completedFor(name, startDate);
+
   err.textContent = 'Saving…';
-  api({ action: 'saveJob', job: { name: name, target: target, startDate: startDate, pieces: pieces } }, function (res) {
+  api({ action: 'saveJob', job: { name: name, target: target, startDate: startDate, pieces: pieces, baseSheets: baseSheets } }, function (res) {
     if (res && res.ok) { expandedJobs[name] = true; closeForm(); load(); }
     else { err.textContent = (res && res.error) || 'Save failed.'; }
   });

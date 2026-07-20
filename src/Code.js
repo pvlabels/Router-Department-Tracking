@@ -200,11 +200,7 @@ function readJobs(ss) {
     var name = String(values[r][0] || '').trim();
     if (!name) continue;
     var startDate = values[r][2];
-    var pieces = [];
-    try {
-      pieces = JSON.parse(String(values[r][4] || '[]'));
-      if (!Array.isArray(pieces)) pieces = [];
-    } catch (err) { pieces = []; }
+    var parsedPieces = parsePieces(values[r][4]);
     jobs.push({
       name: name,
       target: Number(values[r][1]) || 0,
@@ -212,7 +208,8 @@ function readJobs(ss) {
         ? startDate.getFullYear() + '-' + pad2(startDate.getMonth() + 1) + '-' + pad2(startDate.getDate())
         : String(startDate || ''),
       active: values[r][3] === true || String(values[r][3]).toLowerCase() === 'true',
-      pieces: pieces
+      pieces: parsedPieces.pieces,
+      baseSheets: parsedPieces.baseSheets
     });
   }
 
@@ -265,6 +262,30 @@ function nextColor(used) {
   return n % 8;
 }
 
+/**
+ * Parses the Pieces (JSON) cell, supporting both the legacy array form
+ * [{size,qty}] and the current object form {pieces:[{size,qty,cut}], baseSheets}.
+ * `cut` is the count of pieces already produced as of `baseSheets` sheets; the
+ * per-sheet `qty` applies to sheets cut beyond that point (so updating the yield
+ * mid-run never rewrites what was already cut).
+ */
+function parsePieces(cell) {
+  var pieces = [], baseSheets = 0;
+  try {
+    var parsed = JSON.parse(String(cell || '[]'));
+    if (Array.isArray(parsed)) {
+      pieces = parsed;                                   // legacy
+    } else if (parsed && Array.isArray(parsed.pieces)) {
+      pieces = parsed.pieces;
+      baseSheets = Number(parsed.baseSheets) || 0;
+    }
+  } catch (err) { pieces = []; }
+  pieces = pieces.map(function (p) {
+    return { size: String((p && p.size) || '').trim(), qty: Number(p && p.qty) || 0, cut: Math.max(0, Number(p && p.cut) || 0) };
+  }).filter(function (p) { return p.size && p.qty > 0; });
+  return { pieces: pieces, baseSheets: Math.max(0, baseSheets) };
+}
+
 function saveJob(job) {
   if (!job || !String(job.name || '').trim()) throw new Error('Job name is required.');
   var name = String(job.name).trim().slice(0, 200);
@@ -276,14 +297,18 @@ function saveJob(job) {
   (Array.isArray(job.pieces) ? job.pieces : []).forEach(function (p) {
     var size = String((p && p.size) || '').trim().slice(0, 60);
     var qty = Math.round(Number(p && p.qty));
-    if (size && qty > 0) pieces.push({ size: size, qty: qty });
+    var cut = Math.max(0, Math.round(Number(p && p.cut) || 0));
+    if (size && qty > 0) pieces.push({ size: size, qty: qty, cut: cut });
   });
+  // Sheets already cut when this yield takes effect; pieces cut before it are
+  // preserved via each piece's `cut`, and `qty` applies only to sheets beyond it.
+  var baseSheets = Math.max(0, Math.round(Number(job.baseSheets) || 0));
 
   var lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
     var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
-    var rowData = [name, target, startDate, true, JSON.stringify(pieces)];
+    var rowData = [name, target, startDate, true, JSON.stringify({ pieces: pieces, baseSheets: baseSheets })];
     var row = findJobRow(sheet, name);
     if (row) {
       sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
