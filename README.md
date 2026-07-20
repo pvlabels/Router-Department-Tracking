@@ -53,8 +53,15 @@ Script project's properties) so everyone sees the same queue.
 The inline **Summary** aggregates the log over a chosen day, week, month, or year
 (with prev/next navigation): per-job runs, machine time, and average per run,
 plus machine downtime — idle time within scheduled Mon–Fri 6 AM–5 PM shifts,
-summed per day up to now. The read endpoint returns full-history per-day/per-job
+summed per day up to now. The read endpoint returns full-history per-day/per-machine/per-job
 aggregates so month/year totals stay accurate beyond the capped run list.
+
+The **machine dropdown** at the top filters the Summary and Recent runs to a
+single machine or all machines (the Job queue always shows overall job progress,
+since a job's target can span machines). Utilization and downtime scale by the
+number of machines in scope. Weekend what-if finish estimates assume **8-hour**
+weekend shifts; weekdays are the full 11-hour shift. The layout widens and the
+type scales up on large monitors.
 
 Anyone with the link can view **and** edit tracked jobs — there is no edit PIN.
 (The page is public; keep it to a trusted audience.)
