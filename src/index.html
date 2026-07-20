@@ -560,17 +560,28 @@ function runMatchesJob(runName, jobName) {
   return false;
 }
 
+/** Does this schedule cell actually carry work order numbers? */
+function hasWorkOrder(raw) { return /WO[-\s]*\d/i.test(String(raw || '')); }
+
 /**
- * "WO-281819-281831" -> ["WO-281819", "WO-281831"]. Only splits when the cell
- * actually starts with WO-, so part numbers like "05-838" are left intact, and
- * run-together digits are shown as-is rather than guessed apart.
+ * Pulls the work orders out of a schedule Part # cell:
+ *   "WO-281819-281831"        -> ["WO-281819", "WO-281831"]
+ *   "Assorted WO-281684-2662" -> ["Assorted", "WO-281684", "WO-2662"]
+ * Cells with no WO in them (part numbers like "05-520") come back untouched
+ * rather than being guessed apart.
  */
 function splitWorkOrders(raw) {
   var s = String(raw || '').trim();
   if (!s) return [];
-  if (!/^WO[-\s]/i.test(s)) return [s];
-  return s.replace(/^WO[-\s]*/i, '').split(/[-,\s]+/).filter(Boolean)
-    .map(function (p) { return /^\d+$/.test(p) ? 'WO-' + p : p; });
+  var m = s.match(/WO[-\s]*\d+(?:\s*-\s*\d+)*/i);
+  if (!m) return [s];
+  var out = m[0].replace(/^WO[-\s]*/i, '').split(/\s*-\s*/).filter(Boolean)
+    .map(function (n) { return 'WO-' + n; });
+  var prefix = s.slice(0, m.index).trim();
+  if (prefix) out.unshift(prefix);
+  var suffix = s.slice(m.index + m[0].length).trim();
+  if (suffix) out.push(suffix);
+  return out;
 }
 
 /** The cut-file a job's runs are logged under (production runs use TR-<run#>.cnc). */
@@ -634,7 +645,7 @@ function jobRow(job, idx, total) {
       '<div class="jobrow-main" title="Click to open · press and hold to reorder">'
     +   '<div class="jobrow-top"><span class="jname">'
     +     escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name)
-    +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
+    +     (hasWorkOrder(job.workOrders) ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +   '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
@@ -778,9 +789,10 @@ function jobDetail(job, runs, completed, remaining) {
       + '</div>';
   }
 
-  // Work orders on this run (schedule column M).
+  // Work orders / part # for this run (schedule column M).
   if (job.workOrders) {
-    html += '<div class="pieces"><div class="pline"><span class="plabel">Work orders</span></div>'
+    html += '<div class="pieces"><div class="pline"><span class="plabel">'
+      + (hasWorkOrder(job.workOrders) ? 'Work orders' : 'Part #') + '</span></div>'
       + '<div class="pline">' + splitWorkOrders(job.workOrders).map(function (w) {
           return '<span class="pitem"><span class="pcut">' + escapeHtml(w) + '</span></span>';
         }).join('') + '</div></div>';
