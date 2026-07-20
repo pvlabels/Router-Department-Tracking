@@ -267,7 +267,7 @@
   <div class="card reveal">
     <div class="cardhead">
       <h2>Job queue</h2>
-      <span class="sub">press &amp; hold a job to reorder the cut priority</span>
+      <span class="sub">click a job to open · press &amp; hold to reorder</span>
       <span class="spacer"></span>
       <button class="refresh" onclick="openForm()">+ Track job</button>
     </div>
@@ -601,7 +601,7 @@ function jobRow(job, idx, total) {
   var head = document.createElement('div');
   head.className = 'jobrow-head';
   head.innerHTML =
-      '<div class="jobrow-main" title="Press and hold to reorder">'
+      '<div class="jobrow-main" title="Click to open · press and hold to reorder">'
     +   '<div class="jobrow-top"><span class="jname">' + escapeHtml(job.name) + '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
@@ -632,7 +632,8 @@ function rowPointerDown(e, row) {
   endPress();
   var st = { row: row, container: document.getElementById('jobqueue'),
              startY: e.clientY, startX: e.clientX, lastY: e.clientY,
-             pointerId: e.pointerId, mouse: e.pointerType === 'mouse', dragging: false, timer: null };
+             pointerId: e.pointerId, mouse: e.pointerType === 'mouse', dragging: false, timer: null,
+             maxMove: 0, t0: Date.now() };
   pressState = st;
   st.timer = setTimeout(function () { if (pressState === st && !st.dragging) beginDrag(); }, HOLD_MS);
   window.addEventListener('pointermove', rowPointerMove);
@@ -643,8 +644,9 @@ function rowPointerDown(e, row) {
 function rowPointerMove(e) {
   var st = pressState; if (!st) return;
   st.lastY = e.clientY;
+  var dist = Math.abs(e.clientY - st.startY) + Math.abs(e.clientX - st.startX);
+  if (dist > st.maxMove) st.maxMove = dist;
   if (!st.dragging) {
-    var dist = Math.abs(e.clientY - st.startY) + Math.abs(e.clientX - st.startX);
     if (st.mouse && dist > MOVE_START) { clearTimeout(st.timer); beginDrag(); }
     else return;
   }
@@ -681,7 +683,7 @@ function dragMove(y) {
   row.style.transform = 'translateY(' + (y - st.baseY) + 'px) scale(1.02)';
 }
 
-function rowPointerUp() {
+function rowPointerUp(e) {
   var st = pressState; if (!st) return;
   clearTimeout(st.timer);
   window.removeEventListener('pointermove', rowPointerMove);
@@ -689,7 +691,9 @@ function rowPointerUp() {
   window.removeEventListener('pointercancel', rowPointerUp);
   document.body.style.userSelect = '';
   var wasDragging = st.dragging;
-  var container = st.container, row = st.row;
+  var cancelled = e && e.type === 'pointercancel';
+  var container = st.container, row = st.row, name = row.getAttribute('data-name');
+  var quickTap = st.maxMove < 10 && (Date.now() - st.t0) < 600;
   pressState = null;
   dragName = null;
   if (wasDragging) {
@@ -699,6 +703,8 @@ function rowPointerUp() {
     var names = Array.prototype.slice.call(container.querySelectorAll('.jobrow'))
       .map(function (r) { return r.getAttribute('data-name'); });
     commitOrder(names);
+  } else if (!cancelled && quickTap) {
+    toggleJob(name);                 // quick click opens/closes the job
   }
 }
 
