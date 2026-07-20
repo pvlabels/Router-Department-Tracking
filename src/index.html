@@ -536,10 +536,25 @@ function activeJobs() {
   return (state.jobs || []).filter(function (j) { return j.active !== false; });
 }
 
-/** Sheets completed for a job (deduped runs on/after its start date). */
+function stripExt(n) { return String(n).replace(/\.[A-Za-z0-9]+$/, ''); }
+
+/**
+ * A run belongs to a tracked job if it is that exact file, or a numeric version
+ * of it — e.g. tracking "PS-24x18-18x12.cnc" also counts "PS-24x18-18x12-02.cnc".
+ * The version suffix must be purely digits; non-numeric variants (…-EHOL-FIX)
+ * stay separate. Anchored to the tracked name, so TR-7745 never swallows TR-7746.
+ */
+function runMatchesJob(runName, jobName) {
+  var rb = stripExt(runName).toLowerCase(), jb = stripExt(jobName).toLowerCase();
+  if (rb === jb) return true;
+  if (rb.indexOf(jb + '-') === 0) return /^\d+$/.test(rb.slice(jb.length + 1));
+  return false;
+}
+
+/** Sheets completed for a job (deduped runs on/after its start date, all versions). */
 function completedFor(name, startDate) {
   var since = parseLocalDate(startDate || '2000-01-01');
-  return state.runs.filter(function (r) { return r.job === name && r.when >= since; }).length;
+  return state.runs.filter(function (r) { return runMatchesJob(r.job, name) && r.when >= since; }).length;
 }
 
 /** Pieces of a size cut so far: frozen baseline + new rate × sheets since. */
@@ -568,7 +583,7 @@ function renderQueue() {
 
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
-  var runs = state.runs.filter(function (r) { return r.job === job.name && r.when >= since; });
+  var runs = state.runs.filter(function (r) { return runMatchesJob(r.job, job.name) && r.when >= since; });
   var completed = runs.length;
   var remaining = Math.max(0, (job.target || 0) - completed);
   var pct = job.target ? Math.min(100, (completed / job.target) * 100) : 0;
@@ -707,6 +722,12 @@ function jobDetail(job, runs, completed, remaining) {
   if (medianRun) meta.push('typical sheet ' + fmtDur(medianRun));
   if (pace) meta.push('pace ~' + (pace.perDay % 1 ? pace.perDay.toFixed(1) : pace.perDay) + ' sheets/day (median of last ' + pace.sampleDays + ' working day' + (pace.sampleDays > 1 ? 's' : '') + ')');
   html += '<div class="jobmeta">' + escapeHtml(meta.join(' · ')) + '</div>';
+
+  // If versioned files are being counted (e.g. …-02), name them so it's clear.
+  var versions = unique(runs.map(function (r) { return r.job; }));
+  if (versions.length > 1) {
+    html += '<div class="jobmeta" style="margin-top:3px">tracking ' + versions.length + ' versions: ' + escapeHtml(versions.join(', ')) + '</div>';
+  }
 
   var pieces = Array.isArray(job.pieces) ? job.pieces : [];
   if (pieces.length) {
@@ -877,8 +898,10 @@ function renderWeekly() {
     return;
   }
   if (card) { card.style.display = ''; card.classList.add('is-in'); }
-  var nameSet = {};
-  jobs.forEach(function (j) { nameSet[j.name] = true; });
+  var matchGraph = function (runName) {
+    for (var gi = 0; gi < jobs.length; gi++) { if (runMatchesJob(runName, jobs[gi].name)) return jobs[gi]; }
+    return null;
+  };
 
   var end = startOfDay(new Date());
   var days = [];
@@ -899,7 +922,8 @@ function renderWeekly() {
       for (var job in js) {
         var r = js[job].r;
         var day = days[idx[k]];
-        if (nameSet[job]) day.byJob[job] = (day.byJob[job] || 0) + r;
+        var gj = matchGraph(job);
+        if (gj) day.byJob[gj.name] = (day.byJob[gj.name] || 0) + r;
         else day.other += r;
         day.total += r;
       }
