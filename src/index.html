@@ -307,12 +307,12 @@
     <div id="jobqueue"></div>
   </div>
 
-  <!-- ===== Weekly activity ===== -->
-  <div class="card band reveal">
-    <div class="cardhead"><h2>Weekly activity</h2><span class="sub">runs per day, by job — last 14 days</span></div>
+  <!-- ===== Weekly activity (hidden until a job is added to it) ===== -->
+  <div class="card band reveal" id="weekcard" style="display:none">
+    <div class="cardhead"><h2>Weekly activity</h2><span class="sub">runs per day, by job — last 7 days</span></div>
     <div class="legend" id="weeklegend"></div>
     <div class="chartbox" id="weekchartbox"><div class="tooltip" id="weektip"></div></div>
-    <div class="weekempty" id="weekempty" style="display:none">No runs in the last 14 days.</div>
+    <div class="weekempty" id="weekempty" style="display:none">No runs in the last 7 days.</div>
   </div>
 
   <!-- ===== Summary ===== -->
@@ -832,14 +832,14 @@ function renderWeekly() {
   var old = box.querySelector('svg');
   if (old) old.remove();
 
-  var DAYS = 14;
+  var DAYS = 7;
+  var card = document.getElementById('weekcard');
   var jobs = activeJobs().filter(function (j) { return j.inGraph; });   // only jobs added to the graph
-  if (jobs.length === 0) {
-    legend.innerHTML = '';
-    emptyEl.textContent = 'No jobs on the graph yet. Open a job below and choose “Add to graph”.';
-    emptyEl.style.display = '';
+  if (jobs.length === 0) {                       // hide the whole bubble until a job is added
+    if (card) card.style.display = 'none';
     return;
   }
+  if (card) { card.style.display = ''; card.classList.add('is-in'); }
   var nameSet = {};
   jobs.forEach(function (j) { nameSet[j.name] = true; });
 
@@ -881,7 +881,7 @@ function renderWeekly() {
   days.forEach(function (d) { series.forEach(function (s) { maxVal = Math.max(maxVal, valOf(d, s)); }); });
   if (!maxVal) {
     legend.innerHTML = '';
-    emptyEl.textContent = 'No runs in the last 14 days.';
+    emptyEl.textContent = 'No runs in the last 7 days.';
     emptyEl.style.display = '';
     return;
   }
@@ -1005,9 +1005,10 @@ function periodRange() {
     end = new Date(start); end.setDate(end.getDate() + 1);
     label = start.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
   } else if (summaryPeriod === 'week') {
-    start = startOfDay(a); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    end = new Date(start); end.setDate(end.getDate() + 7);
-    var last = new Date(end); last.setDate(last.getDate() - 1);
+    // rolling 7 days ending on the anchor day (today by default)
+    end = new Date(startOfDay(a)); end.setDate(end.getDate() + 1);
+    start = new Date(end); start.setDate(start.getDate() - 7);
+    var last = startOfDay(a);
     label = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' – '
       + last.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } else if (summaryPeriod === 'month') {
