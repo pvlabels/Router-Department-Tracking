@@ -166,9 +166,9 @@
     color: var(--text-primary);
   }
   .card.band h2 { color: var(--text-primary); }
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 2px 0 14px; }
-  .legend .item { font-family: var(--font-mono); display: flex; align-items: center; gap: 6px; font-size: 11.5px; letter-spacing: 0.01em; color: var(--text-secondary); }
-  .legend .chip { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 2px 0 12px; }
+  .legend .item { font-family: var(--font-mono); display: flex; align-items: center; gap: 5px; font-size: 10.5px; letter-spacing: 0.02em; color: var(--text-secondary); }
+  .legend .chip { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .chartbox { position: relative; }
   .chartbox svg { display: block; width: 100%; height: auto; }
   .weekempty { color: var(--text-muted); padding: 22px 0; text-align: center; font-size: 13px; }
@@ -190,6 +190,7 @@
     border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
   }
   button.small:hover { border-color: var(--accent); color: var(--accent); }
+  button.small.on { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
   button.small.danger { color: var(--delta-bad); }
   button.small.danger:hover { border-color: var(--delta-bad); color: var(--delta-bad); }
   button.small:focus-visible, button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -683,7 +684,9 @@ function jobDetail(job, runs, completed, remaining) {
 
   var btns = document.createElement('div');
   btns.className = 'detailbtns';
-  btns.innerHTML = '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
+  var graphLabel = job.inGraph ? '− Remove from graph' : '+ Add to graph';
+  btns.innerHTML = '<button class="small' + (job.inGraph ? ' on' : '') + '" onclick="toggleGraph(' + jsStr(job.name) + ',' + (job.inGraph ? 'false' : 'true') + ')">' + graphLabel + '</button>'
+    + '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
     + '<button class="small danger" id="stop-' + cssId(job.name) + '" onclick="stopClicked(' + jsStr(job.name) + ')">Stop tracking</button>';
   wrap.appendChild(btns);
   return wrap;
@@ -746,6 +749,18 @@ function commitOrder(names) {
   suppressReloadUntil = Date.now() + 6000;
   api({ action: 'reorderJobs', order: names }, function (res) {
     if (!res || !res.ok) onError(new Error((res && res.error) || 'Reorder failed.'));
+  });
+}
+
+/** Add/remove a job from the Weekly activity chart (optimistic, then persist). */
+function toggleGraph(name, on) {
+  var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  if (j) j.inGraph = on;
+  renderQueue();
+  renderWeekly();
+  suppressReloadUntil = Date.now() + 6000;
+  api({ action: 'setGraph', name: name, on: on }, function (res) {
+    if (!res || !res.ok) { onError(new Error((res && res.error) || 'Could not update the graph.')); load(); }
   });
 }
 
@@ -818,7 +833,13 @@ function renderWeekly() {
   if (old) old.remove();
 
   var DAYS = 14;
-  var jobs = activeJobs();                       // queue order; each has a color
+  var jobs = activeJobs().filter(function (j) { return j.inGraph; });   // only jobs added to the graph
+  if (jobs.length === 0) {
+    legend.innerHTML = '';
+    emptyEl.textContent = 'No jobs on the graph yet. Open a job below and choose “Add to graph”.';
+    emptyEl.style.display = '';
+    return;
+  }
   var nameSet = {};
   jobs.forEach(function (j) { nameSet[j.name] = true; });
 
@@ -860,6 +881,7 @@ function renderWeekly() {
   days.forEach(function (d) { series.forEach(function (s) { maxVal = Math.max(maxVal, valOf(d, s)); }); });
   if (!maxVal) {
     legend.innerHTML = '';
+    emptyEl.textContent = 'No runs in the last 14 days.';
     emptyEl.style.display = '';
     return;
   }
@@ -869,7 +891,7 @@ function renderWeekly() {
     return '<div class="item"><span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
   }).join('');
 
-  var W = 1040, H = 240, padL = 34, padR = 12, padT = 12, padB = 26;
+  var W = 1280, H = 250, padL = 30, padR = 12, padT = 12, padB = 24;
   var plotW = W - padL - padR, plotH = H - padT - padB;
   var tickCount = Math.min(4, maxVal);
   var yMax = Math.ceil(maxVal * 1.08 / tickCount) * tickCount;
@@ -886,7 +908,7 @@ function renderWeekly() {
     var v = Math.round((t / tickCount) * yMax);
     var gy = y(v);
     svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, stroke: 'var(--grid)', 'stroke-width': 1 }));
-    var lbl = svgEl('text', { x: padL - 7, y: gy + 4, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 11 });
+    var lbl = svgEl('text', { x: padL - 7, y: gy + 3.5, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 9, 'font-family': 'var(--font-mono)' });
     lbl.textContent = v;
     svg.appendChild(lbl);
   }
@@ -896,7 +918,7 @@ function renderWeekly() {
     var cx = padL + slot * i + slot / 2;
     var isWeekend = d.date.getDay() === 0 || d.date.getDay() === 6;
     if (i % 2 === 1) {
-      var xlbl = svgEl('text', { x: cx, y: H - padB + 17, 'text-anchor': 'middle', fill: isWeekend ? 'var(--grid)' : 'var(--text-muted)', 'font-size': 10 });
+      var xlbl = svgEl('text', { x: cx, y: H - padB + 16, 'text-anchor': 'middle', fill: isWeekend ? 'var(--grid)' : 'var(--text-muted)', 'font-size': 9, 'font-family': 'var(--font-mono)' });
       xlbl.textContent = (d.date.getMonth() + 1) + '/' + d.date.getDate();
       svg.appendChild(xlbl);
     }
@@ -1284,7 +1306,7 @@ function mockData() {
       }
     }
     return {
-      name: def.name, target: def.target, active: true, color: def.color, order: ji,
+      name: def.name, target: def.target, active: true, color: def.color, order: ji, inGraph: ji < 2,
       startDate: dayKey(new Date(now.getTime() - 12 * 86400000)), pieces: def.pieces
     };
   });

@@ -76,6 +76,7 @@ function handleAction(p) {
     if (p.action === 'saveJob') return saveJob(p.job);
     if (p.action === 'stopJob') return stopJob(p.name);
     if (p.action === 'reorderJobs') return reorderJobs(p.order);
+    if (p.action === 'setGraph') return setGraph(p.name, p.on);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -245,6 +246,7 @@ function readJobs(ss) {
     var m = meta[j.name] || { o: 9999, c: 0 };
     j.order = m.o;
     j.color = m.c;
+    j.inGraph = !!m.g;            // shown in the Weekly activity chart? (off by default)
   });
   jobs.sort(function (a, b) { return a.order - b.order; });
   return jobs;
@@ -328,6 +330,23 @@ function saveJob(job) {
       meta[name] = { o: maxOrder + 1, c: nextColor(used) };
       setJobMeta(meta);
     }
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+/** Adds or removes a job from the Weekly activity chart (stored in job meta). */
+function setGraph(name, on) {
+  name = String(name || '').trim();
+  if (!name) throw new Error('Job name is required.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var meta = getJobMeta();
+    if (!meta[name]) meta[name] = { o: 9999, c: nextColor({}) };
+    meta[name].g = !!on;
+    setJobMeta(meta);
   } finally {
     lock.releaseLock();
   }
