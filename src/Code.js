@@ -23,10 +23,26 @@ var CONFIG = {
   ],
 
   // Cap on deduped runs returned to the browser (most recent win).
-  MAX_RUNS: 2000
+  MAX_RUNS: 2000,
+
+  // "Live Production Copy" — schedule sheet that feeds the queue automatically.
+  // B = Run #, C = Sheets, E = Status, G = Notes, I = Cutting Shapes.
+  PROD_SHEET_ID: '1E0C4hanKBmYCrZw1V8DcknU60UxFtXAqMF48_XpDTik',
+  PROD_SHEET_GID: 0,
+  PROD_START_ROW: 2182,
+  PROD_GO_STATUS: 'on-press',            // "we are a go" — adds to the queue
+  PROD_PRINTED_STATUS: 'finished printing', // printed, still needs cutting — stays queued
+  PROD_DONE_STATUS: 'finished cutting',  // removes from the queue
+  PROD_MACHINE: 'multicam',              // column I must contain this (case-insensitive)
+  PROD_SYNC_MINUTES: 2,                  // how often the schedule is re-read
+  // Run 7881 is cut as TR-7881.cnc, so progress can be read straight from the
+  // Job Log (numeric revisions like TR-7881-02.cnc are picked up automatically).
+  PROD_CUT_PREFIX: 'TR-',
+  PROD_CUT_EXT: '.cnc'
 };
 
-var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)'];
+var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
+                   'Notes', 'Cut File', 'Source'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
@@ -86,6 +102,10 @@ function handleAction(p) {
 /* ---------- read ---------- */
 
 function getData() {
+  // Keep the queue in step with the production schedule (throttled, best-effort:
+  // a schedule hiccup must never take the dashboard down).
+  try { syncProductionThrottled(); } catch (err) { /* surfaced via syncStatus below */ }
+
   var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
   var logSheet = ss.getSheetByName(CONFIG.LOG_SHEET_NAME);
   if (!logSheet) {
@@ -190,32 +210,59 @@ function dayKeyLocal(d) {
 
 function jobsSheet(ss) {
   var sheet = ss.getSheetByName(CONFIG.JOBS_SHEET_NAME);
-  if (sheet) return sheet;
-  sheet = ss.insertSheet(CONFIG.JOBS_SHEET_NAME);
-  sheet.getRange(1, 1, 1, JOBS_HEADER.length).setValues([JOBS_HEADER]).setFontWeight('bold');
-  CONFIG.SEED_JOBS.forEach(function (j) {
-    sheet.appendRow([j.name, j.target, j.startDate, j.active, JSON.stringify(j.pieces || [])]);
-  });
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.JOBS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, JOBS_HEADER.length).setValues([JOBS_HEADER]).setFontWeight('bold');
+    CONFIG.SEED_JOBS.forEach(function (j) {
+      sheet.appendRow([j.name, j.target, j.startDate, j.active, JSON.stringify(j.pieces || [])]);
+    });
+    return sheet;
+  }
+  // Add any columns this version expects that the existing tab doesn't have yet.
+  var width = Math.max(sheet.getLastColumn(), 1);
+  var head = sheet.getRange(1, 1, 1, width).getValues()[0].map(function (v) { return String(v).trim(); });
+  var grew = false;
+  JOBS_HEADER.forEach(function (h) { if (head.indexOf(h) < 0) { head.push(h); grew = true; } });
+  if (grew) sheet.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold');
   return sheet;
 }
 
+/** header name -> 0-based column index */
+function jobsCols(sheet) {
+  var width = Math.max(sheet.getLastColumn(), JOBS_HEADER.length);
+  var head = sheet.getRange(1, 1, 1, width).getValues()[0];
+  var map = {};
+  head.forEach(function (h, i) { h = String(h).trim(); if (h) map[h] = i; });
+  return map;
+}
+
 function readJobs(ss) {
-  var values = jobsSheet(ss).getDataRange().getValues();
+  var sheet = jobsSheet(ss);
+  var col = jobsCols(sheet);
+  var values = sheet.getDataRange().getValues();
+  var cell = function (row, header) {
+    var i = col[header];
+    return (i === undefined || i >= row.length) ? '' : row[i];
+  };
   var jobs = [];
   for (var r = 1; r < values.length; r++) {
-    var name = String(values[r][0] || '').trim();
+    var name = String(cell(values[r], 'Job Name') || '').trim();
     if (!name) continue;
-    var startDate = values[r][2];
-    var parsedPieces = parsePieces(values[r][4]);
+    var startDate = cell(values[r], 'Start Date');
+    var parsedPieces = parsePieces(cell(values[r], 'Pieces (JSON)'));
+    var act = cell(values[r], 'Active');
     jobs.push({
       name: name,
-      target: Number(values[r][1]) || 0,
+      target: Number(cell(values[r], 'Sheets to Cut')) || 0,
       startDate: startDate instanceof Date
         ? startDate.getFullYear() + '-' + pad2(startDate.getMonth() + 1) + '-' + pad2(startDate.getDate())
         : String(startDate || ''),
-      active: values[r][3] === true || String(values[r][3]).toLowerCase() === 'true',
+      active: act === true || String(act).toLowerCase() === 'true',
       pieces: parsedPieces.pieces,
-      baseSheets: parsedPieces.baseSheets
+      baseSheets: parsedPieces.baseSheets,
+      notes: String(cell(values[r], 'Notes') || '').trim(),
+      cutFile: String(cell(values[r], 'Cut File') || '').trim(),
+      source: String(cell(values[r], 'Source') || '').trim()
     });
   }
 
@@ -315,13 +362,16 @@ function saveJob(job) {
   lock.waitLock(5000);
   try {
     var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
-    var rowData = [name, target, startDate, true, JSON.stringify({ pieces: pieces, baseSheets: baseSheets })];
+    var col = jobsCols(sheet);
     var row = findJobRow(sheet, name);
-    if (row) {
-      sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
-    } else {
-      sheet.appendRow(rowData);
-    }
+    var fields = {
+      'Job Name': name, 'Sheets to Cut': target, 'Start Date': startDate, 'Active': true,
+      'Pieces (JSON)': JSON.stringify({ pieces: pieces, baseSheets: baseSheets })
+    };
+    // notes / cut file are optional and only overwritten when supplied
+    if (job.notes !== undefined) fields['Notes'] = String(job.notes).slice(0, 500);
+    if (job.cutFile !== undefined) fields['Cut File'] = String(job.cutFile).trim().slice(0, 200);
+    writeJobFields(sheet, col, row, fields);
     // New job: assign a queue slot at the end and a distinct color.
     var meta = getJobMeta();
     if (!meta[name]) {
@@ -381,19 +431,147 @@ function stopJob(name) {
   lock.waitLock(5000);
   try {
     var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
+    var col = jobsCols(sheet);
     var row = findJobRow(sheet, name);
     if (!row) throw new Error('Job not found: ' + name);
-    sheet.getRange(row, 4).setValue(false);
+    sheet.getRange(row, col['Active'] + 1).setValue(false);
   } finally {
     lock.releaseLock();
   }
   return { ok: true };
 }
 
+/* ---------- production schedule sync ---------- */
+
+/**
+ * Pulls the queue from the "Live Production Copy" schedule.
+ *
+ * A run joins the queue when it is a MultiCam job (col I) that has reached the
+ * press — status (col E) "On-Press" or "Finished Printing", i.e. printing or
+ * printed but not yet cut — and leaves when col E reads "Finished Cutting".
+ * Title is the Run # (col B), sheet target is col C, notes are col G.
+ *
+ * Only rows from PROD_START_ROW down are considered, and only jobs this sync
+ * created (Source = production) are ever touched — manual jobs are left alone.
+ * A production job the user manually stops is not resurrected; it only returns
+ * if it disappears and reappears in the schedule.
+ */
+function syncProductionQueue() {
+  var added = 0, removed = 0, updated = 0;
+  var prod = SpreadsheetApp.openById(CONFIG.PROD_SHEET_ID);
+  var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
+            || prod.getSheets()[0];
+  var last = psheet.getLastRow();
+  if (last < CONFIG.PROD_START_ROW) return { added: 0, removed: 0, updated: 0 };
+  var rows = psheet.getRange(CONFIG.PROD_START_ROW, 1, last - CONFIG.PROD_START_ROW + 1, 9).getValues();
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(8000)) return { skipped: 'busy' };
+  try {
+    var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
+    var col = jobsCols(sheet);
+    var values = sheet.getDataRange().getValues();
+    var existing = {};                                  // run # -> {row, active, source}
+    for (var r = 1; r < values.length; r++) {
+      var nm = String(values[r][col['Job Name']] || '').trim();
+      if (!nm) continue;
+      existing[nm] = {
+        row: r + 1,
+        active: values[r][col['Active']] === true || String(values[r][col['Active']]).toLowerCase() === 'true',
+        source: String(values[r][col['Source']] || '').trim()
+      };
+    }
+
+    rows.forEach(function (row) {
+      var runNo = String(row[1] === null || row[1] === undefined ? '' : row[1]).trim();  // B
+      if (!runNo) return;
+      var shapes = String(row[8] || '').toLowerCase();                                    // I
+      if (shapes.indexOf(CONFIG.PROD_MACHINE) < 0) return;                                // MultiCam only
+      var status = String(row[4] || '').trim().toLowerCase();                             // E
+      var have = existing[runNo];
+
+      if (status === CONFIG.PROD_DONE_STATUS) {
+        if (have && have.source === 'production' && have.active) {
+          sheet.getRange(have.row, col['Active'] + 1).setValue(false);
+          removed++;
+        }
+        return;
+      }
+      if (status !== CONFIG.PROD_GO_STATUS && status !== CONFIG.PROD_PRINTED_STATUS) return;
+
+      var notes = String(row[6] || '').trim();                                            // G
+      var sheetsQty = Math.round(Number(row[2])) || 0;                                    // C
+      var when = row[0] instanceof Date
+        ? row[0].getFullYear() + '-' + pad2(row[0].getMonth() + 1) + '-' + pad2(row[0].getDate())
+        : dayKeyLocal(new Date());                                                        // A
+
+      var cutFile = CONFIG.PROD_CUT_PREFIX + runNo + CONFIG.PROD_CUT_EXT;
+
+      if (!have) {
+        writeJobFields(sheet, col, 0, {
+          'Job Name': runNo, 'Sheets to Cut': sheetsQty, 'Start Date': when, 'Active': true,
+          'Pieces (JSON)': JSON.stringify({ pieces: [], baseSheets: 0 }),
+          'Notes': notes, 'Cut File': cutFile, 'Source': 'production'
+        });
+        var meta = getJobMeta();
+        if (!meta[runNo]) {
+          var maxOrder = -1, used = {};
+          for (var k in meta) { maxOrder = Math.max(maxOrder, meta[k].o); used[meta[k].c] = true; }
+          meta[runNo] = { o: maxOrder + 1, c: nextColor(used) };
+          setJobMeta(meta);
+        }
+        added++;
+      } else if (have.source === 'production') {
+        // keep notes / target fresh, but never force a manually stopped job back on
+        var cur = sheet.getRange(have.row, 1, 1, Math.max(sheet.getLastColumn(), JOBS_HEADER.length)).getValues()[0];
+        var curCut = String(cur[col['Cut File']] || '').trim();
+        if (String(cur[col['Notes']] || '') !== notes ||
+            Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut) {
+          cur[col['Notes']] = notes;
+          cur[col['Sheets to Cut']] = sheetsQty;
+          if (!curCut) cur[col['Cut File']] = cutFile;   // backfill the cut-file link
+          sheet.getRange(have.row, 1, 1, cur.length).setValues([cur]);
+          updated++;
+        }
+      }
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return { added: added, removed: removed, updated: updated };
+}
+
+/** Runs the schedule sync at most once every PROD_SYNC_MINUTES. */
+function syncProductionThrottled() {
+  var props = PropertiesService.getScriptProperties();
+  var lastRun = Number(props.getProperty('PROD_SYNC_AT') || 0);
+  var now = Date.now();
+  if (now - lastRun < CONFIG.PROD_SYNC_MINUTES * 60 * 1000) return null;
+  props.setProperty('PROD_SYNC_AT', String(now));
+  return syncProductionQueue();
+}
+
+/** Writes named fields to an existing row, or appends a new row. */
+function writeJobFields(sheet, col, row, fields) {
+  var width = Math.max(sheet.getLastColumn(), JOBS_HEADER.length);
+  if (row) {
+    var current = sheet.getRange(row, 1, 1, width).getValues()[0];
+    for (var h in fields) { if (col[h] !== undefined) current[col[h]] = fields[h]; }
+    sheet.getRange(row, 1, 1, width).setValues([current]);
+  } else {
+    var fresh = [];
+    for (var i = 0; i < width; i++) fresh.push('');
+    for (var k in fields) { if (col[k] !== undefined) fresh[col[k]] = fields[k]; }
+    sheet.appendRow(fresh);
+  }
+}
+
 function findJobRow(sheet, name) {
+  var col = jobsCols(sheet);
+  var nameIdx = col['Job Name'] === undefined ? 0 : col['Job Name'];
   var values = sheet.getDataRange().getValues();
   for (var r = 1; r < values.length; r++) {
-    if (String(values[r][0] || '').trim() === name) return r + 1;
+    if (String(values[r][nameIdx] || '').trim() === name) return r + 1;
   }
   return 0;
 }

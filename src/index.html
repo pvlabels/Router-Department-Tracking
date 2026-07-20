@@ -559,10 +559,18 @@ function runMatchesJob(runName, jobName) {
   return false;
 }
 
+/** The cut-file a job's runs are logged under (production runs use TR-<run#>.cnc). */
+function matchKeyFor(nameOrJob) {
+  if (nameOrJob && typeof nameOrJob === 'object') return nameOrJob.cutFile || nameOrJob.name;
+  var j = (state.jobs || []).filter(function (x) { return x.name === nameOrJob; })[0];
+  return (j && j.cutFile) ? j.cutFile : nameOrJob;
+}
+
 /** Sheets completed for a job (deduped runs on/after its start date, all versions). */
 function completedFor(name, startDate) {
   var since = parseLocalDate(startDate || '2000-01-01');
-  return state.runs.filter(function (r) { return runMatchesJob(r.job, name) && r.when >= since; }).length;
+  var key = matchKeyFor(name);
+  return state.runs.filter(function (r) { return runMatchesJob(r.job, key) && r.when >= since; }).length;
 }
 
 /** Pieces of a size cut so far: frozen baseline + new rate × sheets since. */
@@ -591,7 +599,7 @@ function renderQueue() {
 
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
-  var runs = state.runs.filter(function (r) { return runMatchesJob(r.job, job.name) && r.when >= since; });
+  var runs = state.runs.filter(function (r) { return runMatchesJob(r.job, matchKeyFor(job)) && r.when >= since; });
   var completed = runs.length;
   var remaining = Math.max(0, (job.target || 0) - completed);
   var pct = job.target ? Math.min(100, (completed / job.target) * 100) : 0;
@@ -610,7 +618,7 @@ function jobRow(job, idx, total) {
   head.className = 'jobrow-head';
   head.innerHTML =
       '<div class="jobrow-main" title="Click to open · press and hold to reorder">'
-    +   '<div class="jobrow-top"><span class="jname">' + escapeHtml(job.name) + '</span>'
+    +   '<div class="jobrow-top"><span class="jname">' + escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
     + '</div>'
@@ -744,6 +752,19 @@ function jobDetail(job, runs, completed, remaining) {
   var versions = unique(runs.map(function (r) { return r.job; }));
   if (versions.length > 1) {
     html += '<div class="jobmeta" style="margin-top:3px">tracking ' + versions.length + ' versions: ' + escapeHtml(versions.join(', ')) + '</div>';
+  }
+
+  // Schedule-sourced runs: show where it came from and which file is being cut.
+  if (job.source === 'production') {
+    html += '<div class="jobmeta" style="margin-top:3px">from the production schedule'
+      + (job.cutFile ? ' · cutting <span style="color:var(--text-secondary)">' + escapeHtml(job.cutFile) + '</span>' : '')
+      + '</div>';
+  }
+
+  // Notes from the schedule (column G).
+  if (job.notes) {
+    html += '<div class="pieces"><div class="pline"><span class="plabel">Notes</span></div>'
+      + '<div class="pline pyield">' + escapeHtml(job.notes) + '</div></div>';
   }
 
   var pieces = Array.isArray(job.pieces) ? job.pieces : [];
@@ -916,7 +937,7 @@ function renderWeekly() {
   }
   if (card) { card.style.display = ''; card.classList.add('is-in'); }
   var matchGraph = function (runName) {
-    for (var gi = 0; gi < jobs.length; gi++) { if (runMatchesJob(runName, jobs[gi].name)) return jobs[gi]; }
+    for (var gi = 0; gi < jobs.length; gi++) { if (runMatchesJob(runName, matchKeyFor(jobs[gi]))) return jobs[gi]; }
     return null;
   };
 
