@@ -109,10 +109,20 @@
 
   /* ----- job queue rows ----- */
   .jobrow { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: transparent;
-    transition: box-shadow .16s ease, border-color .16s ease; touch-action: pan-y; }
+    transition: box-shadow .18s ease, border-color .18s ease, background .18s ease; touch-action: pan-y; }
   .jobrow:last-child { margin-bottom: 0; }
-  .jobrow.lifted { background: var(--surface-1); border-color: var(--accent);
-    box-shadow: 0 10px 26px rgba(0,0,0,0.20); position: relative; z-index: 30; }
+  /* glassmorphism lift: translucent frosted surface + soft blurred halo */
+  .jobrow.lifted {
+    position: relative; z-index: 30;
+    background: var(--surface-1);
+    background: color-mix(in srgb, var(--surface-1) 72%, transparent);
+    -webkit-backdrop-filter: blur(9px) saturate(1.15);
+    backdrop-filter: blur(9px) saturate(1.15);
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    box-shadow: 0 16px 40px rgba(0,0,0,0.24), 0 3px 12px rgba(0,0,0,0.12),
+      0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) { .jobrow { transition: none; } }
   .jobrow-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px; user-select: none; }
   .jobrow-main { flex: 1; min-width: 0; cursor: grab; }
   .jobrow.lifted .jobrow-main { cursor: grabbing; }
@@ -631,7 +641,7 @@ function rowPointerDown(e, row) {
   if (e.target.closest('.caret-btn')) return;            // the expand button isn't a drag handle
   endPress();
   var st = { row: row, container: document.getElementById('jobqueue'),
-             startY: e.clientY, startX: e.clientX, lastY: e.clientY,
+             startY: e.clientY, startX: e.clientX, lastY: e.clientY, lastX: e.clientX,
              pointerId: e.pointerId, mouse: e.pointerType === 'mouse', dragging: false, timer: null,
              maxMove: 0, t0: Date.now() };
   pressState = st;
@@ -644,6 +654,7 @@ function rowPointerDown(e, row) {
 function rowPointerMove(e) {
   var st = pressState; if (!st) return;
   st.lastY = e.clientY;
+  st.lastX = e.clientX;
   var dist = Math.abs(e.clientY - st.startY) + Math.abs(e.clientX - st.startX);
   if (dist > st.maxMove) st.maxMove = dist;
   if (!st.dragging) {
@@ -658,6 +669,7 @@ function beginDrag() {
   var st = pressState; if (!st || st.dragging) return;
   st.dragging = true;
   st.baseY = st.lastY;
+  st.baseX = st.lastX;
   dragName = st.row.getAttribute('data-name');           // blocks auto-refresh mid-drag
   st.row.classList.add('lifted');
   st.row.style.touchAction = 'none';
@@ -680,7 +692,8 @@ function dragMove(y) {
   if (after == null) { if (container.lastElementChild !== row) container.appendChild(row); }
   else if (row.nextElementSibling !== after) { container.insertBefore(row, after); }
   st.baseY += row.offsetTop - before;                    // keep the lift under the pointer after a DOM move
-  row.style.transform = 'translateY(' + (y - st.baseY) + 'px) scale(1.02)';
+  var dx = Math.max(-18, Math.min(18, st.lastX - st.baseX));   // slight left/right drift
+  row.style.transform = 'translate(' + dx + 'px,' + (y - st.baseY) + 'px) scale(1.02)';
 }
 
 function rowPointerUp(e) {
