@@ -42,7 +42,7 @@ var CONFIG = {
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
-                   'Notes', 'Cut File', 'Source'];
+                   'Notes', 'Cut File', 'Source', 'Work Orders'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
@@ -262,7 +262,8 @@ function readJobs(ss) {
       baseSheets: parsedPieces.baseSheets,
       notes: String(cell(values[r], 'Notes') || '').trim(),
       cutFile: String(cell(values[r], 'Cut File') || '').trim(),
-      source: String(cell(values[r], 'Source') || '').trim()
+      source: String(cell(values[r], 'Source') || '').trim(),
+      workOrders: String(cell(values[r], 'Work Orders') || '').trim()
     });
   }
 
@@ -463,7 +464,8 @@ function syncProductionQueue() {
             || prod.getSheets()[0];
   var last = psheet.getLastRow();
   if (last < CONFIG.PROD_START_ROW) return { added: 0, removed: 0, updated: 0 };
-  var rows = psheet.getRange(CONFIG.PROD_START_ROW, 1, last - CONFIG.PROD_START_ROW + 1, 9).getValues();
+  // A..M — M (index 12) is Item 1's Part #, which carries the work order numbers
+  var rows = psheet.getRange(CONFIG.PROD_START_ROW, 1, last - CONFIG.PROD_START_ROW + 1, 13).getValues();
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(8000)) return { skipped: 'busy' };
@@ -500,6 +502,7 @@ function syncProductionQueue() {
       if (status !== CONFIG.PROD_GO_STATUS && status !== CONFIG.PROD_PRINTED_STATUS) return;
 
       var notes = String(row[6] || '').trim();                                            // G
+      var workOrders = String(row[12] || '').trim();                                      // M
       var sheetsQty = Math.round(Number(row[2])) || 0;                                    // C
       var when = row[0] instanceof Date
         ? row[0].getFullYear() + '-' + pad2(row[0].getMonth() + 1) + '-' + pad2(row[0].getDate())
@@ -511,7 +514,7 @@ function syncProductionQueue() {
         writeJobFields(sheet, col, 0, {
           'Job Name': runNo, 'Sheets to Cut': sheetsQty, 'Start Date': when, 'Active': true,
           'Pieces (JSON)': JSON.stringify({ pieces: [], baseSheets: 0 }),
-          'Notes': notes, 'Cut File': cutFile, 'Source': 'production'
+          'Notes': notes, 'Cut File': cutFile, 'Source': 'production', 'Work Orders': workOrders
         });
         var meta = getJobMeta();
         if (!meta[runNo]) {
@@ -526,9 +529,11 @@ function syncProductionQueue() {
         var cur = sheet.getRange(have.row, 1, 1, Math.max(sheet.getLastColumn(), JOBS_HEADER.length)).getValues()[0];
         var curCut = String(cur[col['Cut File']] || '').trim();
         if (String(cur[col['Notes']] || '') !== notes ||
-            Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut) {
+            Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut ||
+            String(cur[col['Work Orders']] || '').trim() !== workOrders) {
           cur[col['Notes']] = notes;
           cur[col['Sheets to Cut']] = sheetsQty;
+          cur[col['Work Orders']] = workOrders;
           if (!curCut) cur[col['Cut File']] = cutFile;   // backfill the cut-file link
           sheet.getRange(have.row, 1, 1, cur.length).setValues([cur]);
           updated++;

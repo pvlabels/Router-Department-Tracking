@@ -126,6 +126,7 @@
   .jobrow.lifted .jobrow-main { cursor: grabbing; }
   .jobrow-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
   .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jwo { color: var(--text-muted); font-weight: 400; font-size: 11.5px; margin-left: 10px; letter-spacing: 0.02em; }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-muted); flex: none; font-size: 12.5px; }
   .jpct .done { color: var(--delta-good); font-weight: 600; }
   .jbar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
@@ -559,6 +560,19 @@ function runMatchesJob(runName, jobName) {
   return false;
 }
 
+/**
+ * "WO-281819-281831" -> ["WO-281819", "WO-281831"]. Only splits when the cell
+ * actually starts with WO-, so part numbers like "05-838" are left intact, and
+ * run-together digits are shown as-is rather than guessed apart.
+ */
+function splitWorkOrders(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return [];
+  if (!/^WO[-\s]/i.test(s)) return [s];
+  return s.replace(/^WO[-\s]*/i, '').split(/[-,\s]+/).filter(Boolean)
+    .map(function (p) { return /^\d+$/.test(p) ? 'WO-' + p : p; });
+}
+
 /** The cut-file a job's runs are logged under (production runs use TR-<run#>.cnc). */
 function matchKeyFor(nameOrJob) {
   if (nameOrJob && typeof nameOrJob === 'object') return nameOrJob.cutFile || nameOrJob.name;
@@ -618,7 +632,10 @@ function jobRow(job, idx, total) {
   head.className = 'jobrow-head';
   head.innerHTML =
       '<div class="jobrow-main" title="Click to open · press and hold to reorder">'
-    +   '<div class="jobrow-top"><span class="jname">' + escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
+    +   '<div class="jobrow-top"><span class="jname">'
+    +     escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name)
+    +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
+    +   '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
     + '</div>'
@@ -759,6 +776,14 @@ function jobDetail(job, runs, completed, remaining) {
     html += '<div class="jobmeta" style="margin-top:3px">from the production schedule'
       + (job.cutFile ? ' · cutting <span style="color:var(--text-secondary)">' + escapeHtml(job.cutFile) + '</span>' : '')
       + '</div>';
+  }
+
+  // Work orders on this run (schedule column M).
+  if (job.workOrders) {
+    html += '<div class="pieces"><div class="pline"><span class="plabel">Work orders</span></div>'
+      + '<div class="pline">' + splitWorkOrders(job.workOrders).map(function (w) {
+          return '<span class="pitem"><span class="pcut">' + escapeHtml(w) + '</span></span>';
+        }).join('') + '</div></div>';
   }
 
   // Notes from the schedule (column G).
