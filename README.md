@@ -28,7 +28,7 @@ publicly and no API keys appear in the client.
 | Path | Purpose |
 |---|---|
 | `src/Code.js` | Backend: reads the `Job Log` tab, stores tracked jobs in a `Dashboard Jobs` tab, serves the JSON read API and the PIN-protected write API |
-| `src/index.html` | The dashboard UI — one page: a reorderable **Job queue** of collapsible colored progress bars (expand for finish estimates, pieces, weekend what-ifs), an inline **Summary** (Day/Week/Month/Year), and collapsible **Recent runs**; auto-refreshes every 60 s |
+| `src/index.html` | The dashboard UI — one page: a reorderable **Job queue** of collapsible colored progress bars (expand for finish estimates, pieces, weekend what-ifs), a **Weekly activity** chart (stacked runs/day by job), an inline **Summary** (Day/Week/Month/Year), and collapsible **Recent runs**; auto-refreshes every 60 s |
 | `src/appsscript.json` | Apps Script manifest (anonymous web app, runs as the deploying account) |
 | `.clasp.json` | Links this repo to the Apps Script project (`scriptId`) |
 | `.github/workflows/deploy.yml` | CI: pushes `src/` to Apps Script, redeploys the web app, and publishes the page to GitHub Pages on every push to `main` |
