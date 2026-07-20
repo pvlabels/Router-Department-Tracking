@@ -816,27 +816,36 @@ function renderWeekly() {
     }
   }
 
-  var maxTotal = Math.max.apply(null, days.map(function (d) { return d.total; }));
-  if (!maxTotal) {
+  // Series = active jobs in queue order, then an "Other" bucket if used.
+  var series = jobs.map(function (j) { return { name: j.name, color: jobColor(j.color), other: false }; });
+  var anyOther = days.some(function (d) { return d.other > 0; });
+  if (anyOther) series.push({ name: 'Other', color: 'var(--text-muted)', other: true });
+
+  var valOf = function (d, s) { return s.other ? d.other : (d.byJob[s.name] || 0); };
+
+  // Grouped bars: y-axis scales to the tallest single bar (not the day total).
+  var maxVal = 0;
+  days.forEach(function (d) { series.forEach(function (s) { maxVal = Math.max(maxVal, valOf(d, s)); }); });
+  if (!maxVal) {
     legend.innerHTML = '';
     emptyEl.style.display = '';
     return;
   }
   emptyEl.style.display = 'none';
 
-  // Series = active jobs in queue order, then an "Other" bucket if used.
-  var series = jobs.map(function (j) { return { name: j.name, color: jobColor(j.color) }; });
-  var anyOther = days.some(function (d) { return d.other > 0; });
   legend.innerHTML = series.map(function (s) {
     return '<div class="item"><span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
-  }).join('') + (anyOther ? '<div class="item"><span class="chip" style="background:var(--text-muted)"></span>Other</div>' : '');
+  }).join('');
 
   var W = 1040, H = 240, padL = 34, padR = 12, padT = 12, padB = 26;
   var plotW = W - padL - padR, plotH = H - padT - padB;
-  var tickCount = Math.min(4, maxTotal);
-  var yMax = Math.ceil(maxTotal * 1.08 / tickCount) * tickCount;
+  var tickCount = Math.min(4, maxVal);
+  var yMax = Math.ceil(maxVal * 1.08 / tickCount) * tickCount;
   var y = function (v) { return padT + (1 - v / yMax) * plotH; };
-  var slot = plotW / DAYS, barW = Math.min(48, slot * 0.62);
+  var slot = plotW / DAYS;
+  var groupW = slot * 0.74;
+  var innerGap = series.length > 1 ? 2 : 0;
+  var barW = Math.max(2, (groupW - innerGap * (series.length - 1)) / series.length);
 
   var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H });
 
@@ -860,33 +869,23 @@ function renderWeekly() {
       svg.appendChild(xlbl);
     }
 
-    // stacked segments (active jobs bottom-up, then Other), 2px surface gaps
-    var stack = series.filter(function (s) { return d.byJob[s.name] > 0; })
-      .map(function (s) { return { count: d.byJob[s.name], color: s.color }; });
-    if (d.other > 0) stack.push({ count: d.other, color: 'var(--text-muted)' });
-
-    var cum = 0;
-    stack.forEach(function (seg, si) {
-      var y0 = y(cum), y1 = y(cum + seg.count);
-      var top = si === stack.length - 1;
-      var gap = si > 0 ? 1 : 0;
-      var hgt = Math.max(1, y0 - y1 - gap - (top ? 0 : 1));
-      var yTop = y1 + (top ? 0 : 1);
-      var xL = cx - barW / 2;
-      if (top) {
-        var rr = Math.min(4, barW / 2, hgt);
-        svg.appendChild(svgEl('path', {
-          d: 'M' + xL + ' ' + (yTop + hgt) + 'L' + xL + ' ' + (yTop + rr)
-            + 'Q' + xL + ' ' + yTop + ' ' + (xL + rr) + ' ' + yTop
-            + 'L' + (xL + barW - rr) + ' ' + yTop
-            + 'Q' + (xL + barW) + ' ' + yTop + ' ' + (xL + barW) + ' ' + (yTop + rr)
-            + 'L' + (xL + barW) + ' ' + (yTop + hgt) + 'Z',
-          fill: seg.color
-        }));
-      } else {
-        svg.appendChild(svgEl('rect', { x: xL, y: yTop, width: barW, height: hgt, fill: seg.color }));
-      }
-      cum += seg.count;
+    // one bar per series, side by side, centered in the day's slot
+    var groupStart = cx - groupW / 2;
+    series.forEach(function (s, si) {
+      var count = valOf(d, s);
+      if (count <= 0) return;
+      var xL = groupStart + si * (barW + innerGap);
+      var yTop = y(count);
+      var hgt = y(0) - yTop;
+      var rr = Math.min(3, barW / 2, hgt);
+      svg.appendChild(svgEl('path', {
+        d: 'M' + xL + ' ' + (yTop + hgt) + 'L' + xL + ' ' + (yTop + rr)
+          + 'Q' + xL + ' ' + yTop + ' ' + (xL + rr) + ' ' + yTop
+          + 'L' + (xL + barW - rr) + ' ' + yTop
+          + 'Q' + (xL + barW) + ' ' + yTop + ' ' + (xL + barW) + ' ' + (yTop + rr)
+          + 'L' + (xL + barW) + ' ' + (yTop + hgt) + 'Z',
+        fill: s.color
+      }));
     });
 
     // full-column hover target
