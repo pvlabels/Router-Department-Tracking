@@ -48,11 +48,20 @@
     color: var(--text-primary);
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  /* Scale to the monitor: wider container + larger type on big screens. */
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px clamp(16px, 3vw, 56px) 56px; }
+  @media (min-width: 1500px) { body { font-size: 15px; } .wrap { max-width: 1700px; } }
+  @media (min-width: 1900px) { body { font-size: 16px; } .wrap { max-width: 2000px; } header h1 { font-size: 23px; } }
+  @media (min-width: 2500px) { body { font-size: 18px; } .wrap { max-width: 2400px; } }
 
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
   header h1 { font-size: 20px; font-weight: 650; margin: 0; }
   .sub { color: var(--text-secondary); font-size: 13px; }
+  .mselect {
+    font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+  }
+  .mselect:hover { border-color: var(--baseline); }
   .spacer { flex: 1; }
   .updated { color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--delta-good); }
@@ -107,9 +116,13 @@
   .jobrow-detail.hidden { display: none; }
 
   .jobmeta { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
-  .pieces { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
-  .pieces .pline { padding: 1px 0; }
-  .pieces .pdone { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .pieces { margin-top: 10px; font-size: 14.5px; color: var(--text-secondary); line-height: 1.65; }
+  .pieces .plabel { color: var(--text-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px; }
+  .pieces .pyield { color: var(--text-primary); }
+  .pieces .psz { color: var(--text-secondary); margin-right: 3px; }
+  .pieces .pcut { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15.5px; }
+  .pieces .ptot { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .pieces .pitem { display: inline-block; margin-right: 16px; }
   .finish { margin-top: 14px; }
   .finish .label { font-size: 12px; color: var(--text-secondary); }
   .finish .value { font-size: 20px; font-weight: 650; margin-top: 2px; }
@@ -193,7 +206,7 @@
 <div class="wrap">
   <header>
     <h1>Router Department</h1>
-    <span class="sub" id="subtitle"></span>
+    <select class="mselect" id="machineSelect" onchange="onMachineChange()" title="Filter Summary &amp; Recent runs by machine"></select>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading…</span></span>
     <button class="refresh" onclick="load()">Refresh</button>
@@ -280,10 +293,11 @@
 <script>
 var REFRESH_MS = 60000;
 
-// Shop schedule: Mon–Fri, 6:00 AM – 5:00 PM.
+// Shop schedule: Mon–Fri, 6:00 AM – 5:00 PM (11h). Weekend shifts are 8h.
 var WORK_START_HOUR = 6;
 var WORK_END_HOUR = 17;
 var HOURS_PER_DAY = WORK_END_HOUR - WORK_START_HOUR;
+var WEEKEND_SHIFT_HOURS = 8;
 
 // How many recent active days feed the pace estimate.
 var PACE_DAYS = 5;
@@ -294,7 +308,9 @@ var PACE_DAYS = 5;
 var API_BASE = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec';
 var API_URL = API_BASE + '?format=json';
 
-var state = { runs: [], jobs: [], daily: {} };
+var state = { runs: [], jobs: [], daily: {}, machines: [] };
+var selectedMachine = 'all';    // machine filter for Summary + Recent runs
+try { selectedMachine = localStorage.getItem('machine') || 'all'; } catch (e) {}
 var expandedJobs = {};          // job name -> true when its ticket is open
 var recentOpen = false;
 var dragName = null;            // job being dragged
@@ -323,21 +339,43 @@ function autoRefresh() {
 function onData(data) {
   state = data;
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
+  // Fallback: build machine-nested daily aggregates + machine list if the
+  // backend didn't send them (e.g. local mock).
   if (!state.daily) {
     state.daily = {};
     state.runs.forEach(function (r) {
-      var k = dayKey(r.when);
-      var day = state.daily[k] || (state.daily[k] = {});
-      var a = day[r.job] || (day[r.job] = { r: 0, s: 0 });
+      var mach = r.machine || 'Unknown';
+      var day = state.daily[dayKey(r.when)] || (state.daily[dayKey(r.when)] = {});
+      var m = day[mach] || (day[mach] = {});
+      var a = m[r.job] || (m[r.job] = { r: 0, s: 0 });
       a.r += 1; a.s += r.seconds;
     });
   }
+  if (!state.machines || !state.machines.length) {
+    state.machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean)).sort();
+  }
+  populateMachineSelect();
   document.getElementById('banner').className = 'banner';
-  var machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean));
-  document.getElementById('subtitle').textContent = machines.length === 1 ? machines[0] : '';
   document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   document.getElementById('livedot').className = 'dot';
   render();
+}
+
+function populateMachineSelect() {
+  var sel = document.getElementById('machineSelect');
+  var machines = state.machines || [];
+  if (selectedMachine !== 'all' && machines.indexOf(selectedMachine) < 0) selectedMachine = 'all';
+  sel.innerHTML = '<option value="all">All machines</option>' + machines.map(function (m) {
+    return '<option value="' + escapeHtml(m) + '"' + (m === selectedMachine ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';
+  }).join('');
+  sel.value = selectedMachine;
+}
+
+function onMachineChange() {
+  selectedMachine = document.getElementById('machineSelect').value;
+  try { localStorage.setItem('machine', selectedMachine); } catch (e) {}
+  renderSummary();
+  renderRecent();
 }
 
 function onError(err) {
@@ -407,10 +445,12 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
   var d = new Date();
   for (var guard = 0; guard < 400; guard++) {
     var dow = d.getDay();
-    var isWork = (dow >= 1 && dow <= 5) || (dow === 6 && includeSat) || (dow === 0 && includeSun);
+    var isWeekday = dow >= 1 && dow <= 5;
+    var isWork = isWeekday || (dow === 6 && includeSat) || (dow === 0 && includeSun);
     if (isWork) {
+      var endHour = isWeekday ? WORK_END_HOUR : WORK_START_HOUR + WEEKEND_SHIFT_HOURS;  // weekends are 8h
       var shiftStart = new Date(d); shiftStart.setHours(WORK_START_HOUR, 0, 0, 0);
-      var shiftEnd = new Date(d); shiftEnd.setHours(WORK_END_HOUR, 0, 0, 0);
+      var shiftEnd = new Date(d); shiftEnd.setHours(endHour, 0, 0, 0);
       var from = d > shiftStart ? d : shiftStart;
       if (from < shiftEnd) {
         var hours = (shiftEnd - from) / 3600000;
@@ -546,13 +586,19 @@ function jobDetail(job, runs, completed, remaining) {
 
   var pieces = Array.isArray(job.pieces) ? job.pieces : [];
   if (pieces.length) {
-    var base = job.baseSheets || 0;
-    html += '<div class="pieces"><div class="pline">Each sheet yields: '
-      + pieces.map(function (p) { return escapeHtml(p.qty + ' × ' + p.size); }).join(', ') + '</div>';
-    html += '<div class="pline">Pieces cut so far: ' + pieces.map(function (p) {
-      return escapeHtml(p.size) + ' <span class="pdone">' + piecesCut(p, base, completed).toLocaleString()
-        + ' / ' + piecesTotal(p, base, job.target).toLocaleString() + '</span>';
-    }).join(' · ') + '</div></div>';
+    var baseSheets = job.baseSheets || 0;
+    html += '<div class="pieces">';
+    html += '<div class="pline"><span class="plabel">Each sheet yields</span></div>';
+    html += '<div class="pline pyield">' + pieces.map(function (p) {
+      return '<span class="pitem"><span class="pcut">' + p.qty + '</span> <span class="psz">×</span> ' + escapeHtml(p.size) + '</span>';
+    }).join('') + '</div>';
+    html += '<div class="pline"><span class="plabel">Pieces cut so far</span></div>';
+    html += '<div class="pline">' + pieces.map(function (p) {
+      return '<span class="pitem"><span class="psz">' + escapeHtml(p.size) + '</span> '
+        + '<span class="pcut">' + piecesCut(p, baseSheets, completed).toLocaleString() + '</span> '
+        + '<span class="ptot">/ ' + piecesTotal(p, baseSheets, job.target).toLocaleString() + '</span></span>';
+    }).join('') + '</div>';
+    html += '</div>';
   }
 
   if (remaining === 0) {
@@ -560,14 +606,14 @@ function jobDetail(job, runs, completed, remaining) {
   } else if (!pace) {
     html += '<div class="finish"><div class="label">Estimated finish</div><div class="value">No run history yet</div></div>';
   } else {
-    var base = simulateFinish(remaining, pace.perHour, false, false);
+    var finishBase = simulateFinish(remaining, pace.perHour, false, false);
     var withSat = simulateFinish(remaining, pace.perHour, true, false);
     var withBoth = simulateFinish(remaining, pace.perHour, true, true);
-    if (base) {
+    if (finishBase) {
       html += '<div class="finish"><div class="label">Estimated finish — normal schedule (Mon–Fri, 6 AM–5 PM)</div>'
-        + '<div class="value">' + fmtDate(base) + ' <span class="time">around ' + fmtHour(base) + '</span></div></div>';
-      html += '<div class="scenarios"><div class="title">If we add weekend shifts (same 6 AM–5 PM hours):</div>'
-        + scenarioRow('Work Saturdays', withSat, base) + scenarioRow('Work Sat + Sun', withBoth, base) + '</div>';
+        + '<div class="value">' + fmtDate(finishBase) + ' <span class="time">around ' + fmtHour(finishBase) + '</span></div></div>';
+      html += '<div class="scenarios"><div class="title">If we add weekend shifts (8-hour days):</div>'
+        + scenarioRow('Work Saturdays', withSat, finishBase) + scenarioRow('Work Sat + Sun', withBoth, finishBase) + '</div>';
     }
   }
 
@@ -748,7 +794,8 @@ function periodRange() {
   return { start: start, end: end, label: label };
 }
 
-function scheduleStats(start, end, machineByDay) {
+function scheduleStats(start, end, machineByDay, machineCount) {
+  machineCount = machineCount || 1;
   var now = new Date();
   var cap = end < now ? end : now;
   var scheduled = 0, downtime = 0, weekdayMachine = 0;
@@ -759,7 +806,7 @@ function scheduleStats(start, end, machineByDay) {
       var shiftStart = new Date(d); shiftStart.setHours(WORK_START_HOUR, 0, 0, 0);
       var shiftEnd = new Date(d); shiftEnd.setHours(WORK_END_HOUR, 0, 0, 0);
       var to = shiftEnd < now ? shiftEnd : now;
-      var sched = to > shiftStart ? (to - shiftStart) / 1000 : 0;
+      var sched = (to > shiftStart ? (to - shiftStart) / 1000 : 0) * machineCount;
       var machine = machineByDay[dayKey(d)] || 0;
       scheduled += sched; weekdayMachine += machine;
       downtime += Math.max(0, sched - machine);
@@ -774,23 +821,31 @@ function renderSummary() {
   document.getElementById('periodlabel').textContent = range.label;
   document.getElementById('periodnext').disabled = range.end > new Date();
 
-  var perJob = {}, machineByDay = {};
+  var perJob = {}, machineByDay = {}, machinesInRange = {};
   var totalRuns = 0, totalSecs = 0;
   var daily = state.daily || {};
   for (var k in daily) {
     var d = parseLocalDate(k);
     if (d < range.start || d >= range.end) continue;
-    var jobs = daily[k];
-    for (var job in jobs) {
-      var a = jobs[job];
-      var pj = perJob[job] || (perJob[job] = { runs: 0, secs: 0 });
-      pj.runs += a.r; pj.secs += a.s;
-      machineByDay[k] = (machineByDay[k] || 0) + a.s;
-      totalRuns += a.r; totalSecs += a.s;
+    var machs = daily[k];
+    for (var mach in machs) {
+      if (selectedMachine !== 'all' && mach !== selectedMachine) continue;
+      machinesInRange[mach] = true;
+      var jobs = machs[mach];
+      for (var job in jobs) {
+        var a = jobs[job];
+        var pj = perJob[job] || (perJob[job] = { runs: 0, secs: 0 });
+        pj.runs += a.r; pj.secs += a.s;
+        machineByDay[k] = (machineByDay[k] || 0) + a.s;
+        totalRuns += a.r; totalSecs += a.s;
+      }
     }
   }
 
-  var sched = scheduleStats(range.start, range.end, machineByDay);
+  // Each machine has its own shift capacity, so scale scheduled time by how
+  // many machines are in scope (all machines that ran in the period, or 1).
+  var machineCount = selectedMachine === 'all' ? Math.max(1, Object.keys(machinesInRange).length) : 1;
+  var sched = scheduleStats(range.start, range.end, machineByDay, machineCount);
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
 
   var tilesEl = document.getElementById('sumtiles');
@@ -836,7 +891,10 @@ function renderSummary() {
     + '<td class="num">' + fmtDur(totalSecs) + '</td><td class="num">—</td><td class="num">100%</td></tr></tfoot>';
   tableEl.innerHTML = html;
 
-  noteEl.textContent = 'Downtime = idle time during scheduled shifts (Mon–Fri, 6 AM–5 PM), '
+  var scopeNote = selectedMachine === 'all'
+    ? (machineCount > 1 ? 'Across ' + machineCount + ' machines. ' : '')
+    : 'Machine: ' + selectedMachine + '. ';
+  noteEl.textContent = scopeNote + 'Downtime = idle time during scheduled shifts (Mon–Fri, 6 AM–5 PM), '
     + 'summed per day up to now. Weekend runs count toward machine time but not the shift schedule.';
 }
 
@@ -853,21 +911,26 @@ function renderRecent() {
   if (!recentOpen) return;
   var table = document.getElementById('datatable');
   var MAX = 15;
-  var recent = state.runs.slice(-MAX).reverse();
-  var heads = ['Date', 'Start', 'Job', 'Run time', 'Status'];
+  var filtered = state.runs.filter(function (r) { return selectedMachine === 'all' || r.machine === selectedMachine; });
+  var showMachine = selectedMachine === 'all' && (state.machines || []).length > 1;
+  var recent = filtered.slice(-MAX).reverse();
+
+  var heads = ['Date', 'Start', 'Job', 'Run time'].concat(showMachine ? ['Machine'] : []).concat(['Status']);
   var html = '<thead><tr>' + heads.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
   recent.forEach(function (r) {
     var cells = [
       r.when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       r.when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-      r.job, fmtDur(r.seconds), r.status.replace(/\.$/, '')
+      r.job, fmtDur(r.seconds)
     ];
+    if (showMachine) cells.push(r.machine);
+    cells.push(r.status.replace(/\.$/, ''));
     html += '<tr>' + cells.map(function (c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
   });
   html += '</tbody>';
   table.innerHTML = html;
   document.getElementById('rowcount').textContent =
-    'Showing ' + recent.length + ' of ' + state.runs.length + ' runs (newest first, doubles removed)';
+    'Showing ' + recent.length + ' of ' + filtered.length + ' runs (newest first, doubles removed)';
 }
 
 /* ---------- job form + write API ---------- */
@@ -999,9 +1062,9 @@ function mockData() {
     { name: 'CR-0120-04.cnc', color: 1, target: 40, pieces: [{ size: '31.5x23.5', qty: 6 }], daily: [4, 0, 5, 3, 4] },
     { name: 'SR-07-111-m3.cnc', color: 2, target: 24, pieces: [], daily: [0, 3, 0, 2, 2] }
   ];
+  var MACHINES = ['MultiCam 3-205-R16 (41334)', 'MultiCam 5-408-R16 (52210)'];
   var runs = [], now = new Date();
   var jobs = defs.map(function (def, ji) {
-    var completed = 0;
     for (var d = 12; d >= 0; d--) {
       var day = new Date(now); day.setDate(day.getDate() - d);
       if (day.getDay() === 0 || day.getDay() === 6) continue;
@@ -1011,8 +1074,7 @@ function mockData() {
         var secs = 2000 + ((d * 131 + i * 977 + ji * 313) % 900);
         t = new Date(t.getTime() + (secs + 300) * 1000);
         if (t > now) break;
-        runs.push({ start: t.toISOString(), job: def.name, seconds: secs, machine: 'MultiCam 3-205-R16 (41334)', status: 'Job completed.' });
-        completed++;
+        runs.push({ start: t.toISOString(), job: def.name, seconds: secs, machine: MACHINES[(ji + i) % MACHINES.length], status: 'Job completed.' });
       }
     }
     return {
@@ -1020,7 +1082,7 @@ function mockData() {
       startDate: dayKey(new Date(now.getTime() - 12 * 86400000)), pieces: def.pieces
     };
   });
-  return { runs: runs, jobs: jobs, updatedAt: new Date().toISOString() };
+  return { runs: runs, jobs: jobs, machines: MACHINES.slice(), updatedAt: new Date().toISOString() };
 }
 
 load();

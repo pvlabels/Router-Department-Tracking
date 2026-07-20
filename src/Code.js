@@ -95,6 +95,7 @@ function getData() {
   return {
     runs: log.runs,
     daily: log.daily,
+    machines: log.machines,
     jobs: readJobs(ss),
     updatedAt: new Date().toISOString()
   };
@@ -159,11 +160,15 @@ function readLog(sheet) {
   var all = Object.keys(byKey).map(function (k) { return byKey[k]; });
   all.sort(function (a, b) { return a._t - b._t; });
 
-  // Full-history daily aggregates.
-  var daily = {};
+  // Full-history daily aggregates, nested by machine so the dashboard can
+  // filter summaries to one machine: daily[day][machine][job] = {r, s}.
+  var daily = {}, machineSet = {};
   all.forEach(function (run) {
+    var mach = run.machine || 'Unknown';
+    machineSet[mach] = true;
     var day = daily[run._d] || (daily[run._d] = {});
-    var agg = day[run.job] || (day[run.job] = { r: 0, s: 0 });
+    var m = day[mach] || (day[mach] = {});
+    var agg = m[run.job] || (m[run.job] = { r: 0, s: 0 });
     agg.r += 1;
     agg.s += run.seconds;
   });
@@ -172,7 +177,7 @@ function readLog(sheet) {
   var runs = all.slice(all.length > CONFIG.MAX_RUNS ? all.length - CONFIG.MAX_RUNS : 0);
   runs.forEach(function (r) { delete r._t; delete r._d; });
 
-  return { runs: runs, daily: daily };
+  return { runs: runs, daily: daily, machines: Object.keys(machineSet).sort() };
 }
 
 /** Local-time YYYY-MM-DD for a Date (the spreadsheet's timezone). */
