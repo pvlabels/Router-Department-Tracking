@@ -7,6 +7,11 @@ and redeployed automatically by GitHub Actions.
 
 **Dashboard: <https://pvlabels.github.io/Router-Department-Tracking/>**
 
+Visually themed with the [Hallmark](https://github.com/nutlope/hallmark) **Cobalt**
+design skill: cool engineered paper, hairline-defined surfaces, one electric-cobalt
+accent, Space Grotesk / Inter / JetBrains Mono, and the weekly chart rendered as a
+single dark graphite band. Light and dark modes both supported.
+
 The page is hosted on GitHub Pages and fetches data from an anonymous Apps
 Script JSON endpoint (`doGet?format=json`). Viewers never open a
 `script.google.com` URL, so Google Workspace policies that block Apps Script
