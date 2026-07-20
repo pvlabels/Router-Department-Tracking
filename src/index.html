@@ -136,6 +136,25 @@
   .strip { margin-top: 14px; }
   .strip .title { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
   .strip svg { display: block; width: 100%; height: auto; }
+
+  /* weekly activity chart */
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 2px 0 12px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend .chip { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; }
+  .weekempty { color: var(--text-muted); padding: 22px 0; text-align: center; font-size: 13px; }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.16); padding: 8px 10px; font-size: 12.5px; min-width: 160px;
+  }
+  .tooltip .t-x { color: var(--text-secondary); margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
+  .tooltip .t-row .chip { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .tooltip .t-row .name { color: var(--text-secondary); flex: 1; padding-right: 10px; }
+  .tooltip .t-row .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tooltip .t-total { border-top: 1px solid var(--grid); margin-top: 4px; padding-top: 4px; }
   .detailbtns { margin-top: 14px; display: flex; gap: 8px; }
 
   button.small {
@@ -253,6 +272,14 @@
     </div>
 
     <div id="jobqueue"></div>
+  </div>
+
+  <!-- ===== Weekly activity ===== -->
+  <div class="card">
+    <div class="cardhead"><h2>Weekly activity</h2><span class="sub">runs per day, by job — last 14 days</span></div>
+    <div class="legend" id="weeklegend"></div>
+    <div class="chartbox" id="weekchartbox"><div class="tooltip" id="weektip"></div></div>
+    <div class="weekempty" id="weekempty" style="display:none">No runs in the last 14 days.</div>
   </div>
 
   <!-- ===== Summary ===== -->
@@ -374,6 +401,7 @@ function populateMachineSelect() {
 function onMachineChange() {
   selectedMachine = document.getElementById('machineSelect').value;
   try { localStorage.setItem('machine', selectedMachine); } catch (e) {}
+  renderWeekly();
   renderSummary();
   renderRecent();
 }
@@ -467,6 +495,7 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 
 function render() {
   renderQueue();
+  renderWeekly();
   renderSummary();
   renderRecent();
 }
@@ -745,6 +774,152 @@ function dailyStrip(runs, color) {
 
   wrap.appendChild(svg);
   return wrap;
+}
+
+/* ---------- weekly activity chart (all active jobs, by color) ---------- */
+
+function renderWeekly() {
+  var box = document.getElementById('weekchartbox');
+  var legend = document.getElementById('weeklegend');
+  var emptyEl = document.getElementById('weekempty');
+  var old = box.querySelector('svg');
+  if (old) old.remove();
+
+  var DAYS = 14;
+  var jobs = activeJobs();                       // queue order; each has a color
+  var nameSet = {};
+  jobs.forEach(function (j) { nameSet[j.name] = true; });
+
+  var end = startOfDay(new Date());
+  var days = [];
+  for (var i = DAYS - 1; i >= 0; i--) {
+    var d = new Date(end); d.setDate(d.getDate() - i);
+    days.push({ date: d, key: dayKey(d), byJob: {}, other: 0, total: 0 });
+  }
+  var idx = {};
+  days.forEach(function (d, i) { idx[d.key] = i; });
+
+  var daily = state.daily || {};
+  for (var k in daily) {
+    if (!(k in idx)) continue;
+    var machs = daily[k];
+    for (var m in machs) {
+      if (selectedMachine !== 'all' && m !== selectedMachine) continue;
+      var js = machs[m];
+      for (var job in js) {
+        var r = js[job].r;
+        var day = days[idx[k]];
+        if (nameSet[job]) day.byJob[job] = (day.byJob[job] || 0) + r;
+        else day.other += r;
+        day.total += r;
+      }
+    }
+  }
+
+  var maxTotal = Math.max.apply(null, days.map(function (d) { return d.total; }));
+  if (!maxTotal) {
+    legend.innerHTML = '';
+    emptyEl.style.display = '';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // Series = active jobs in queue order, then an "Other" bucket if used.
+  var series = jobs.map(function (j) { return { name: j.name, color: jobColor(j.color) }; });
+  var anyOther = days.some(function (d) { return d.other > 0; });
+  legend.innerHTML = series.map(function (s) {
+    return '<div class="item"><span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
+  }).join('') + (anyOther ? '<div class="item"><span class="chip" style="background:var(--text-muted)"></span>Other</div>' : '');
+
+  var W = 1040, H = 240, padL = 34, padR = 12, padT = 12, padB = 26;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  var tickCount = Math.min(4, maxTotal);
+  var yMax = Math.ceil(maxTotal * 1.08 / tickCount) * tickCount;
+  var y = function (v) { return padT + (1 - v / yMax) * plotH; };
+  var slot = plotW / DAYS, barW = Math.min(48, slot * 0.62);
+
+  var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H });
+
+  // gridlines + integer y ticks
+  for (var t = 0; t <= tickCount; t++) {
+    var v = Math.round((t / tickCount) * yMax);
+    var gy = y(v);
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, stroke: 'var(--grid)', 'stroke-width': 1 }));
+    var lbl = svgEl('text', { x: padL - 7, y: gy + 4, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 11 });
+    lbl.textContent = v;
+    svg.appendChild(lbl);
+  }
+  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y(0), y2: y(0), stroke: 'var(--baseline)', 'stroke-width': 1 }));
+
+  days.forEach(function (d, i) {
+    var cx = padL + slot * i + slot / 2;
+    var isWeekend = d.date.getDay() === 0 || d.date.getDay() === 6;
+    if (i % 2 === 1) {
+      var xlbl = svgEl('text', { x: cx, y: H - padB + 17, 'text-anchor': 'middle', fill: isWeekend ? 'var(--grid)' : 'var(--text-muted)', 'font-size': 10 });
+      xlbl.textContent = (d.date.getMonth() + 1) + '/' + d.date.getDate();
+      svg.appendChild(xlbl);
+    }
+
+    // stacked segments (active jobs bottom-up, then Other), 2px surface gaps
+    var stack = series.filter(function (s) { return d.byJob[s.name] > 0; })
+      .map(function (s) { return { count: d.byJob[s.name], color: s.color }; });
+    if (d.other > 0) stack.push({ count: d.other, color: 'var(--text-muted)' });
+
+    var cum = 0;
+    stack.forEach(function (seg, si) {
+      var y0 = y(cum), y1 = y(cum + seg.count);
+      var top = si === stack.length - 1;
+      var gap = si > 0 ? 1 : 0;
+      var hgt = Math.max(1, y0 - y1 - gap - (top ? 0 : 1));
+      var yTop = y1 + (top ? 0 : 1);
+      var xL = cx - barW / 2;
+      if (top) {
+        var rr = Math.min(4, barW / 2, hgt);
+        svg.appendChild(svgEl('path', {
+          d: 'M' + xL + ' ' + (yTop + hgt) + 'L' + xL + ' ' + (yTop + rr)
+            + 'Q' + xL + ' ' + yTop + ' ' + (xL + rr) + ' ' + yTop
+            + 'L' + (xL + barW - rr) + ' ' + yTop
+            + 'Q' + (xL + barW) + ' ' + yTop + ' ' + (xL + barW) + ' ' + (yTop + rr)
+            + 'L' + (xL + barW) + ' ' + (yTop + hgt) + 'Z',
+          fill: seg.color
+        }));
+      } else {
+        svg.appendChild(svgEl('rect', { x: xL, y: yTop, width: barW, height: hgt, fill: seg.color }));
+      }
+      cum += seg.count;
+    });
+
+    // full-column hover target
+    var hit = svgEl('rect', { x: padL + slot * i, y: padT, width: slot, height: plotH, fill: 'transparent' });
+    hit.addEventListener('mousemove', function () { weekTooltip(d, series, cx, W); });
+    svg.appendChild(hit);
+  });
+
+  svg.addEventListener('mouseleave', function () { document.getElementById('weektip').style.display = 'none'; });
+  box.appendChild(svg);
+}
+
+function weekTooltip(day, series, cx, W) {
+  var tip = document.getElementById('weektip');
+  var box = document.getElementById('weekchartbox');
+  var html = '<div class="t-x">' + escapeHtml(fmtDate(day.date)) + '</div>';
+  series.forEach(function (s) {
+    var c = day.byJob[s.name];
+    if (!c) return;
+    html += '<div class="t-row"><span class="chip" style="background:' + s.color + '"></span>'
+      + '<span class="name">' + escapeHtml(s.name) + '</span><span class="val">' + c + '</span></div>';
+  });
+  if (day.other > 0) {
+    html += '<div class="t-row"><span class="chip" style="background:var(--text-muted)"></span>'
+      + '<span class="name">Other</span><span class="val">' + day.other + '</span></div>';
+  }
+  html += '<div class="t-row t-total"><span class="name">Total runs</span><span class="val">' + day.total + '</span></div>';
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  var bx = box.getBoundingClientRect();
+  var tx = (cx / W) * bx.width;
+  tip.style.left = Math.max(0, Math.min(tx + 14, bx.width - tip.offsetWidth - 4)) + 'px';
+  tip.style.top = '6px';
 }
 
 /* ---------- summary ---------- */
