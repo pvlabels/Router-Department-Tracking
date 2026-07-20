@@ -108,28 +108,25 @@
   .collapse-head .caret { color: var(--accent); font-size: 12px; }
 
   /* ----- job queue rows ----- */
-  .jobrow { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: transparent; transition: border-color .2s ease; }
+  .jobrow { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: transparent;
+    transition: box-shadow .16s ease, border-color .16s ease; touch-action: pan-y; }
   .jobrow:last-child { margin-bottom: 0; }
-  .jobrow.dragover { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-  .jobrow.dragging { opacity: 0.45; }
-  .jobrow-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px; }
-  .grip { cursor: grab; color: var(--text-muted); font-size: 15px; letter-spacing: -2px; user-select: none; padding: 0 2px; flex: none; }
-  .grip:active { cursor: grabbing; }
-  .jobrow-main { flex: 1; cursor: pointer; min-width: 0; }
+  .jobrow.lifted { background: var(--surface-1); border-color: var(--accent);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.20); position: relative; z-index: 30; }
+  .jobrow-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px; user-select: none; }
+  .jobrow-main { flex: 1; min-width: 0; cursor: grab; }
+  .jobrow.lifted .jobrow-main { cursor: grabbing; }
   .jobrow-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
   .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-muted); flex: none; font-size: 12.5px; }
   .jpct .done { color: var(--delta-good); font-weight: 600; }
   .jbar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
   .jfill { height: 100%; border-radius: 4px; transition: width .3s ease; }
-  .jobrow-move { display: flex; align-items: center; gap: 4px; flex: none; }
-  .mvbtn {
-    font: inherit; font-size: 12px; line-height: 1; padding: 4px 7px; border: 1px solid var(--border);
-    background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer;
-  }
-  .mvbtn:hover { border-color: var(--accent); color: var(--accent); }
-  .mvbtn:disabled { opacity: 0.3; cursor: default; }
-  .caret-btn { cursor: pointer; color: var(--accent); width: 20px; text-align: center; user-select: none; font-size: 12px; flex: none; }
+  .caret-btn { flex: none; cursor: pointer; color: var(--accent); font-size: 12px; line-height: 1;
+    width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border); border-radius: 6px; background: transparent; user-select: none; }
+  .caret-btn:hover { border-color: var(--accent); }
+  .caret-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .jobrow-detail { padding: 2px 14px 15px; }
   .jobrow-detail.hidden { display: none; }
 
@@ -270,7 +267,7 @@
   <div class="card reveal">
     <div class="cardhead">
       <h2>Job queue</h2>
-      <span class="sub">drag <span style="letter-spacing:-2px">⠿</span> or use ▲▼ to set cut priority</span>
+      <span class="sub">press &amp; hold a job to reorder the cut priority</span>
       <span class="spacer"></span>
       <button class="refresh" onclick="openForm()">+ Track job</button>
     </div>
@@ -589,17 +586,12 @@ function jobRow(job, idx, total) {
   var head = document.createElement('div');
   head.className = 'jobrow-head';
   head.innerHTML =
-      '<span class="grip" draggable="true" title="Drag to reorder">⠿</span>'
-    + '<div class="jobrow-main">'
+      '<div class="jobrow-main" title="Press and hold to reorder">'
     +   '<div class="jobrow-top"><span class="jname">' + escapeHtml(job.name) + '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
     + '</div>'
-    + '<div class="jobrow-move">'
-    +   '<button class="mvbtn" title="Move up"' + (idx === 0 ? ' disabled' : '') + ' data-act="up">▲</button>'
-    +   '<button class="mvbtn" title="Move down"' + (idx === total - 1 ? ' disabled' : '') + ' data-act="down">▼</button>'
-    +   '<span class="caret-btn" data-act="toggle">' + (open ? '▾' : '▸') + '</span>'
-    + '</div>';
+    + '<button class="caret-btn" data-act="toggle" title="' + (open ? 'Hide details' : 'Show details') + '">' + (open ? '▾' : '▸') + '</button>';
   row.appendChild(head);
 
   var detail = document.createElement('div');
@@ -607,31 +599,101 @@ function jobRow(job, idx, total) {
   detail.appendChild(jobDetail(job, runs, completed, remaining));
   row.appendChild(detail);
 
-  // interactions
-  head.querySelector('.jobrow-main').addEventListener('click', function () { toggleJob(job.name); });
+  // small button opens the hidden info; press-and-hold the row to reorder
   head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleJob(job.name); });
-  head.querySelector('[data-act="up"]').addEventListener('click', function (e) { e.stopPropagation(); moveJob(job.name, -1); });
-  head.querySelector('[data-act="down"]').addEventListener('click', function (e) { e.stopPropagation(); moveJob(job.name, 1); });
-
-  var grip = head.querySelector('.grip');
-  grip.addEventListener('dragstart', function (e) {
-    dragName = job.name; row.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', job.name); } catch (err) {}
-  });
-  grip.addEventListener('dragend', function () { dragName = null; row.classList.remove('dragging'); clearDragOver(); });
-  row.addEventListener('dragover', function (e) {
-    if (!dragName || dragName === job.name) return;
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-    clearDragOver(); row.classList.add('dragover');
-  });
-  row.addEventListener('dragleave', function () { row.classList.remove('dragover'); });
-  row.addEventListener('drop', function (e) {
-    e.preventDefault(); row.classList.remove('dragover');
-    if (dragName && dragName !== job.name) dropJob(dragName, job.name);
-  });
+  head.addEventListener('pointerdown', function (e) { rowPointerDown(e, row); });
 
   return row;
+}
+
+/* ---- press-and-hold drag reorder (whole row lifts and follows) ---- */
+
+var HOLD_MS = 160, MOVE_START = 6;
+var pressState = null;
+
+function rowPointerDown(e, row) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.target.closest('.caret-btn')) return;            // the expand button isn't a drag handle
+  endPress();
+  var st = { row: row, container: document.getElementById('jobqueue'),
+             startY: e.clientY, startX: e.clientX, lastY: e.clientY,
+             pointerId: e.pointerId, mouse: e.pointerType === 'mouse', dragging: false, timer: null };
+  pressState = st;
+  st.timer = setTimeout(function () { if (pressState === st && !st.dragging) beginDrag(); }, HOLD_MS);
+  window.addEventListener('pointermove', rowPointerMove);
+  window.addEventListener('pointerup', rowPointerUp);
+  window.addEventListener('pointercancel', rowPointerUp);
+}
+
+function rowPointerMove(e) {
+  var st = pressState; if (!st) return;
+  st.lastY = e.clientY;
+  if (!st.dragging) {
+    var dist = Math.abs(e.clientY - st.startY) + Math.abs(e.clientX - st.startX);
+    if (st.mouse && dist > MOVE_START) { clearTimeout(st.timer); beginDrag(); }
+    else return;
+  }
+  e.preventDefault();
+  dragMove(e.clientY);
+}
+
+function beginDrag() {
+  var st = pressState; if (!st || st.dragging) return;
+  st.dragging = true;
+  st.baseY = st.lastY;
+  dragName = st.row.getAttribute('data-name');           // blocks auto-refresh mid-drag
+  st.row.classList.add('lifted');
+  st.row.style.touchAction = 'none';
+  try { st.row.setPointerCapture(st.pointerId); } catch (err) {}
+  document.body.style.userSelect = 'none';
+  dragMove(st.lastY);
+}
+
+function dragMove(y) {
+  var st = pressState, row = st.row, container = st.container;
+  var kids = Array.prototype.slice.call(container.children).filter(function (c) {
+    return c !== row && c.classList && c.classList.contains('jobrow');
+  });
+  var after = null;
+  for (var i = 0; i < kids.length; i++) {
+    var box = kids[i].getBoundingClientRect();
+    if (y < box.top + box.height / 2) { after = kids[i]; break; }
+  }
+  var before = row.offsetTop;
+  if (after == null) { if (container.lastElementChild !== row) container.appendChild(row); }
+  else if (row.nextElementSibling !== after) { container.insertBefore(row, after); }
+  st.baseY += row.offsetTop - before;                    // keep the lift under the pointer after a DOM move
+  row.style.transform = 'translateY(' + (y - st.baseY) + 'px) scale(1.02)';
+}
+
+function rowPointerUp() {
+  var st = pressState; if (!st) return;
+  clearTimeout(st.timer);
+  window.removeEventListener('pointermove', rowPointerMove);
+  window.removeEventListener('pointerup', rowPointerUp);
+  window.removeEventListener('pointercancel', rowPointerUp);
+  document.body.style.userSelect = '';
+  var wasDragging = st.dragging;
+  var container = st.container, row = st.row;
+  pressState = null;
+  dragName = null;
+  if (wasDragging) {
+    row.classList.remove('lifted');
+    row.style.transform = '';
+    row.style.touchAction = '';
+    var names = Array.prototype.slice.call(container.querySelectorAll('.jobrow'))
+      .map(function (r) { return r.getAttribute('data-name'); });
+    commitOrder(names);
+  }
+}
+
+function endPress() {
+  if (!pressState) return;
+  clearTimeout(pressState.timer);
+  window.removeEventListener('pointermove', rowPointerMove);
+  window.removeEventListener('pointerup', rowPointerUp);
+  window.removeEventListener('pointercancel', rowPointerUp);
+  pressState = null;
 }
 
 function jobDetail(job, runs, completed, remaining) {
@@ -713,31 +775,6 @@ function toggleJob(name) {
   else { detail.classList.add('hidden'); caret.textContent = '▸'; }
 }
 function cssSelector(s) { return String(s).replace(/(["\\])/g, '\\$1'); }
-
-/* ----- reorder ----- */
-
-function clearDragOver() {
-  Array.prototype.forEach.call(document.querySelectorAll('.jobrow.dragover'), function (el) { el.classList.remove('dragover'); });
-}
-
-function moveJob(name, dir) {
-  var jobs = activeJobs();
-  var i = jobs.map(function (j) { return j.name; }).indexOf(name);
-  var t = i + dir;
-  if (i < 0 || t < 0 || t >= jobs.length) return;
-  var names = jobs.map(function (j) { return j.name; });
-  names.splice(t, 0, names.splice(i, 1)[0]);
-  commitOrder(names);
-}
-
-function dropJob(from, onto) {
-  var names = activeJobs().map(function (j) { return j.name; });
-  var fi = names.indexOf(from), ti = names.indexOf(onto);
-  if (fi < 0 || ti < 0) return;
-  names.splice(fi, 1);
-  names.splice(names.indexOf(onto) + (fi < ti ? 1 : 0), 0, from);
-  commitOrder(names);
-}
 
 function commitOrder(names) {
   // Apply optimistically: reassign order on the active jobs, keep others as-is.
