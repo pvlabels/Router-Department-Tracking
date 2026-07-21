@@ -92,7 +92,6 @@ function handleAction(p) {
     if (p.action === 'saveJob') return saveJob(p.job);
     if (p.action === 'stopJob') return stopJob(p.name);
     if (p.action === 'reorderJobs') return reorderJobs(p.order);
-    if (p.action === 'setGraph') return setGraph(p.name, p.on);
     if (p.action === 'setComplete') return setComplete(p.name, p.on);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
@@ -295,7 +294,6 @@ function readJobs(ss) {
     var m = meta[j.name] || { o: 9999, c: 0 };
     j.order = m.o;
     j.color = m.c;
-    j.inGraph = !!m.g;            // shown in the Weekly activity chart? (off by default)
     j.finishedAt = m.f || '';     // set = job is done and belongs in the Finished log
     j.noAutoFinish = !!m.x;       // reopened by hand — don't auto-finish it again
   });
@@ -391,56 +389,6 @@ function saveJob(job) {
 }
 
 /** Adds or removes a job from the Weekly activity chart (stored in job meta). */
-function setGraph(name, on) {
-  name = String(name || '').trim();
-  if (!name) throw new Error('Job name is required.');
-  var lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-  try {
-    var meta = getJobMeta();
-    if (!meta[name]) meta[name] = { o: 9999, c: nextColor({}) };
-    meta[name].g = !!on;
-    setJobMeta(meta);
-  } finally {
-    lock.releaseLock();
-  }
-  return { ok: true };
-}
-
-/**
- * Marks a job finished (or reopens it).
- *
- * Finishing stamps a timestamp in job meta and deactivates the sheet row, which
- * is what moves the job out of the queue and into the Finished log. The stamp is
- * what separates "we cut it" from "Stop tracking" — both leave Active=false, but
- * only a finished job carries `f`. Reopening clears the stamp and reactivates.
- */
-function setComplete(name, on) {
-  name = String(name || '').trim();
-  if (!name) throw new Error('Job name is required.');
-  var lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-  try {
-    var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
-    var col = jobsCols(sheet);
-    var row = findJobRow(sheet, name);
-    if (!row) throw new Error('Job not found: ' + name);
-    sheet.getRange(row, col['Active'] + 1).setValue(!on);
-
-    var meta = getJobMeta();
-    if (!meta[name]) meta[name] = { o: 9999, c: nextColor({}) };
-    if (on) { meta[name].f = new Date().toISOString(); delete meta[name].x; }
-    // Reopening a job that already hit its target has to suppress the auto-finish
-    // rule, or it would drop straight back into the log. It stays in the queue
-    // until it's marked complete again (or the schedule finishes it).
-    else { delete meta[name].f; meta[name].x = true; }
-    setJobMeta(meta);
-  } finally {
-    lock.releaseLock();
-  }
-  return { ok: true };
-}
-
 /** Rewrites queue order from an array of job names (index = position). */
 function reorderJobs(order) {
   if (!Array.isArray(order)) throw new Error('order must be an array of job names.');

@@ -116,8 +116,6 @@
   .cardhead { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
   .sub { color: var(--text-muted); font-size: 12.5px; }
   .collapse-head { cursor: pointer; user-select: none; gap: 10px; margin-bottom: 0; }
-  .panels { display: grid; grid-template-columns: repeat(auto-fit,minmax(440px,1fr)); gap: 20px; margin-bottom: 20px; }
-  .panels > .card { margin-bottom: 0; }
 
   /* ---------- job rows ---------- */
   .jobrow { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--surface-1); }
@@ -137,15 +135,28 @@
   .jco { font-weight: 700; color: var(--text-primary); font-size: 12.5px; margin-left: 10px; }
 
   /* ---------- finished log ---------- */
-  .finrow {
-    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    padding: 11px 2px; border-bottom: 1px solid var(--grid);
-  }
-  .finrow:last-child { border-bottom: none; }
-  .fintitle { flex: 1; min-width: 220px; display: flex; align-items: baseline; flex-wrap: wrap; }
-  .fincount { color: var(--text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  .findate { color: var(--text-muted); font-size: 12.5px; min-width: 92px; }
   .done-btn { color: var(--delta-good); }
+  #fintable .done { color: var(--delta-good); font-weight: 500; }
+  #fintable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
+
+  /* ---------- summary filters + sortable columns ---------- */
+  .filterbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 16px 0 12px; padding-top: 14px; border-top: 1px solid var(--grid);
+  }
+  .filterbar input, .filterbar select {
+    font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
+  .filterbar #f_job { min-width: 190px; }
+  .filterbar input:focus, .filterbar select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .filterbar .fdate { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12.5px; }
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: var(--text-primary); }
+  th.sorted { color: var(--text-primary); }
+  th .arrow { font-size: 9px; margin-left: 5px; }
+  .navbar button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .navbar button:disabled { opacity: .4; cursor: default; }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; flex: none; color: var(--text-secondary); }
   .jpct .done { color: var(--delta-good); }
   .jbar { height: 10px; border-radius: 999px; background: var(--grid); overflow: hidden; }
@@ -191,23 +202,6 @@
   .detailbtns { margin-top: 18px; display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* ---------- weekly chart ---------- */
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
-  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); }
-  .legend .chip { width: 9px; height: 9px; border-radius: 2px; flex: none; }
-  .chartbox { position: relative; }
-  .chartbox svg { display: block; width: 100%; height: auto; }
-  .weekempty { color: var(--text-muted); padding: 22px 0; text-align: center; font-size: 13px; }
-  .tooltip {
-    position: absolute; pointer-events: none; display: none; z-index: 5;
-    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: var(--shadow-menu); padding: 9px 11px; font-size: 13px; min-width: 165px;
-  }
-  .tooltip .t-x { color: var(--text-muted); margin-bottom: 5px; font-size: 12.5px; }
-  .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
-  .tooltip .t-row .chip { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-  .tooltip .t-row .name { color: var(--text-secondary); flex: 1; padding-right: 10px; }
-  .tooltip .t-row .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
-  .tooltip .t-total { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 5px; }
 
   /* ---------- form ---------- */
   #formcard { border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; background: var(--surface-2); }
@@ -318,61 +312,55 @@
   </div>
 
   <!-- ===== Finished log ===== -->
-  <div class="card reveal" id="finishedcard" style="display:none">
-    <div class="cardhead collapse-head" onclick="toggleFinished()">
-      <span id="finishedcaret" style="display:flex;color:var(--accent)"></span>
+  <div class="card reveal" id="finishedcard">
+    <div class="cardhead">
       <h2>Finished log</h2>
       <span class="sub" id="finishedsub"></span>
+      <span class="spacer"></span>
+      <div class="navbar">
+        <button onclick="finDayStep(-1)" title="Previous day" id="finprev"></button>
+        <span id="finlabel"></span>
+        <button id="finnext" onclick="finDayStep(1)" title="Next day"></button>
+        <button onclick="finToday()">Today</button>
+        <button id="finall" onclick="toggleFinAll()">All</button>
+      </div>
     </div>
-    <div id="finishedbody" style="display:none;margin-top:14px"></div>
+    <div class="tablewrap"><table id="fintable"></table></div>
+    <div class="rowcount" id="finnote"></div>
   </div>
 
-  <!-- ===== Weekly activity + Summary ===== -->
-  <div class="panels">
-    <div class="card reveal" id="weekcard" style="display:none">
-      <div class="cardhead" style="align-items:baseline;margin-bottom:12px">
-        <h2>Weekly activity</h2><span class="sub">runs per day, by job &mdash; last 7 days</span>
-      </div>
-      <div class="legend" id="weeklegend"></div>
-      <div class="chartbox" id="weekchartbox"><div class="tooltip" id="weektip"></div></div>
-      <div class="weekempty" id="weekempty" style="display:none">No runs in the last 7 days.</div>
-    </div>
-
-    <div class="card reveal">
-      <div class="cardhead" style="margin-bottom:14px">
-        <h2>Summary</h2>
-        <span class="spacer"></span>
-        <div class="seg" id="periodseg">
-          <button data-p="day" onclick="setPeriod('day')">Daily</button>
-          <button data-p="week" class="on" onclick="setPeriod('week')">Weekly</button>
-          <button data-p="month" onclick="setPeriod('month')">Monthly</button>
-          <button data-p="year" onclick="setPeriod('year')">Yearly</button>
-        </div>
-      </div>
-      <div class="sumbar">
-        <div class="navbar">
-          <button onclick="periodStep(-1)" title="Previous" id="periodprev"></button>
-          <span id="periodlabel"></span>
-          <button id="periodnext" onclick="periodStep(1)" title="Next"></button>
-          <button onclick="periodToday()">Today</button>
-        </div>
-      </div>
-      <div class="sumtiles" id="sumtiles"></div>
-      <div class="tablewrap"><table id="sumtable"></table></div>
-      <div class="rowcount" id="sumnote"></div>
-    </div>
-  </div>
-
-  <!-- ===== Recent runs (collapsible) ===== -->
+  <!-- ===== Summary ===== -->
   <div class="card reveal">
-    <div class="cardhead collapse-head" onclick="toggleRecent()">
-      <span id="recentcaret" style="display:flex;color:var(--accent)"></span>
-      <h2>Recent runs</h2>
+    <div class="cardhead" style="margin-bottom:14px">
+      <h2>Summary</h2>
+      <span class="spacer"></span>
+      <div class="seg" id="periodseg">
+        <button data-p="day" onclick="setPeriod('day')">Daily</button>
+        <button data-p="week" class="on" onclick="setPeriod('week')">Weekly</button>
+        <button data-p="month" onclick="setPeriod('month')">Monthly</button>
+        <button data-p="year" onclick="setPeriod('year')">Yearly</button>
+      </div>
     </div>
-    <div id="recentbody" style="display:none;margin-top:14px">
-      <div class="tablewrap"><table id="datatable"></table></div>
-      <div class="rowcount" id="rowcount"></div>
+    <div class="sumbar">
+      <div class="navbar">
+        <button onclick="periodStep(-1)" title="Previous" id="periodprev"></button>
+        <span id="periodlabel"></span>
+        <button id="periodnext" onclick="periodStep(1)" title="Next"></button>
+        <button onclick="periodToday()">Today</button>
+      </div>
     </div>
+    <div class="sumtiles" id="sumtiles"></div>
+    <div class="filterbar">
+      <input id="f_job" placeholder="Filter job&hellip;" oninput="onFilterChange()">
+      <select id="f_machine" onchange="onFilterChange()"></select>
+      <label class="fdate">from <input id="f_from" type="date" onchange="onFilterChange()"></label>
+      <label class="fdate">to <input id="f_to" type="date" onchange="onFilterChange()"></label>
+      <button class="small" onclick="clearFilters()">Clear</button>
+      <span class="spacer"></span>
+      <span class="sub" id="filtercount"></span>
+    </div>
+    <div class="tablewrap"><table id="sumtable"></table></div>
+    <div class="rowcount" id="sumnote"></div>
   </div>
 </div>
 <script>
@@ -397,7 +385,6 @@ var state = { runs: [], jobs: [], daily: {}, machines: [] };
 var selectedMachine = 'all';    // machine filter for Summary + Recent runs
 try { selectedMachine = localStorage.getItem('machine') || 'all'; } catch (e) {}
 var expandedJobs = {};          // job name -> true when its ticket is open
-var recentOpen = false;
 var dragName = null;            // job being dragged
 var suppressReloadUntil = 0;    // pause auto-refresh briefly after a reorder
 
@@ -495,14 +482,22 @@ function populateMachineSelect() {
     return '<option value="' + escapeHtml(m) + '"' + (m === selectedMachine ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';
   }).join('');
   sel.value = selectedMachine;
+
+  // The summary's own machine filter narrows within whatever the header picked.
+  var f = document.getElementById('f_machine');
+  if (f) {
+    f.innerHTML = '<option value="">Any machine</option>' + machines.map(function (m) {
+      return '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>';
+    }).join('');
+    f.value = machines.indexOf(sumFilters.machine) >= 0 ? sumFilters.machine : '';
+    sumFilters.machine = f.value;
+  }
 }
 
 function onMachineChange() {
   selectedMachine = document.getElementById('machineSelect').value;
   try { localStorage.setItem('machine', selectedMachine); } catch (e) {}
-  renderWeekly();
   renderSummary();
-  renderRecent();
 }
 
 function onError(err) {
@@ -532,6 +527,8 @@ function fmtDur(s) {
 }
 function fmtDate(d) { return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }); }
 function fmtHour(d) { return d.toLocaleTimeString(undefined, { hour: 'numeric' }); }
+function fmtTime(d) { return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function fmtDateShort(d) { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
 function unique(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function (ch) {
@@ -595,9 +592,7 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 function render() {
   renderQueue();
   renderFinished();
-  renderWeekly();
   renderSummary();
-  renderRecent();
 }
 
 /* ----- job queue (collapsible, colored, reorderable) ----- */
@@ -723,43 +718,93 @@ function renderQueue() {
 
 /* ----- finished log: jobs that were cut, manually or by hitting target ----- */
 
-var finishedOpen = false;
+var finAnchor = startOfDay(new Date());   // which day the log is showing
+var finShowAll = false;                   // true = every finished job, no day filter
+
+/**
+ * When a job finished. Manual/schedule completions carry a stamp; a job that
+ * simply hit its target is dated by its last run.
+ */
+function finishedWhen(job) {
+  if (job.finishedAt) return new Date(job.finishedAt);
+  var runs = runsForJob(job);
+  return runs.length ? runs[runs.length - 1].when : null;
+}
+
+/** A finished job's runs, oldest first. */
+function runsForJob(job) {
+  var since = parseLocalDate(job.startDate || '2000-01-01');
+  var key = matchKeyFor(job);
+  return state.runs.filter(function (r) { return runMatchesJob(r.job, key) && r.when >= since; })
+    .sort(function (a, b) { return a.when - b.when; });
+}
 
 function renderFinished() {
-  var card = document.getElementById('finishedcard');
-  var body = document.getElementById('finishedbody');
-  if (!card || !body) return;
-  var jobs = finishedJobs();
+  var table = document.getElementById('fintable');
+  var note = document.getElementById('finnote');
+  if (!table) return;
 
-  if (!jobs.length) { card.style.display = 'none'; return; }
-  card.style.display = '';
+  var all = finishedJobs();
+  var rows = all.map(function (job) {
+    var runs = runsForJob(job);
+    var secs = runs.reduce(function (t, r) { return t + r.seconds; }, 0);
+    return {
+      job: job,
+      when: finishedWhen(job),
+      sheets: runs.length,
+      avg: runs.length ? secs / runs.length : 0
+    };
+  });
+
+  if (!finShowAll) {
+    var key = dayKey(finAnchor);
+    rows = rows.filter(function (r) { return r.when && dayKey(r.when) === key; });
+  }
+  rows.sort(function (a, b) { return (b.when || 0) - (a.when || 0); });
+
+  document.getElementById('finlabel').textContent = finShowAll ? 'All time' : fmtDate(finAnchor);
+  document.getElementById('finnext').disabled = finShowAll || startOfDay(finAnchor) >= startOfDay(new Date());
+  document.getElementById('finprev').disabled = finShowAll;
+  document.getElementById('finall').classList.toggle('on', finShowAll);
   document.getElementById('finishedsub').textContent =
-    jobs.length + ' job' + (jobs.length === 1 ? '' : 's') + ' completed';
-  document.getElementById('finishedcaret').innerHTML =
-    finishedOpen ? ICON.chevronDown(16) : ICON.chevronRight(16);
-  body.style.display = finishedOpen ? '' : 'none';
-  if (!finishedOpen) return;
+    rows.length + ' job' + (rows.length === 1 ? '' : 's') + ' completed';
 
-  body.innerHTML = jobs.map(function (job) {
-    var completed = completedFor(job.name, job.startDate);
-    var company = companyFromNotes(job.notes);
-    return '<div class="finrow">'
-      + '<span class="fintitle"><span class="jname">'
+  if (!rows.length) {
+    table.innerHTML = '';
+    note.innerHTML = '<div class="empty">' + (finShowAll ? 'No finished jobs yet.'
+      : 'Nothing finished on ' + escapeHtml(fmtDate(finAnchor)) + '.') + '</div>';
+    return;
+  }
+  note.innerHTML = '';
+
+  var html = '<thead><tr><th>Job</th><th>Date finished</th><th>Time</th>'
+    + '<th class="num">Sheets</th><th class="num">Avg run time</th><th>Status</th><th></th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    var job = r.job, company = companyFromNotes(job.notes);
+    html += '<tr>'
+      + '<td><span class="jname">'
       +   escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
       +   (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
-      +   (company ? '<span class="jco">' + escapeHtml(company) + '</span>' : '')
-      + '</span>'
-      + '<span class="fincount">' + completed + ' / ' + (job.target || 0) + ' sheets</span>'
-      + '<span class="findate">' + (job.finishedAt ? fmtDate(new Date(job.finishedAt)) : 'target reached') + '</span>'
-      + '<button class="small" onclick="reopenJob(' + jsStr(job.name) + ')">Reopen</button>'
-      + '</div>';
-  }).join('');
+      +   (company ? '<span class="jco">' + escapeHtml(company) + '</span>' : '') + '</td>'
+      + '<td>' + (r.when ? escapeHtml(fmtDate(r.when)) : '&mdash;') + '</td>'
+      + '<td>' + (r.when ? escapeHtml(fmtTime(r.when)) : '&mdash;') + '</td>'
+      + '<td class="num">' + r.sheets + ' / ' + (job.target || 0) + '</td>'
+      + '<td class="num">' + (r.sheets ? escapeHtml(fmtDur(r.avg)) : '&mdash;') + '</td>'
+      + '<td><span class="done">Complete ✓</span></td>'
+      + '<td class="num"><button class="small" onclick="reopenJob(' + jsStr(job.name) + ')">Reopen</button></td>'
+      + '</tr>';
+  });
+  table.innerHTML = html + '</tbody>';
 }
 
-function toggleFinished() {
-  finishedOpen = !finishedOpen;
+function finDayStep(delta) {
+  var d = new Date(finAnchor); d.setDate(d.getDate() + delta);
+  if (startOfDay(d) > startOfDay(new Date())) return;
+  finAnchor = startOfDay(d);
   renderFinished();
 }
+function finToday() { finShowAll = false; finAnchor = startOfDay(new Date()); renderFinished(); }
+function toggleFinAll() { finShowAll = !finShowAll; renderFinished(); }
 
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
@@ -980,9 +1025,7 @@ function jobDetail(job, runs, completed, remaining) {
 
   var btns = document.createElement('div');
   btns.className = 'detailbtns';
-  var graphLabel = job.inGraph ? '− Remove from graph' : '+ Add to graph';
-  btns.innerHTML = '<button class="small' + (job.inGraph ? ' on' : '') + '" onclick="toggleGraph(' + jsStr(job.name) + ',' + (job.inGraph ? 'false' : 'true') + ')">' + graphLabel + '</button>'
-    + '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
+  btns.innerHTML = '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
     + '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>'
     + '<button class="small danger" id="stop-' + cssId(job.name) + '" onclick="stopClicked(' + jsStr(job.name) + ')">Stop tracking</button>';
   wrap.appendChild(btns);
@@ -1050,18 +1093,6 @@ function setCompleteState(name, on, errMsg) {
   });
 }
 
-/** Add/remove a job from the Weekly activity chart (optimistic, then persist). */
-function toggleGraph(name, on) {
-  var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
-  if (j) j.inGraph = on;
-  renderQueue();
-  renderWeekly();
-  suppressReloadUntil = Date.now() + 6000;
-  api({ action: 'setGraph', name: name, on: on }, function (res) {
-    if (!res || !res.ok) { onError(new Error((res && res.error) || 'Could not update the graph.')); load(); }
-  });
-}
-
 /* ----- daily strip ----- */
 
 function dailyStrip(runs, color) {
@@ -1119,161 +1150,6 @@ function dailyStrip(runs, color) {
 
   wrap.appendChild(svg);
   return wrap;
-}
-
-/* ---------- weekly activity chart (all active jobs, by color) ---------- */
-
-function renderWeekly() {
-  var box = document.getElementById('weekchartbox');
-  var legend = document.getElementById('weeklegend');
-  var emptyEl = document.getElementById('weekempty');
-  var old = box.querySelector('svg');
-  if (old) old.remove();
-
-  var DAYS = 7;
-  var card = document.getElementById('weekcard');
-  var jobs = activeJobs().filter(function (j) { return j.inGraph; });   // only jobs added to the graph
-  if (jobs.length === 0) {                       // hide the whole bubble until a job is added
-    if (card) card.style.display = 'none';
-    return;
-  }
-  if (card) { card.style.display = ''; card.classList.add('is-in'); }
-  var matchGraph = function (runName) {
-    for (var gi = 0; gi < jobs.length; gi++) { if (runMatchesJob(runName, matchKeyFor(jobs[gi]))) return jobs[gi]; }
-    return null;
-  };
-
-  var end = startOfDay(new Date());
-  var days = [];
-  for (var i = DAYS - 1; i >= 0; i--) {
-    var d = new Date(end); d.setDate(d.getDate() - i);
-    days.push({ date: d, key: dayKey(d), byJob: {}, other: 0, total: 0 });
-  }
-  var idx = {};
-  days.forEach(function (d, i) { idx[d.key] = i; });
-
-  var daily = state.daily || {};
-  for (var k in daily) {
-    if (!(k in idx)) continue;
-    var machs = daily[k];
-    for (var m in machs) {
-      if (selectedMachine !== 'all' && m !== selectedMachine) continue;
-      var js = machs[m];
-      for (var job in js) {
-        var r = js[job].r;
-        var day = days[idx[k]];
-        var gj = matchGraph(job);
-        if (gj) day.byJob[gj.name] = (day.byJob[gj.name] || 0) + r;
-        else day.other += r;
-        day.total += r;
-      }
-    }
-  }
-
-  // Series = active jobs in queue order, then an "Other" bucket if used.
-  var series = jobs.map(function (j) { return { name: j.name, color: jobColor(j.color), other: false }; });
-  var anyOther = days.some(function (d) { return d.other > 0; });
-  if (anyOther) series.push({ name: 'Other', color: 'var(--text-muted)', other: true });
-
-  var valOf = function (d, s) { return s.other ? d.other : (d.byJob[s.name] || 0); };
-
-  // Grouped bars: y-axis scales to the tallest single bar (not the day total).
-  var maxVal = 0;
-  days.forEach(function (d) { series.forEach(function (s) { maxVal = Math.max(maxVal, valOf(d, s)); }); });
-  if (!maxVal) {
-    legend.innerHTML = '';
-    emptyEl.textContent = 'No runs in the last 7 days.';
-    emptyEl.style.display = '';
-    return;
-  }
-  emptyEl.style.display = 'none';
-
-  legend.innerHTML = series.map(function (s) {
-    return '<div class="item"><span class="chip" style="background:' + s.color + '"></span>' + escapeHtml(s.name) + '</div>';
-  }).join('');
-
-  var W = 1280, H = 250, padL = 30, padR = 12, padT = 12, padB = 24;
-  var plotW = W - padL - padR, plotH = H - padT - padB;
-  var tickCount = Math.min(4, maxVal);
-  var yMax = Math.ceil(maxVal * 1.08 / tickCount) * tickCount;
-  var y = function (v) { return padT + (1 - v / yMax) * plotH; };
-  var slot = plotW / DAYS;
-  var groupW = slot * 0.74;
-  var innerGap = series.length > 1 ? 2 : 0;
-  var barW = Math.max(2, (groupW - innerGap * (series.length - 1)) / series.length);
-
-  var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H });
-
-  // gridlines + integer y ticks
-  for (var t = 0; t <= tickCount; t++) {
-    var v = Math.round((t / tickCount) * yMax);
-    var gy = y(v);
-    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, stroke: 'var(--grid)', 'stroke-width': 1 }));
-    var lbl = svgEl('text', { x: padL - 7, y: gy + 3.5, 'text-anchor': 'end', fill: 'var(--text-muted)', 'font-size': 9, 'font-family': 'var(--font-mono)' });
-    lbl.textContent = v;
-    svg.appendChild(lbl);
-  }
-  svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y(0), y2: y(0), stroke: 'var(--baseline)', 'stroke-width': 1 }));
-
-  days.forEach(function (d, i) {
-    var cx = padL + slot * i + slot / 2;
-    var isWeekend = d.date.getDay() === 0 || d.date.getDay() === 6;
-    if (i % 2 === 1) {
-      var xlbl = svgEl('text', { x: cx, y: H - padB + 16, 'text-anchor': 'middle', fill: isWeekend ? 'var(--grid)' : 'var(--text-muted)', 'font-size': 9, 'font-family': 'var(--font-mono)' });
-      xlbl.textContent = (d.date.getMonth() + 1) + '/' + d.date.getDate();
-      svg.appendChild(xlbl);
-    }
-
-    // one bar per series, side by side, centered in the day's slot
-    var groupStart = cx - groupW / 2;
-    series.forEach(function (s, si) {
-      var count = valOf(d, s);
-      if (count <= 0) return;
-      var xL = groupStart + si * (barW + innerGap);
-      var yTop = y(count);
-      var hgt = y(0) - yTop;
-      var rr = Math.min(3, barW / 2, hgt);
-      svg.appendChild(svgEl('path', {
-        d: 'M' + xL + ' ' + (yTop + hgt) + 'L' + xL + ' ' + (yTop + rr)
-          + 'Q' + xL + ' ' + yTop + ' ' + (xL + rr) + ' ' + yTop
-          + 'L' + (xL + barW - rr) + ' ' + yTop
-          + 'Q' + (xL + barW) + ' ' + yTop + ' ' + (xL + barW) + ' ' + (yTop + rr)
-          + 'L' + (xL + barW) + ' ' + (yTop + hgt) + 'Z',
-        fill: s.color
-      }));
-    });
-
-    // full-column hover target
-    var hit = svgEl('rect', { x: padL + slot * i, y: padT, width: slot, height: plotH, fill: 'transparent' });
-    hit.addEventListener('mousemove', function () { weekTooltip(d, series, cx, W); });
-    svg.appendChild(hit);
-  });
-
-  svg.addEventListener('mouseleave', function () { document.getElementById('weektip').style.display = 'none'; });
-  box.appendChild(svg);
-}
-
-function weekTooltip(day, series, cx, W) {
-  var tip = document.getElementById('weektip');
-  var box = document.getElementById('weekchartbox');
-  var html = '<div class="t-x">' + escapeHtml(fmtDate(day.date)) + '</div>';
-  series.forEach(function (s) {
-    var c = day.byJob[s.name];
-    if (!c) return;
-    html += '<div class="t-row"><span class="chip" style="background:' + s.color + '"></span>'
-      + '<span class="name">' + escapeHtml(s.name) + '</span><span class="val">' + c + '</span></div>';
-  });
-  if (day.other > 0) {
-    html += '<div class="t-row"><span class="chip" style="background:var(--text-muted)"></span>'
-      + '<span class="name">Other</span><span class="val">' + day.other + '</span></div>';
-  }
-  html += '<div class="t-row t-total"><span class="name">Total runs</span><span class="val">' + day.total + '</span></div>';
-  tip.innerHTML = html;
-  tip.style.display = 'block';
-  var bx = box.getBoundingClientRect();
-  var tx = (cx / W) * bx.width;
-  tip.style.left = Math.max(0, Math.min(tx + 14, bx.width - tip.offsetWidth - 4)) + 'px';
-  tip.style.top = '6px';
 }
 
 /* ---------- summary ---------- */
@@ -1382,18 +1258,17 @@ function renderSummary() {
   var tableEl = document.getElementById('sumtable');
   var noteEl = document.getElementById('sumnote');
 
-  var rows = Object.keys(perJob).map(function (job) {
-    return { job: job, runs: perJob[job].runs, secs: perJob[job].secs };
-  }).sort(function (a, b) { return b.secs - a.secs; });
-
-  if (rows.length === 0) {
+  if (totalRuns === 0) {
     tilesEl.style.display = 'none';
     tableEl.innerHTML = '';
+    document.getElementById('filtercount').textContent = '';
     noteEl.innerHTML = '<div class="empty">No runs in this period.</div>';
     return;
   }
   tilesEl.style.display = '';
 
+  // Tiles stay period-wide and unfiltered — they answer "how did the shop run",
+  // which shouldn't move when you narrow the table to one job.
   var tiles = [
     { label: 'Total runs', value: totalRuns.toLocaleString() },
     { label: 'Machine time', value: fmtDur(totalSecs) },
@@ -1407,60 +1282,112 @@ function renderSummary() {
       + '</div>';
   }).join('');
 
-  var html = '<thead><tr><th>Job</th><th class="num">Runs</th><th class="num">Machine time</th>'
-    + '<th class="num">Avg / run</th><th class="num">Share</th></tr></thead><tbody>';
-  rows.forEach(function (r) {
-    var share = totalSecs > 0 ? (r.secs / totalSecs) * 100 : 0;
-    html += '<tr><td>' + escapeHtml(r.job) + '</td>'
-      + '<td class="num">' + r.runs.toLocaleString() + '</td>'
-      + '<td class="num">' + fmtDur(r.secs) + '</td>'
-      + '<td class="num">' + fmtDur(r.runs ? r.secs / r.runs : 0) + '</td>'
-      + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
-  });
-  html += '</tbody><tfoot><tr><td>All jobs</td><td class="num">' + totalRuns.toLocaleString() + '</td>'
-    + '<td class="num">' + fmtDur(totalSecs) + '</td><td class="num">—</td><td class="num">100%</td></tr></tfoot>';
-  tableEl.innerHTML = html;
+  renderSumTable(range, totalRuns, machineCount);
+}
 
-  var scopeNote = selectedMachine === 'all'
+/* ----- summary table: one row per run, sortable and filterable ----- */
+
+var SUM_COLS = [
+  { key: 'when',    label: 'Date',     get: function (r) { return r.when; },    fmt: function (r) { return fmtDateShort(r.when); } },
+  { key: 'time',    label: 'Start',    get: function (r) { return r.when; },    fmt: function (r) { return fmtTime(r.when); } },
+  { key: 'job',     label: 'Job',      get: function (r) { return r.job; },     fmt: function (r) { return r.job; } },
+  { key: 'seconds', label: 'Run time', get: function (r) { return r.seconds; }, fmt: function (r) { return fmtDur(r.seconds); }, num: true },
+  { key: 'machine', label: 'Machine',  get: function (r) { return r.machine; }, fmt: function (r) { return r.machine || '—'; } }
+];
+var sumSort = { key: 'when', dir: -1 };     // newest first
+var sumFilters = { job: '', machine: '', from: '', to: '' };
+var SUM_MAX = 300;                          // keep the DOM sane on Yearly
+
+function sumRows(range) {
+  return state.runs.filter(function (r) {
+    if (r.when < range.start || r.when >= range.end) return false;
+    if (selectedMachine !== 'all' && r.machine !== selectedMachine) return false;
+    if (sumFilters.machine && r.machine !== sumFilters.machine) return false;
+    if (sumFilters.job && String(r.job).toLowerCase().indexOf(sumFilters.job.toLowerCase()) < 0) return false;
+    if (sumFilters.from && dayKey(r.when) < sumFilters.from) return false;
+    if (sumFilters.to && dayKey(r.when) > sumFilters.to) return false;
+    return true;
+  });
+}
+
+function renderSumTable(range, periodRuns, machineCount) {
+  var tableEl = document.getElementById('sumtable');
+  var noteEl = document.getElementById('sumnote');
+  var rows = sumRows(range);
+
+  var col = SUM_COLS.filter(function (c) { return c.key === sumSort.key; })[0] || SUM_COLS[0];
+  rows.sort(function (a, b) {
+    var x = col.get(a), y = col.get(b);
+    if (x < y) return -sumSort.dir;
+    if (x > y) return sumSort.dir;
+    return 0;
+  });
+
+  var shown = rows.slice(0, SUM_MAX);
+  var html = '<thead><tr>' + SUM_COLS.map(function (c) {
+    var on = c.key === sumSort.key;
+    return '<th class="sortable' + (c.num ? ' num' : '') + (on ? ' sorted' : '') + '" onclick="sortSummary(' + jsStr(c.key) + ')">'
+      + escapeHtml(c.label) + '<span class="arrow">' + (on ? (sumSort.dir > 0 ? '▲' : '▼') : '') + '</span></th>';
+  }).join('') + '</tr></thead><tbody>';
+
+  shown.forEach(function (r) {
+    html += '<tr>' + SUM_COLS.map(function (c) {
+      return '<td' + (c.num ? ' class="num"' : '') + '>' + escapeHtml(String(c.fmt(r))) + '</td>';
+    }).join('') + '</tr>';
+  });
+  tableEl.innerHTML = html + '</tbody>';
+
+  var filtered = rows.length !== periodRuns;
+  document.getElementById('filtercount').textContent =
+    filtered ? rows.length + ' of ' + periodRuns + ' runs' : rows.length + ' runs';
+
+  // state.runs is capped server-side, so a long period can hold more runs than
+  // we were sent. Compare against the unfiltered count and say so, rather than
+  // letting the table look complete.
+  var inRange = state.runs.filter(function (r) {
+    return r.when >= range.start && r.when < range.end
+      && (selectedMachine === 'all' || r.machine === selectedMachine);
+  }).length;
+  var missing = periodRuns - inRange;
+  var notes = [];
+  if (shown.length < rows.length) notes.push('Showing the first ' + SUM_MAX + ' of ' + rows.length + ' matching runs.');
+  if (missing > 0) {
+    notes.push('Run history is capped, so ' + missing + ' older run' + (missing === 1 ? '' : 's')
+      + ' in this period aren\'t listed. The tiles above still count them.');
+  }
+  notes.push((selectedMachine === 'all'
     ? (machineCount > 1 ? 'Across ' + machineCount + ' machines. ' : '')
-    : 'Machine: ' + selectedMachine + '. ';
-  noteEl.textContent = scopeNote + 'Downtime = idle time during scheduled shifts (Mon–Fri, 6 AM–5 PM), '
-    + 'summed per day up to now. Weekend runs count toward machine time but not the shift schedule.';
+    : 'Machine: ' + selectedMachine + '. ')
+    + 'Downtime = idle time during scheduled shifts (Mon–Fri, 6 AM–5 PM), summed per day up to now. '
+    + 'Weekend runs count toward machine time but not the shift schedule.');
+  noteEl.textContent = notes.join(' ');
 }
 
-/* ---------- recent runs (collapsible) ---------- */
-
-function toggleRecent() {
-  recentOpen = !recentOpen;
-  document.getElementById('recentbody').style.display = recentOpen ? '' : 'none';
-  document.getElementById('recentcaret').innerHTML = recentOpen ? ICON.chevronDown(16) : ICON.chevronRight(16);
-  if (recentOpen) renderRecent();
+function anyFilterActive() {
+  return !!(sumFilters.job || sumFilters.machine || sumFilters.from || sumFilters.to);
 }
 
-function renderRecent() {
-  if (!recentOpen) return;
-  var table = document.getElementById('datatable');
-  var MAX = 15;
-  var filtered = state.runs.filter(function (r) { return selectedMachine === 'all' || r.machine === selectedMachine; });
-  var showMachine = selectedMachine === 'all' && (state.machines || []).length > 1;
-  var recent = filtered.slice(-MAX).reverse();
+function sortSummary(key) {
+  if (sumSort.key === key) sumSort.dir = -sumSort.dir;
+  else { sumSort.key = key; sumSort.dir = key === 'job' || key === 'machine' ? 1 : -1; }
+  renderSummary();
+}
 
-  var heads = ['Date', 'Start', 'Job', 'Run time'].concat(showMachine ? ['Machine'] : []).concat(['Status']);
-  var html = '<thead><tr>' + heads.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
-  recent.forEach(function (r) {
-    var cells = [
-      r.when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      r.when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-      r.job, fmtDur(r.seconds)
-    ];
-    if (showMachine) cells.push(r.machine);
-    cells.push(r.status.replace(/\.$/, ''));
-    html += '<tr>' + cells.map(function (c) { return '<td>' + escapeHtml(c) + '</td>'; }).join('') + '</tr>';
-  });
-  html += '</tbody>';
-  table.innerHTML = html;
-  document.getElementById('rowcount').textContent =
-    'Showing ' + recent.length + ' of ' + filtered.length + ' runs (newest first, doubles removed)';
+function onFilterChange() {
+  sumFilters.job = document.getElementById('f_job').value.trim();
+  sumFilters.machine = document.getElementById('f_machine').value;
+  sumFilters.from = document.getElementById('f_from').value;
+  sumFilters.to = document.getElementById('f_to').value;
+  renderSummary();
+}
+
+function clearFilters() {
+  sumFilters = { job: '', machine: '', from: '', to: '' };
+  document.getElementById('f_job').value = '';
+  document.getElementById('f_machine').value = '';
+  document.getElementById('f_from').value = '';
+  document.getElementById('f_to').value = '';
+  renderSummary();
 }
 
 /* ---------- job form + write API ---------- */
@@ -1608,7 +1535,7 @@ function mockData() {
       }
     }
     return {
-      name: def.name, target: def.target, active: true, color: def.color, order: ji, inGraph: ji < 2,
+      name: def.name, target: def.target, active: true, color: def.color, order: ji,
       startDate: dayKey(new Date(now.getTime() - 12 * 86400000)), pieces: def.pieces
     };
   });
@@ -1617,9 +1544,10 @@ function mockData() {
 
 // Paint the static chrome (theme + icons) before the first data render.
 applyTheme(currentTheme());
-document.getElementById('recentcaret').innerHTML = ICON.chevronRight(16);
 document.getElementById('periodprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('periodnext').innerHTML = ICON.chevronRight(16);
+document.getElementById('finprev').innerHTML = ICON.chevronLeft(16);
+document.getElementById('finnext').innerHTML = ICON.chevronRight(16);
 
 load();
 setInterval(autoRefresh, REFRESH_MS);
