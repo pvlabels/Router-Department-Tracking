@@ -1,3 +1,7 @@
 .clasprc.json
 node_modules/
 .DS_Store
+
+# design handoffs (kept locally, not published)
+Router Department Redesign.zip
+*.zip
