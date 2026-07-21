@@ -2,6 +2,7 @@
 <html>
 <head>
 <base target="_top">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -133,6 +134,18 @@
   .jtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; letter-spacing: -0.01em; }
   .jwo { font-family: var(--font-mono); color: var(--text-muted); font-size: 12px; margin-left: 10px; }
+  .jco { font-weight: 700; color: var(--text-primary); font-size: 12.5px; margin-left: 10px; }
+
+  /* ---------- finished log ---------- */
+  .finrow {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 11px 2px; border-bottom: 1px solid var(--grid);
+  }
+  .finrow:last-child { border-bottom: none; }
+  .fintitle { flex: 1; min-width: 220px; display: flex; align-items: baseline; flex-wrap: wrap; }
+  .fincount { color: var(--text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .findate { color: var(--text-muted); font-size: 12.5px; min-width: 92px; }
+  .done-btn { color: var(--delta-good); }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; flex: none; color: var(--text-secondary); }
   .jpct .done { color: var(--delta-good); }
   .jbar { height: 10px; border-radius: 999px; background: var(--grid); overflow: hidden; }
@@ -302,6 +315,16 @@
     </div>
 
     <div id="jobqueue"></div>
+  </div>
+
+  <!-- ===== Finished log ===== -->
+  <div class="card reveal" id="finishedcard" style="display:none">
+    <div class="cardhead collapse-head" onclick="toggleFinished()">
+      <span id="finishedcaret" style="display:flex;color:var(--accent)"></span>
+      <h2>Finished log</h2>
+      <span class="sub" id="finishedsub"></span>
+    </div>
+    <div id="finishedbody" style="display:none;margin-top:14px"></div>
   </div>
 
   <!-- ===== Weekly activity + Summary ===== -->
@@ -571,6 +594,7 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 
 function render() {
   renderQueue();
+  renderFinished();
   renderWeekly();
   renderSummary();
   renderRecent();
@@ -578,8 +602,46 @@ function render() {
 
 /* ----- job queue (collapsible, colored, reorderable) ----- */
 
+/**
+ * A job is finished if it was marked complete (or the schedule finished it), or
+ * if its runs reached the sheet target on their own. Either way it leaves the
+ * queue for the Finished log.
+ */
+function isFinished(job) {
+  if (job.finishedAt) return true;
+  if (job.noAutoFinish) return false;                    // reopened by hand
+  return job.target > 0 && completedFor(job.name, job.startDate) >= job.target;
+}
+
 function activeJobs() {
-  return (state.jobs || []).filter(function (j) { return j.active !== false; });
+  return (state.jobs || []).filter(function (j) { return j.active !== false && !isFinished(j); });
+}
+
+/** Finished jobs, most recently finished first. */
+function finishedJobs() {
+  return (state.jobs || []).filter(isFinished).sort(function (a, b) {
+    return String(b.finishedAt || '').localeCompare(String(a.finishedAt || ''));
+  });
+}
+
+/**
+ * Notes double as a customer field on the schedule, so pull out anything that
+ * reads like a company name: Title Case, no digits, a few words at most. That
+ * keeps "Power & Energy Tech" and rejects "same run as 2826".
+ */
+var NOTE_SMALLWORDS = { and: 1, of: 1, the: 1, for: 1, '&': 1 };
+var NOTE_NOT_COMPANY = /^(rush|hold|remake|reprint|urgent|asap|done|redo|sample|proof|correction|recut|same|see|note|notes)$/i;
+
+function companyFromNotes(raw) {
+  var s = String(raw || '').trim();
+  if (!s || /\d/.test(s) || !/[A-Za-z]/.test(s)) return '';
+  var words = s.split(/\s+/);
+  if (words.length > 5) return '';                       // that's a sentence, not a name
+  if (NOTE_NOT_COMPANY.test(words[0])) return '';        // floor shorthand, not a customer
+  var titleCase = words.every(function (w) {
+    return NOTE_SMALLWORDS[w.toLowerCase()] || /^[A-Z]/.test(w);
+  });
+  return titleCase ? s : '';
 }
 
 function stripExt(n) { return String(n).replace(/\.[A-Za-z0-9]+$/, ''); }
@@ -659,6 +721,46 @@ function renderQueue() {
   });
 }
 
+/* ----- finished log: jobs that were cut, manually or by hitting target ----- */
+
+var finishedOpen = false;
+
+function renderFinished() {
+  var card = document.getElementById('finishedcard');
+  var body = document.getElementById('finishedbody');
+  if (!card || !body) return;
+  var jobs = finishedJobs();
+
+  if (!jobs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('finishedsub').textContent =
+    jobs.length + ' job' + (jobs.length === 1 ? '' : 's') + ' completed';
+  document.getElementById('finishedcaret').innerHTML =
+    finishedOpen ? ICON.chevronDown(16) : ICON.chevronRight(16);
+  body.style.display = finishedOpen ? '' : 'none';
+  if (!finishedOpen) return;
+
+  body.innerHTML = jobs.map(function (job) {
+    var completed = completedFor(job.name, job.startDate);
+    var company = companyFromNotes(job.notes);
+    return '<div class="finrow">'
+      + '<span class="fintitle"><span class="jname">'
+      +   escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
+      +   (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
+      +   (company ? '<span class="jco">' + escapeHtml(company) + '</span>' : '')
+      + '</span>'
+      + '<span class="fincount">' + completed + ' / ' + (job.target || 0) + ' sheets</span>'
+      + '<span class="findate">' + (job.finishedAt ? fmtDate(new Date(job.finishedAt)) : 'target reached') + '</span>'
+      + '<button class="small" onclick="reopenJob(' + jsStr(job.name) + ')">Reopen</button>'
+      + '</div>';
+  }).join('');
+}
+
+function toggleFinished() {
+  finishedOpen = !finishedOpen;
+  renderFinished();
+}
+
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
   var runs = state.runs.filter(function (r) { return runMatchesJob(r.job, matchKeyFor(job)) && r.when >= since; });
@@ -684,6 +786,7 @@ function jobRow(job, idx, total) {
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
     +     escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
     +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
+    +     (companyFromNotes(job.notes) ? '<span class="jco">' + escapeHtml(companyFromNotes(job.notes)) + '</span>' : '')
     +   '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
@@ -880,6 +983,7 @@ function jobDetail(job, runs, completed, remaining) {
   var graphLabel = job.inGraph ? '− Remove from graph' : '+ Add to graph';
   btns.innerHTML = '<button class="small' + (job.inGraph ? ' on' : '') + '" onclick="toggleGraph(' + jsStr(job.name) + ',' + (job.inGraph ? 'false' : 'true') + ')">' + graphLabel + '</button>'
     + '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
+    + '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>'
     + '<button class="small danger" id="stop-' + cssId(job.name) + '" onclick="stopClicked(' + jsStr(job.name) + ')">Stop tracking</button>';
   wrap.appendChild(btns);
   return wrap;
@@ -917,6 +1021,32 @@ function commitOrder(names) {
   suppressReloadUntil = Date.now() + 6000;
   api({ action: 'reorderJobs', order: names }, function (res) {
     if (!res || !res.ok) onError(new Error((res && res.error) || 'Reorder failed.'));
+  });
+}
+
+/** Move a job to the Finished log (optimistic, then persist). */
+function markComplete(name) {
+  setCompleteState(name, true, 'Could not mark the job complete.');
+}
+
+/** Put a finished job back in the queue. */
+function reopenJob(name) {
+  setCompleteState(name, false, 'Could not reopen the job.');
+}
+
+function setCompleteState(name, on, errMsg) {
+  var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  if (j) {
+    j.finishedAt = on ? new Date().toISOString() : '';
+    j.noAutoFinish = !on;
+    j.active = !on;
+  }
+  delete expandedJobs[name];
+  renderQueue();
+  renderFinished();
+  suppressReloadUntil = Date.now() + 6000;
+  api({ action: 'setComplete', name: name, on: on }, function (res) {
+    if (!res || !res.ok) { onError(new Error((res && res.error) || errMsg)); load(); }
   });
 }
 
