@@ -42,7 +42,7 @@ var CONFIG = {
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
-                   'Notes', 'Cut File', 'Source', 'Work Orders'];
+                   'Notes', 'Cut File', 'Source', 'Work Orders', 'Label'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
@@ -92,7 +92,7 @@ function handleAction(p) {
     if (p.action === 'saveJob') return saveJob(p.job);
     if (p.action === 'stopJob') return stopJob(p.name);
     if (p.action === 'reorderJobs') return reorderJobs(p.order);
-    if (p.action === 'setComplete') return setComplete(p.name, p.on);
+    if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -263,7 +263,9 @@ function readJobs(ss) {
       notes: String(cell(values[r], 'Notes') || '').trim(),
       cutFile: String(cell(values[r], 'Cut File') || '').trim(),
       source: String(cell(values[r], 'Source') || '').trim(),
-      workOrders: String(cell(values[r], 'Work Orders') || '').trim()
+      workOrders: String(cell(values[r], 'Work Orders') || '').trim(),
+      // Display-only override; the row is still keyed by the real file name.
+      label: String(cell(values[r], 'Label') || '').trim()
     });
   }
 
@@ -373,6 +375,7 @@ function saveJob(job) {
     // notes / cut file are optional and only overwritten when supplied
     if (job.notes !== undefined) fields['Notes'] = String(job.notes).slice(0, 500);
     if (job.cutFile !== undefined) fields['Cut File'] = String(job.cutFile).trim().slice(0, 200);
+    if (job.label !== undefined) fields['Label'] = String(job.label).trim().slice(0, 120);
     writeJobFields(sheet, col, row, fields);
     // New job: assign a queue slot at the end and a distinct color.
     var meta = getJobMeta();
@@ -388,7 +391,56 @@ function saveJob(job) {
   return { ok: true };
 }
 
-/** Adds or removes a job from the Weekly activity chart (stored in job meta). */
+/**
+ * Marks a job finished (or reopens it).
+ *
+ * Finishing stamps a timestamp in job meta and deactivates the sheet row, which
+ * is what moves the job out of the queue and into the Finished log. The stamp is
+ * what separates "we cut it" from a job that was simply switched off. It also
+ * retargets the job to the sheets actually cut, so the log reads 12/12 rather
+ * than 12/40; the original target is kept in meta.t so Reopen can restore it.
+ */
+function setComplete(name, on, sheetsCut) {
+  name = String(name || '').trim();
+  if (!name) throw new Error('Job name is required.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var sheet = jobsSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
+    var col = jobsCols(sheet);
+    var row = findJobRow(sheet, name);
+    if (!row) throw new Error('Job not found: ' + name);
+    sheet.getRange(row, col['Active'] + 1).setValue(!on);
+
+    var meta = getJobMeta();
+    if (!meta[name]) meta[name] = { o: 9999, c: nextColor({}) };
+    var targetCell = sheet.getRange(row, col['Sheets to Cut'] + 1);
+
+    if (on) {
+      meta[name].f = new Date().toISOString();
+      delete meta[name].x;
+      var cut = Math.round(Number(sheetsCut));
+      if (isFinite(cut) && cut >= 0) {
+        if (meta[name].t === undefined) meta[name].t = Number(targetCell.getValue()) || 0;
+        targetCell.setValue(cut);
+      }
+    } else {
+      // Reopening restores the original target and suppresses the
+      // target-reached rule, or the job would drop straight back into the log.
+      delete meta[name].f;
+      meta[name].x = true;
+      if (meta[name].t !== undefined) {
+        targetCell.setValue(meta[name].t);
+        delete meta[name].t;
+      }
+    }
+    setJobMeta(meta);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
 /** Rewrites queue order from an array of job names (index = position). */
 function reorderJobs(order) {
   if (!Array.isArray(order)) throw new Error('order must be an array of job names.');

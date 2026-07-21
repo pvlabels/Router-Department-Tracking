@@ -136,7 +136,9 @@
 
   /* ---------- finished log ---------- */
   .done-btn { color: var(--delta-good); }
-  #fintable .done { color: var(--delta-good); font-weight: 500; }
+  /* Status sits right after a right-aligned number column — give it room. */
+  #fintable th:nth-child(6), #fintable td:nth-child(6) { padding-left: 26px; }
+  #fintable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
   #fintable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
 
   /* ---------- summary filters + sortable columns ---------- */
@@ -289,6 +291,11 @@
         <datalist id="joblist"></datalist>
       </div>
       <div class="frow">
+        <label for="f_label">Display name</label>
+        <input id="f_label" placeholder="optional — shown instead of the file name">
+      </div>
+      <div class="formnote">Only changes what the queue shows. The job still tracks the file above, which stays visible on the ticket.</div>
+      <div class="frow">
         <label for="f_target">Sheets to cut</label>
         <input id="f_target" type="number" min="1" step="1">
       </div>
@@ -313,16 +320,23 @@
 
   <!-- ===== Finished log ===== -->
   <div class="card reveal" id="finishedcard">
-    <div class="cardhead">
+    <div class="cardhead" style="margin-bottom:14px">
       <h2>Finished log</h2>
       <span class="sub" id="finishedsub"></span>
       <span class="spacer"></span>
+      <div class="seg" id="finseg">
+        <button data-p="day" class="on" onclick="setFinPeriod('day')">Daily</button>
+        <button data-p="week" onclick="setFinPeriod('week')">Weekly</button>
+        <button data-p="month" onclick="setFinPeriod('month')">Monthly</button>
+        <button data-p="year" onclick="setFinPeriod('year')">Yearly</button>
+      </div>
+    </div>
+    <div class="sumbar">
       <div class="navbar">
-        <button onclick="finDayStep(-1)" title="Previous day" id="finprev"></button>
+        <button onclick="finStep(-1)" title="Previous" id="finprev"></button>
         <span id="finlabel"></span>
-        <button id="finnext" onclick="finDayStep(1)" title="Next day"></button>
+        <button id="finnext" onclick="finStep(1)" title="Next"></button>
         <button onclick="finToday()">Today</button>
-        <button id="finall" onclick="toggleFinAll()">All</button>
       </div>
     </div>
     <div class="tablewrap"><table id="fintable"></table></div>
@@ -639,6 +653,16 @@ function companyFromNotes(raw) {
   return titleCase ? s : '';
 }
 
+/**
+ * What the queue calls a job. A Label set from the Edit form overrides the file
+ * name for display only — matching, progress and the ticket still use the real
+ * name, which stays visible on the ticket so the two are never confused.
+ */
+function jobTitle(job) {
+  if (job.label) return job.label;
+  return job.source === 'production' ? 'Run ' + job.name : job.name;
+}
+
 function stripExt(n) { return String(n).replace(/\.[A-Za-z0-9]+$/, ''); }
 
 /**
@@ -718,8 +742,8 @@ function renderQueue() {
 
 /* ----- finished log: jobs that were cut, manually or by hitting target ----- */
 
-var finAnchor = startOfDay(new Date());   // which day the log is showing
-var finShowAll = false;                   // true = every finished job, no day filter
+var finPeriod = 'day';                    // mirrors the Summary's period control
+var finAnchor = startOfDay(new Date());
 
 /**
  * When a job finished. Manual/schedule completions carry a stamp; a job that
@@ -756,23 +780,18 @@ function renderFinished() {
     };
   });
 
-  if (!finShowAll) {
-    var key = dayKey(finAnchor);
-    rows = rows.filter(function (r) { return r.when && dayKey(r.when) === key; });
-  }
+  var range = rangeFor(finPeriod, finAnchor);
+  rows = rows.filter(function (r) { return r.when && r.when >= range.start && r.when < range.end; });
   rows.sort(function (a, b) { return (b.when || 0) - (a.when || 0); });
 
-  document.getElementById('finlabel').textContent = finShowAll ? 'All time' : fmtDate(finAnchor);
-  document.getElementById('finnext').disabled = finShowAll || startOfDay(finAnchor) >= startOfDay(new Date());
-  document.getElementById('finprev').disabled = finShowAll;
-  document.getElementById('finall').classList.toggle('on', finShowAll);
+  document.getElementById('finlabel').textContent = range.label;
+  document.getElementById('finnext').disabled = range.end > new Date();
   document.getElementById('finishedsub').textContent =
     rows.length + ' job' + (rows.length === 1 ? '' : 's') + ' completed';
 
   if (!rows.length) {
     table.innerHTML = '';
-    note.innerHTML = '<div class="empty">' + (finShowAll ? 'No finished jobs yet.'
-      : 'Nothing finished on ' + escapeHtml(fmtDate(finAnchor)) + '.') + '</div>';
+    note.innerHTML = '<div class="empty">Nothing finished in this period.</div>';
     return;
   }
   note.innerHTML = '';
@@ -783,7 +802,7 @@ function renderFinished() {
     var job = r.job, company = companyFromNotes(job.notes);
     html += '<tr>'
       + '<td><span class="jname">'
-      +   escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
+      +   escapeHtml(jobTitle(job)) + '</span>'
       +   (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
       +   (company ? '<span class="jco">' + escapeHtml(company) + '</span>' : '') + '</td>'
       + '<td>' + (r.when ? escapeHtml(fmtDate(r.when)) : '&mdash;') + '</td>'
@@ -797,14 +816,18 @@ function renderFinished() {
   table.innerHTML = html + '</tbody>';
 }
 
-function finDayStep(delta) {
-  var d = new Date(finAnchor); d.setDate(d.getDate() + delta);
-  if (startOfDay(d) > startOfDay(new Date())) return;
-  finAnchor = startOfDay(d);
+function setFinPeriod(p) {
+  finPeriod = p;
+  Array.prototype.forEach.call(document.querySelectorAll('#finseg button'), function (b) {
+    b.className = b.getAttribute('data-p') === p ? 'on' : '';
+  });
   renderFinished();
 }
-function finToday() { finShowAll = false; finAnchor = startOfDay(new Date()); renderFinished(); }
-function toggleFinAll() { finShowAll = !finShowAll; renderFinished(); }
+function finStep(delta) {
+  finAnchor = stepAnchor(finAnchor, finPeriod, delta);
+  renderFinished();
+}
+function finToday() { finAnchor = startOfDay(new Date()); renderFinished(); }
 
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
@@ -829,7 +852,7 @@ function jobRow(job, idx, total) {
       '<div class="grip" data-act="grip" title="Drag to reorder">' + ICON.grip(16) + '</div>'
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
-    +     escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
+    +     escapeHtml(jobTitle(job)) + '</span>'
     +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +     (companyFromNotes(job.notes) ? '<span class="jco">' + escapeHtml(companyFromNotes(job.notes)) + '</span>' : '')
     +   '</span>'
@@ -966,6 +989,11 @@ function jobDetail(job, runs, completed, remaining) {
     html += '<div class="prodline">From the production schedule'
       + (job.cutFile ? ' · cutting <span class="mono">' + escapeHtml(job.cutFile) + '</span>' : '') + '</div>';
   }
+  // A display name hides the real one in the queue, so surface it here.
+  if (job.label) {
+    html += '<div class="prodline"' + (job.source === 'production' ? ' style="margin-top:6px"' : '') + '>'
+      + 'Tracking <span class="mono">' + escapeHtml(job.name) + '</span></div>';
+  }
   var versions = unique(runs.map(function (r) { return r.job; }));
   if (versions.length > 1) {
     html += '<div class="prodline" style="margin-top:6px">Tracking ' + versions.length + ' versions: ' + escapeHtml(versions.join(', ')) + '</div>';
@@ -1026,8 +1054,7 @@ function jobDetail(job, runs, completed, remaining) {
   var btns = document.createElement('div');
   btns.className = 'detailbtns';
   btns.innerHTML = '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
-    + '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>'
-    + '<button class="small danger" id="stop-' + cssId(job.name) + '" onclick="stopClicked(' + jsStr(job.name) + ')">Stop tracking</button>';
+    + '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>';
   wrap.appendChild(btns);
   return wrap;
 }
@@ -1072,6 +1099,12 @@ function markComplete(name) {
   setCompleteState(name, true, 'Could not mark the job complete.');
 }
 
+/** Sheets cut for a job right now — what a completed job gets retargeted to. */
+function sheetsCutFor(name) {
+  var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  return j ? completedFor(j.name, j.startDate) : 0;
+}
+
 /** Put a finished job back in the queue. */
 function reopenJob(name) {
   setCompleteState(name, false, 'Could not reopen the job.');
@@ -1079,16 +1112,21 @@ function reopenJob(name) {
 
 function setCompleteState(name, on, errMsg) {
   var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  var cut = sheetsCutFor(name);
   if (j) {
     j.finishedAt = on ? new Date().toISOString() : '';
     j.noAutoFinish = !on;
     j.active = !on;
+    // Mirror the retarget the backend is about to do, so the row doesn't
+    // flash the old goal before the next refresh lands.
+    if (on) { j.prevTarget = j.target; j.target = cut; }
+    else if (j.prevTarget !== undefined) { j.target = j.prevTarget; delete j.prevTarget; }
   }
   delete expandedJobs[name];
   renderQueue();
   renderFinished();
   suppressReloadUntil = Date.now() + 6000;
-  api({ action: 'setComplete', name: name, on: on }, function (res) {
+  api({ action: 'setComplete', name: name, on: on, sheets: cut }, function (res) {
     if (!res || !res.ok) { onError(new Error((res && res.error) || errMsg)); load(); }
   });
 }
@@ -1165,30 +1203,26 @@ function setPeriod(p) {
   renderSummary();
 }
 function periodStep(delta) {
-  var d = new Date(summaryAnchor);
-  if (summaryPeriod === 'day') d.setDate(d.getDate() + delta);
-  else if (summaryPeriod === 'week') d.setDate(d.getDate() + delta * 7);
-  else if (summaryPeriod === 'month') d.setMonth(d.getMonth() + delta);
-  else d.setFullYear(d.getFullYear() + delta);
-  summaryAnchor = startOfDay(d);
+  summaryAnchor = stepAnchor(summaryAnchor, summaryPeriod, delta);
   renderSummary();
 }
 function periodToday() { summaryAnchor = startOfDay(new Date()); renderSummary(); }
 
-function periodRange() {
-  var a = summaryAnchor, start, end, label;
-  if (summaryPeriod === 'day') {
+/** Date window for a period ('day'|'week'|'month'|'year') anchored on a day. */
+function rangeFor(period, a) {
+  var start, end, label;
+  if (period === 'day') {
     start = startOfDay(a);
     end = new Date(start); end.setDate(end.getDate() + 1);
     label = start.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
-  } else if (summaryPeriod === 'week') {
+  } else if (period === 'week') {
     // rolling 7 days ending on the anchor day (today by default)
     end = new Date(startOfDay(a)); end.setDate(end.getDate() + 1);
     start = new Date(end); start.setDate(start.getDate() - 7);
     var last = startOfDay(a);
     label = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' – '
       + last.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  } else if (summaryPeriod === 'month') {
+  } else if (period === 'month') {
     start = new Date(a.getFullYear(), a.getMonth(), 1);
     end = new Date(a.getFullYear(), a.getMonth() + 1, 1);
     label = start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -1199,6 +1233,18 @@ function periodRange() {
   }
   return { start: start, end: end, label: label };
 }
+
+/** Steps an anchor date by one period in either direction. */
+function stepAnchor(anchor, period, delta) {
+  var d = new Date(anchor);
+  if (period === 'day') d.setDate(d.getDate() + delta);
+  else if (period === 'week') d.setDate(d.getDate() + delta * 7);
+  else if (period === 'month') d.setMonth(d.getMonth() + delta);
+  else d.setFullYear(d.getFullYear() + delta);
+  return startOfDay(d);
+}
+
+function periodRange() { return rangeFor(summaryPeriod, summaryAnchor); }
 
 function scheduleStats(start, end, machineByDay, machineCount) {
   machineCount = machineCount || 1;
@@ -1412,6 +1458,7 @@ function openForm(jobName) {
   var editing = jobName ? (state.jobs || []).filter(function (j) { return j.name === jobName; })[0] : null;
   document.getElementById('formtitle').textContent = editing ? 'Edit job' : 'Track a job';
   document.getElementById('f_name').value = editing ? editing.name : '';
+  document.getElementById('f_label').value = editing ? (editing.label || '') : '';
   document.getElementById('f_target').value = editing ? editing.target : '';
   document.getElementById('f_start').value = editing ? editing.startDate : dayKey(new Date());
   document.getElementById('f_err').textContent = '';
@@ -1458,6 +1505,7 @@ function submitForm() {
   var err = document.getElementById('f_err');
   err.textContent = '';
   var name = document.getElementById('f_name').value.trim();
+  var label = document.getElementById('f_label').value.trim();
   var target = parseInt(document.getElementById('f_target').value, 10);
   var startDate = document.getElementById('f_start').value;
   if (!name) { err.textContent = 'Job name is required.'; return; }
@@ -1480,34 +1528,9 @@ function submitForm() {
   var baseSheets = completedFor(name, startDate);
 
   err.textContent = 'Saving…';
-  api({ action: 'saveJob', job: { name: name, target: target, startDate: startDate, pieces: pieces, baseSheets: baseSheets } }, function (res) {
+  api({ action: 'saveJob', job: { name: name, label: label, target: target, startDate: startDate, pieces: pieces, baseSheets: baseSheets } }, function (res) {
     if (res && res.ok) { expandedJobs[name] = true; closeForm(); load(); }
     else { err.textContent = (res && res.error) || 'Save failed.'; }
-  });
-}
-
-var stopArmed = {};
-function stopClicked(name) {
-  var btn = document.getElementById('stop-' + cssId(name));
-  if (!stopArmed[name]) {
-    stopArmed[name] = true;
-    if (btn) btn.textContent = 'Confirm stop?';
-    setTimeout(function () {
-      stopArmed[name] = false;
-      var b = document.getElementById('stop-' + cssId(name));
-      if (b) b.textContent = 'Stop tracking';
-    }, 4000);
-    return;
-  }
-  stopArmed[name] = false;
-  if (btn) btn.textContent = 'Stopping…';
-  api({ action: 'stopJob', name: name }, function (res) {
-    if (res && res.ok) { delete expandedJobs[name]; load(); }
-    else {
-      onError(new Error((res && res.error) || 'Stop failed.'));
-      var b = document.getElementById('stop-' + cssId(name));
-      if (b) b.textContent = 'Stop tracking';
-    }
   });
 }
 
