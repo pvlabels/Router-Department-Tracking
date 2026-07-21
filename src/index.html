@@ -73,11 +73,6 @@
     position: sticky; top: 0; z-index: 20;
     background: var(--page); border-bottom: 1px solid var(--border);
   }
-  .logo {
-    width: 30px; height: 30px; border-radius: 7px; background: var(--text-primary); color: var(--page);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px; font-weight: 700; font-family: var(--font-mono); flex: none;
-  }
   header h1 { font-size: clamp(18px,2vw,21px); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
   .tagline { color: var(--text-muted); font-size: 12.5px; margin-top: 1px; }
   .spacer { flex: 1; }
@@ -113,13 +108,6 @@
   }
   .banner.error { display: block; }
   .banner strong { color: var(--text-primary); }
-
-  /* ---------- KPI strip ---------- */
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 14px; margin-bottom: 20px; }
-  .kpi { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; background: var(--surface-1); }
-  .kpi .label { color: var(--text-muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
-  .kpi .value { font-size: clamp(28px,3vw,38px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; margin-top: 10px; font-variant-numeric: tabular-nums; }
-  .kpi .sub { color: var(--text-secondary); font-size: 12.5px; margin-top: 6px; }
 
   /* ---------- cards ---------- */
   .card { border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin-bottom: 20px; background: var(--surface-1); }
@@ -264,7 +252,6 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">&#955;</div>
     <div>
       <h1>Router Department</h1>
       <div class="tagline">MultiCam cut queue &middot; live tracking</div>
@@ -277,9 +264,6 @@
   </header>
 
   <div class="banner" id="banner"></div>
-
-  <!-- ===== KPI strip ===== -->
-  <div class="kpis reveal" id="kpis"></div>
 
   <!-- ===== Job queue ===== -->
   <div class="card reveal">
@@ -586,56 +570,10 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 /* ---------- render ---------- */
 
 function render() {
-  renderKpis();
   renderQueue();
   renderWeekly();
   renderSummary();
   renderRecent();
-}
-
-/* ----- KPI strip: the at-a-glance numbers above the queue ----- */
-
-function renderKpis() {
-  var host = document.getElementById('kpis');
-  if (!host) return;
-  var jobs = activeJobs();
-
-  var sheetsLeft = 0, fromSchedule = 0;
-  jobs.forEach(function (j) {
-    var done = completedFor(j.name, j.startDate);
-    sheetsLeft += Math.max(0, (j.target || 0) - done);
-    if (j.source === 'production') fromSchedule++;
-  });
-
-  // today's activity, machine filter applied (same basis as the Summary)
-  var today = dayKey(new Date()), runsToday = 0, secsToday = 0;
-  var day = (state.daily || {})[today] || {};
-  for (var m in day) {
-    if (selectedMachine !== 'all' && m !== selectedMachine) continue;
-    for (var job in day[m]) { runsToday += day[m][job].r; secsToday += day[m][job].s; }
-  }
-
-  // utilization so far today against the Mon–Fri shift
-  var start = startOfDay(new Date()), end = new Date(start); end.setDate(end.getDate() + 1);
-  var byDay = {}; byDay[today] = secsToday;
-  var sched = scheduleStats(start, end, byDay, selectedMachine === 'all'
-    ? Math.max(1, (state.machines || []).length) : 1);
-  var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
-
-  var kpis = [
-    { label: 'In queue', value: String(jobs.length),
-      sub: fromSchedule ? fromSchedule + ' from the schedule' : 'tracked jobs' },
-    { label: 'Sheets remaining', value: sheetsLeft.toLocaleString(),
-      sub: 'across ' + jobs.length + ' job' + (jobs.length === 1 ? '' : 's') },
-    { label: 'Runs today', value: String(runsToday), sub: fmtDur(secsToday) + ' machine time' },
-    { label: 'Utilization', value: Math.round(util) + '%', sub: 'today vs 6 AM–5 PM shift', color: 'var(--accent)' }
-  ];
-
-  host.innerHTML = kpis.map(function (k) {
-    return '<div class="kpi"><div class="label">' + escapeHtml(k.label) + '</div>'
-      + '<div class="value"' + (k.color ? ' style="color:' + k.color + '"' : '') + '>' + escapeHtml(k.value) + '</div>'
-      + '<div class="sub">' + escapeHtml(k.sub) + '</div></div>';
-  }).join('');
 }
 
 /* ----- job queue (collapsible, colored, reorderable) ----- */
@@ -745,7 +683,7 @@ function jobRow(job, idx, total) {
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
     +     escapeHtml(job.source === 'production' ? 'Run ' + job.name : job.name) + '</span>'
-    +     (hasWorkOrder(job.workOrders) ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
+    +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +   '</span>'
     +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
