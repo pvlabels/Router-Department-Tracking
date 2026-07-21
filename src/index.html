@@ -5,41 +5,73 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Hallmark · redesign · genre: modern-minimal · theme: Cobalt
-   * pre-emit critique: P5 H5 E4 S5 R5 V4
-   * cool engineered paper · hairlines · one cobalt signal · one graphite band */
+  /* Geist — Vercel's design system (vercel.com/geist).
+   * Tokens lifted from Geist's own stylesheet: neutral gray scale, background
+   * 100/200, blue/green/amber/red/purple/pink/teal accents, shadow presets.
+   * Step mapping: 1-3 surfaces, 4-6 borders, 7-8 solid, 9-10 text. */
   :root {
     color-scheme: light;
-    --font-display: "Space Grotesk", system-ui, sans-serif;
-    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-    /* cool engineered paper + cool charcoal ink — never #fff / #000 */
-    --page:#fbfcfe; --surface-1:#fbfcfe;
-    --text-primary:#1b2130; --text-secondary:#3e4757; --text-muted:#6c7787;
-    --grid:#e8ebf1; --baseline:#d9dee7; --border:#e3e7ef;
-    --delta-good:#0f8a4d; --delta-bad:#d13f3f;
-    --series-1:#2f6bff; --series-2:#12a566;
-    /* the one cobalt signal */
-    --accent:#2f6bff; --accent-ink:#f6f9ff; --accent-wash:rgba(47,107,255,0.10);
-    --graphite:#14171f;
-    /* per-job categorical palette (job-0 aligned to the cobalt signal) */
-    --job-0:#2f6bff; --job-1:#12a266; --job-2:#e0a208; --job-3:#0a8a3f;
-    --job-4:#5a45d6; --job-5:#e0483f; --job-6:#d8629a; --job-7:#e26a2c;
+    --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    /* backgrounds 100/200 + neutral gray scale */
+    --page: hsl(0,0%,100%); --surface-1: hsl(0,0%,100%); --surface-2: hsl(0,0%,98%);
+    --text-primary: hsl(0,0%,9%);    /* gray-1000 */
+    --text-secondary: hsl(0,0%,30%); /* gray-900  */
+    --text-muted: hsl(0,0%,56%);     /* gray-700  */
+    --grid: hsl(0,0%,92%);           /* gray-200  */
+    --border: hsl(0,0%,92%);         /* gray-400  */
+    --baseline: hsl(0,0%,79%);       /* gray-500  */
+    --delta-good: hsl(131,41%,46%);  /* green-700 */
+    --delta-bad: hsl(358,70%,52%);   /* red-800   */
+    --series-1: hsl(212,100%,48%); --series-2: hsl(131,41%,46%);
+    --accent: hsl(212,100%,48%);     /* blue-700  */
+    --accent-ink: hsl(0,0%,100%);
+    --accent-wash: hsl(212,100%,97%);
+    --graphite: hsl(0,0%,4%);
+    --shadow-small: 0px 2px 2px #0000000a;
+    --shadow-medium: 0px 2px 2px #0000000a, 0px 8px 8px -8px #0000000a;
+    --shadow-menu: 0px 1px 1px #00000005, 0px 4px 8px -4px #0000000a, 0px 16px 24px -8px #0000000f;
+    /* per-job categorical palette — Geist accent families at step 700 */
+    --job-0: hsl(212,100%,48%);  /* blue   */
+    --job-1: hsl(131,41%,46%);   /* green  */
+    --job-2: hsl(39,100%,57%);   /* amber  */
+    --job-3: hsl(272,51%,54%);   /* purple */
+    --job-4: hsl(173,80%,36%);   /* teal   */
+    --job-5: hsl(336,80%,58%);   /* pink   */
+    --job-6: hsl(358,75%,59%);   /* red    */
+    --job-7: hsl(211,100%,42%);  /* blue-900 */
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --page:#0f1218; --surface-1:#161a22;
-      --text-primary:#eef1f6; --text-secondary:#bcc4d1; --text-muted:#7f8a99;
-      --grid:#232a35; --baseline:#323b49; --border:#28303c;
-      --delta-good:#35c47a; --delta-bad:#f0736f;
-      --series-1:#5b8bff; --series-2:#25b586;
-      --accent:#5b8bff; --accent-ink:#0b0d12; --accent-wash:rgba(91,139,255,0.16);
-      --graphite:#0b0d12;
-      --job-0:#5b8bff; --job-1:#25b586; --job-2:#e0a83a; --job-3:#2ea043;
-      --job-4:#9a8cf0; --job-5:#f0736f; --job-6:#e07aa6; --job-7:#e58a4d;
+      --page: hsl(0,0%,4%); --surface-1: hsl(0,0%,4%); --surface-2: hsl(0,0%,10%);
+      --text-primary: hsl(0,0%,93%);   /* gray-1000 */
+      --text-secondary: hsl(0,0%,63%); /* gray-900  */
+      --text-muted: hsl(0,0%,56%);     /* gray-700  */
+      --grid: hsl(0,0%,12%);           /* gray-200  */
+      --border: hsl(0,0%,18%);         /* gray-400  */
+      --baseline: hsl(0,0%,25%);
+      --delta-good: hsl(131,43%,57%);  /* green-900 */
+      --delta-bad: hsl(358,100%,69%);  /* red-900   */
+      --series-1: hsl(210,100%,66%); --series-2: hsl(131,43%,57%);
+      --accent: hsl(210,100%,66%);     /* blue-900  */
+      --accent-ink: hsl(0,0%,4%);
+      --accent-wash: hsl(216,50%,12%); /* blue-100  */
+      --graphite: hsl(0,0%,0%);
+      --shadow-small: 0px 2px 2px #00000040;
+      --shadow-medium: 0px 2px 2px #00000040, 0px 8px 8px -8px #00000040;
+      --shadow-menu: 0px 1px 1px #00000040, 0px 4px 8px -4px #00000059, 0px 16px 24px -8px #00000073;
+      --job-0: hsl(210,100%,66%);  /* blue   */
+      --job-1: hsl(131,43%,57%);   /* green  */
+      --job-2: hsl(39,90%,50%);    /* amber  */
+      --job-3: hsl(275,80%,71%);   /* purple */
+      --job-4: hsl(174,90%,41%);   /* teal   */
+      --job-5: hsl(341,90%,67%);   /* pink   */
+      --job-6: hsl(358,100%,69%);  /* red    */
+      --job-7: hsl(206,100%,50%);  /* blue-600 */
     }
   }
 
@@ -70,24 +102,24 @@
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
   }
-  header h1 { font-family: var(--font-display); font-size: clamp(19px, 2.2vw, 25px); font-weight: 600; letter-spacing: -0.01em; margin: 0; }
-  .sub { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-size: 11px; }
+  header h1 { font-family: var(--font-display); font-size: clamp(18px, 2vw, 22px); font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .sub { color: var(--text-muted); font-size: 13px; }
   .mselect {
-    font: inherit; font-size: 12.5px; padding: 6px 11px; border-radius: 6px;
+    font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
   }
-  .mselect:hover { border-color: var(--accent); }
+  .mselect:hover { border-color: var(--baseline); }
   .mselect:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .spacer { flex: 1; }
-  .updated { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--delta-good); }
+  .updated { color: var(--text-muted); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--delta-good); }
   .dot.stale { background: var(--text-muted); }
   button.refresh {
-    font: inherit; font-size: 12.5px; padding: 6px 13px; border-radius: 6px;
+    font: inherit; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1);
-    color: var(--text-primary); cursor: pointer;
+    color: var(--text-primary); cursor: pointer; transition: background .15s ease, border-color .15s ease;
   }
-  button.refresh:hover { border-color: var(--accent); color: var(--accent); }
+  button.refresh:hover { background: var(--surface-2); border-color: var(--baseline); }
   button.refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .banner {
@@ -97,83 +129,72 @@
   .banner.error { display: block; }
   .banner strong { color: var(--text-primary); }
 
-  /* hairlines do the work — bordered surfaces, no fill contrast, no shadow */
+  /* Geist surfaces: background-100 card, gray-400 border, subtle shadow */
   .card {
-    background: transparent; border: 1px solid var(--border); border-radius: 12px;
-    padding: clamp(15px, 1.8vw, 22px); margin-bottom: 18px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: clamp(15px, 1.8vw, 22px); margin-bottom: 16px; box-shadow: var(--shadow-small);
   }
-  .card h2 { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.005em; margin: 0; }
+  .card h2 { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.011em; margin: 0; }
   .cardhead { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
   .collapse-head { cursor: pointer; user-select: none; }
   .collapse-head .caret { color: var(--accent); font-size: 12px; }
 
   /* ----- job queue rows ----- */
-  .jobrow { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: transparent; touch-action: pan-y; }
+  .jobrow { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--surface-1); touch-action: pan-y; }
   .jobrow:last-child { margin-bottom: 0; }
-  /* glassmorphism lift: translucent frosted surface + soft blurred halo */
+  /* lifted while dragging: frosted surface + Geist menu shadow */
   .jobrow.lifted {
     position: relative; z-index: 30;
     background: var(--surface-1);
-    background: color-mix(in srgb, var(--surface-1) 72%, transparent);
+    background: color-mix(in srgb, var(--surface-1) 78%, transparent);
     -webkit-backdrop-filter: blur(9px) saturate(1.15);
     backdrop-filter: blur(9px) saturate(1.15);
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-    box-shadow: 0 16px 40px rgba(0,0,0,0.24), 0 3px 12px rgba(0,0,0,0.12),
-      0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+    border-color: var(--baseline);
+    box-shadow: var(--shadow-menu), 0 0 0 1px var(--border);
   }
   .jobrow-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px; user-select: none; }
   .jobrow-main { flex: 1; min-width: 0; cursor: grab; }
   .jobrow.lifted .jobrow-main { cursor: grabbing; }
   .jobrow-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-  .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .jwo { color: var(--text-muted); font-weight: 400; font-size: 11.5px; margin-left: 10px; letter-spacing: 0.02em; }
+  .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jwo { font-family: var(--font-mono); color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 10px; }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-muted); flex: none; font-size: 12.5px; }
-  .jpct .done { color: var(--delta-good); font-weight: 600; }
-  .jbar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
-  .jfill { height: 100%; border-radius: 4px; transition: width .3s ease; }
-  .caret-btn { flex: none; cursor: pointer; color: var(--accent); font-size: 12px; line-height: 1;
+  .jpct .done { color: var(--delta-good); font-weight: 500; }
+  .jbar { height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+  .jfill { height: 100%; border-radius: 3px; transition: width .3s ease; }
+  .caret-btn { flex: none; cursor: pointer; color: var(--text-muted); font-size: 12px; line-height: 1;
     width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-    border: 1px solid var(--border); border-radius: 6px; background: transparent; user-select: none; }
-  .caret-btn:hover { border-color: var(--accent); }
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); user-select: none;
+    transition: background .15s ease, color .15s ease; }
+  .caret-btn:hover { background: var(--surface-2); color: var(--text-primary); }
   .caret-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .jobrow-detail { padding: 2px 14px 15px; }
   .jobrow-detail.hidden { display: none; }
 
-  .jobmeta { font-family: var(--font-mono); color: var(--text-muted); font-size: 11.5px; letter-spacing: 0.02em; margin-top: 2px; }
-  .pieces { margin-top: 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
-  .pieces .plabel { font-family: var(--font-mono); color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 10px; margin-bottom: 2px; }
+  .jobmeta { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+  .pieces { margin-top: 14px; font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
+  .pieces .plabel { color: var(--text-muted); font-size: 13px; margin-top: 12px; margin-bottom: 3px; }
   .pieces .pyield { color: var(--text-primary); }
-  .pieces .psz { color: var(--text-secondary); margin-right: 3px; }
-  .pieces .pcut { font-family: var(--font-mono); color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15px; }
-  .pieces .ptot { font-family: var(--font-mono); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .pieces .psz { color: var(--text-muted); margin-right: 3px; font-family: var(--font-mono); font-size: 12.5px; }
+  .pieces .pcut { font-family: var(--font-mono); color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .pieces .ptot { font-family: var(--font-mono); color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 13px; }
   .pieces .pitem { display: inline-block; margin-right: 18px; }
-  .finish { margin-top: 15px; }
-  .finish .label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
-  .finish .value { font-family: var(--font-display); font-size: 20px; font-weight: 600; margin-top: 3px; }
-  .finish .value .time { color: var(--text-secondary); font-weight: 500; font-size: 15px; }
-  .scenarios { margin-top: 13px; border-top: 1px solid var(--border); padding-top: 11px; }
-  .scenarios .title { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 7px; }
+  .finish { margin-top: 16px; }
+  .finish .label { font-size: 13px; color: var(--text-muted); }
+  .finish .value { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-top: 3px; }
+  .finish .value .time { color: var(--text-muted); font-weight: 400; font-size: 15px; letter-spacing: normal; }
+  .scenarios { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .scenarios .title { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
   .scen { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 13.5px; }
   .scen .sname { width: 130px; color: var(--text-secondary); flex: none; }
   .scen .sdate { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
-  .scen .ssave { color: var(--delta-good); font-size: 12.5px; }
-  .strip { margin-top: 15px; }
-  .strip .title { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 5px; }
+  .scen .ssave { color: var(--delta-good); font-size: 13px; }
+  .strip { margin-top: 16px; }
+  .strip .title { font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
   .strip svg { display: block; width: 100%; height: auto; }
 
-  /* weekly activity — the one dark graphite band (light -> dark -> light rhythm) */
-  .card.band {
-    background: var(--graphite); border-color: rgba(255,255,255,0.10);
-    --text-primary:#eef2f8; --text-secondary:#c3ccd9; --text-muted:#8b95a4;
-    --grid:rgba(255,255,255,0.08); --baseline:rgba(255,255,255,0.18); --border:rgba(255,255,255,0.12);
-    --surface-1:#1b2029;
-    --job-0:#5b8bff; --job-1:#25b586; --job-2:#e0a83a; --job-3:#2ea043;
-    --job-4:#9a8cf0; --job-5:#f0736f; --job-6:#e07aa6; --job-7:#e58a4d;
-    color: var(--text-primary);
-  }
-  .card.band h2 { color: var(--text-primary); }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 2px 0 12px; }
-  .legend .item { font-family: var(--font-mono); display: flex; align-items: center; gap: 5px; font-size: 10.5px; letter-spacing: 0.02em; color: var(--text-secondary); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 2px 0 14px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
   .legend .chip { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .chartbox { position: relative; }
   .chartbox svg { display: block; width: 100%; height: auto; }
@@ -181,38 +202,43 @@
   .tooltip {
     position: absolute; pointer-events: none; display: none; z-index: 5;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.28); padding: 9px 11px; font-size: 12px; min-width: 165px;
+    box-shadow: var(--shadow-menu); padding: 9px 11px; font-size: 13px; min-width: 165px;
   }
-  .tooltip .t-x { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 5px; font-size: 10.5px; }
+  .tooltip .t-x { color: var(--text-muted); margin-bottom: 5px; font-size: 12.5px; }
   .tooltip .t-row { display: flex; align-items: center; gap: 6px; }
   .tooltip .t-row .chip { width: 8px; height: 8px; border-radius: 2px; flex: none; }
   .tooltip .t-row .name { color: var(--text-secondary); flex: 1; padding-right: 10px; }
-  .tooltip .t-row .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tooltip .t-row .val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
   .tooltip .t-total { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 5px; }
-  .detailbtns { margin-top: 15px; display: flex; gap: 8px; }
+  .detailbtns { margin-top: 16px; display: flex; gap: 8px; }
 
+  /* Geist secondary: bordered, fills on hover */
   button.small {
-    font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 6px;
-    border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 500; padding: 5px 11px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
   }
-  button.small:hover { border-color: var(--accent); color: var(--accent); }
+  button.small:hover { background: var(--surface-2); border-color: var(--baseline); }
   button.small.on { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
   button.small.danger { color: var(--delta-bad); }
-  button.small.danger:hover { border-color: var(--delta-bad); color: var(--delta-bad); }
+  button.small.danger:hover { background: var(--surface-2); border-color: var(--delta-bad); }
   button.small:focus-visible, button.primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Geist primary: inverted — near-black on light, near-white on dark */
   button.primary {
-    font: inherit; font-size: 13px; padding: 7px 15px; border-radius: 6px;
-    border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 600;
+    font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 6px;
+    border: 1px solid var(--text-primary); background: var(--text-primary); color: var(--page);
+    cursor: pointer; font-weight: 500; transition: opacity .15s ease;
   }
-  button.primary:hover { filter: brightness(1.06); }
+  button.primary:hover { opacity: 0.85; }
 
   /* form */
   .frow { display: flex; align-items: center; gap: 10px; margin: 9px 0; flex-wrap: wrap; }
-  .frow label { width: 120px; flex: none; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .frow label { width: 120px; flex: none; font-size: 13px; color: var(--text-muted); }
   .frow input {
     font: inherit; font-size: 13.5px; padding: 7px 10px; border-radius: 6px;
-    border: 1px solid var(--baseline); background: var(--surface-1); color: var(--text-primary);
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
   }
+  .frow input::placeholder { color: var(--text-muted); }
   .frow input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
   #f_name { width: 280px; font-family: var(--font-mono); }
   #f_target { width: 100px; }
@@ -226,24 +252,25 @@
   .sumbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .seg button {
-    font: inherit; font-size: 12.5px; padding: 6px 13px; border: none; cursor: pointer;
-    background: var(--surface-1); color: var(--text-secondary); border-left: 1px solid var(--border);
+    font: inherit; font-size: 13px; font-weight: 500; padding: 6px 13px; border: none; cursor: pointer;
+    background: var(--surface-1); color: var(--text-muted); border-left: 1px solid var(--border);
+    transition: background .15s ease, color .15s ease;
   }
   .seg button:first-child { border-left: none; }
-  .seg button:hover { color: var(--accent); }
-  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .seg button:hover { background: var(--surface-2); color: var(--text-primary); }
+  .seg button.on { background: var(--accent); color: hsl(0,0%,100%); }
   .navbar { display: flex; align-items: center; gap: 8px; }
-  .navbar #periodlabel { font-family: var(--font-display); font-weight: 600; min-width: 190px; text-align: center; }
+  .navbar #periodlabel { font-family: var(--font-display); font-weight: 500; font-size: 14px; min-width: 190px; text-align: center; }
   .navbar button { font: inherit; font-size: 15px; line-height: 1; padding: 5px 11px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
-    border-radius: 6px; cursor: pointer; }
-  .navbar button:hover { border-color: var(--accent); color: var(--accent); }
-  .navbar button.today { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    border-radius: 6px; cursor: pointer; transition: background .15s ease; }
+  .navbar button:hover { background: var(--surface-2); }
+  .navbar button.today { font-size: 13px; font-weight: 500; }
   .navbar button:disabled { opacity: 0.35; cursor: default; }
   .sumtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
-  .sumtile { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-  .sumtile .label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 6px; }
-  .sumtile .value { font-family: var(--font-display); font-size: clamp(22px, 2.4vw, 28px); font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .sumtile { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; background: var(--surface-2); }
+  .sumtile .label { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+  .sumtile .value { font-family: var(--font-display); font-size: clamp(22px, 2.4vw, 28px); font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
   .util { height: 5px; border-radius: 3px; background: var(--grid); margin-top: 10px; overflow: hidden; }
   .util .fill { height: 100%; background: var(--accent); border-radius: 3px; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
@@ -251,13 +278,13 @@
   .tablewrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; white-space: nowrap; }
-  th { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 500; font-size: 11px; border-bottom: 1px solid var(--baseline); }
+  th { color: var(--text-muted); font-weight: 500; font-size: 13px; border-bottom: 1px solid var(--border); }
   td { border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
   tbody td:first-child { font-family: var(--font-mono); font-size: 12.5px; }
   tr:last-child td { border-bottom: none; }
   td.num, th.num { text-align: right; }
-  tfoot td { border-top: 1px solid var(--baseline); border-bottom: none; font-weight: 600; font-family: var(--font-mono); }
-  .rowcount { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; letter-spacing: 0.03em; margin-top: 10px; }
+  tfoot td { border-top: 1px solid var(--border); border-bottom: none; font-weight: 500; font-family: var(--font-mono); }
+  .rowcount { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -314,7 +341,7 @@
   </div>
 
   <!-- ===== Weekly activity (hidden until a job is added to it) ===== -->
-  <div class="card band reveal" id="weekcard" style="display:none">
+  <div class="card reveal" id="weekcard" style="display:none">
     <div class="cardhead"><h2>Weekly activity</h2><span class="sub">runs per day, by job — last 7 days</span></div>
     <div class="legend" id="weeklegend"></div>
     <div class="chartbox" id="weekchartbox"><div class="tooltip" id="weektip"></div></div>
