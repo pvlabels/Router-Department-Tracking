@@ -136,6 +136,9 @@
 
   /* ---------- finished log ---------- */
   .done-btn { color: var(--delta-good); }
+  /* Dates are data: mono, matching the Summary's Date column. The Job column
+     already gets it from the generic tbody td:first-child rule. */
+  #fintable td:nth-child(2) { font-family: var(--font-mono); font-size: 12.5px; }
   /* Status sits right after a right-aligned number column — give it room. */
   #fintable th:nth-child(6), #fintable td:nth-child(6) { padding-left: 26px; }
   #fintable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
@@ -236,7 +239,7 @@
   .seg button.on { background: var(--accent); color: #fff; }
   .navbar { display: flex; align-items: center; gap: 8px; }
   .navbar button { padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; }
-  .navbar #periodlabel { font-weight: 500; font-size: 13.5px; min-width: 180px; text-align: center; }
+  .navbar #periodlabel, .navbar #finlabel { font-weight: 500; font-size: 13.5px; min-width: 180px; text-align: center; }
   .sumtiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 12px; margin-bottom: 16px; }
   .sumtile { border: 1px solid var(--border); border-radius: 8px; padding: 13px 15px; background: var(--surface-2); }
   .sumtile .label { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
