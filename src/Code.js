@@ -425,14 +425,16 @@ function setComplete(name, on, sheetsCut) {
         targetCell.setValue(cut);
       }
     } else {
-      // Reopening restores the original target and suppresses the
+      // Reopening sets the new target the caller asked for (sheets already cut
+      // plus however many are being added). Falling back to the pre-completion
+      // target keeps older callers working. Either way `x` suppresses the
       // target-reached rule, or the job would drop straight back into the log.
       delete meta[name].f;
       meta[name].x = true;
-      if (meta[name].t !== undefined) {
-        targetCell.setValue(meta[name].t);
-        delete meta[name].t;
-      }
+      var newTarget = Math.round(Number(sheetsCut));
+      if (isFinite(newTarget) && newTarget > 0) targetCell.setValue(newTarget);
+      else if (meta[name].t !== undefined) targetCell.setValue(meta[name].t);
+      delete meta[name].t;
     }
     setJobMeta(meta);
   } finally {

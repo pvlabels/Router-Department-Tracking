@@ -144,6 +144,23 @@
   #fintable > thead > tr > th:nth-child(6),
   #fintable > tbody > tr > td:nth-child(6) { padding-left: 26px; }
   #fintable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
+  /* ---------- modal ---------- */
+  .modal {
+    position: fixed; inset: 0; z-index: 60; display: flex;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(0,0,0,.45);
+  }
+  .modalcard {
+    width: 100%; max-width: 400px; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.22);
+  }
+  .modalcard h2 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .modalsub { color: var(--text-secondary); font-size: 13px; margin-top: 5px; }
+  .modalcard #r_add { width: 110px; }
+  .modalnote { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
+  .modalbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
   #fintable tr.finrow { cursor: pointer; }
   #fintable tr.finrow:hover td { background: var(--surface-2); }
   #fintable tr.finrow.open td { border-bottom: none; }
@@ -355,6 +372,24 @@
     </div>
     <div class="tablewrap"><table id="fintable"></table></div>
     <div class="rowcount" id="finnote"></div>
+  </div>
+
+  <!-- ===== Reopen dialog ===== -->
+  <div class="modal" id="reopenmodal" style="display:none" onclick="if(event.target===this)closeReopen()">
+    <div class="modalcard" role="dialog" aria-modal="true" aria-labelledby="reopentitle">
+      <h2 id="reopentitle">Reopen job</h2>
+      <div class="modalsub" id="reopensub"></div>
+      <div class="frow" style="margin-top:16px">
+        <label for="r_add">Sheets to add</label>
+        <input id="r_add" type="number" min="1" step="1" value="1" oninput="updateReopenNote()">
+      </div>
+      <div class="modalnote" id="reopennote"></div>
+      <div class="modalbtns">
+        <button class="small" onclick="closeReopen()">Cancel</button>
+        <button class="primary" onclick="confirmReopen()">Reopen</button>
+      </div>
+      <div class="formerr" id="r_err"></div>
+    </div>
   </div>
 
   <!-- ===== Summary ===== -->
@@ -1147,28 +1182,72 @@ function sheetsCutFor(name) {
   return j ? completedFor(j.name, j.startDate) : 0;
 }
 
-/** Put a finished job back in the queue. */
+/* ----- reopen: ask how many sheets to add before it rejoins the queue ----- */
+
+var reopenName = null;
+
 function reopenJob(name) {
-  setCompleteState(name, false, 'Could not reopen the job.');
+  var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  if (!j) return;
+  reopenName = name;
+  var cut = sheetsCutFor(name);
+  document.getElementById('reopensub').textContent =
+    jobTitle(j) + ' — ' + cut + ' sheet' + (cut === 1 ? '' : 's') + ' cut so far.';
+  document.getElementById('r_err').textContent = '';
+  var input = document.getElementById('r_add');
+  input.value = 1;
+  updateReopenNote();
+  document.getElementById('reopenmodal').style.display = '';
+  input.focus();
+  input.select();
 }
 
-function setCompleteState(name, on, errMsg) {
+/** Live "ends up at N/M" line, so the new goal is never a surprise. */
+function updateReopenNote() {
+  if (!reopenName) return;
+  var cut = sheetsCutFor(reopenName);
+  var add = parseInt(document.getElementById('r_add').value, 10);
+  document.getElementById('reopennote').textContent = (add > 0)
+    ? 'Goes back to the queue at ' + cut + ' / ' + (cut + add) + ' sheets.'
+    : 'Enter how many more sheets need cutting.';
+}
+
+function closeReopen() {
+  document.getElementById('reopenmodal').style.display = 'none';
+  reopenName = null;
+}
+
+function confirmReopen() {
+  if (!reopenName) return;
+  var add = parseInt(document.getElementById('r_add').value, 10);
+  if (!(add > 0)) {
+    document.getElementById('r_err').textContent = 'Enter at least 1 sheet.';
+    return;
+  }
+  var name = reopenName, target = sheetsCutFor(name) + add;
+  closeReopen();
+  setCompleteState(name, false, 'Could not reopen the job.', target);
+}
+
+function setCompleteState(name, on, errMsg, newTarget) {
   var j = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
   var cut = sheetsCutFor(name);
+  var sheets = on ? cut : newTarget;
   if (j) {
     j.finishedAt = on ? new Date().toISOString() : '';
     j.noAutoFinish = !on;
     j.active = !on;
     // Mirror the retarget the backend is about to do, so the row doesn't
     // flash the old goal before the next refresh lands.
-    if (on) { j.prevTarget = j.target; j.target = cut; }
-    else if (j.prevTarget !== undefined) { j.target = j.prevTarget; delete j.prevTarget; }
+    if (on) j.target = cut;
+    else if (sheets > 0) j.target = sheets;
   }
   delete expandedJobs[name];
+  delete expandedFinished[name];
   renderQueue();
   renderFinished();
   suppressReloadUntil = Date.now() + 6000;
-  api({ action: 'setComplete', name: name, on: on, sheets: cut }, function (res) {
+  api({ action: 'setComplete', name: name, on: on, sheets: sheets }, function (res) {
     if (!res || !res.ok) { onError(new Error((res && res.error) || errMsg)); load(); }
   });
 }
@@ -1613,6 +1692,13 @@ document.getElementById('periodprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('periodnext').innerHTML = ICON.chevronRight(16);
 document.getElementById('finprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('finnext').innerHTML = ICON.chevronRight(16);
+
+// Enter confirms the reopen dialog, Escape backs out of it.
+document.addEventListener('keydown', function (e) {
+  if (document.getElementById('reopenmodal').style.display === 'none') return;
+  if (e.key === 'Enter') { e.preventDefault(); confirmReopen(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeReopen(); }
+});
 
 load();
 setInterval(autoRefresh, REFRESH_MS);
