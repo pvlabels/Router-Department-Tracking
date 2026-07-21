@@ -137,11 +137,22 @@
   /* ---------- finished log ---------- */
   .done-btn { color: var(--delta-good); }
   /* Dates are data: mono, matching the Summary's Date column. The Job column
-     already gets it from the generic tbody td:first-child rule. */
-  #fintable td:nth-child(2) { font-family: var(--font-mono); font-size: 12.5px; }
+     already gets it from the generic tbody td:first-child rule. Scoped to the
+     log's own rows — an expanded ticket nests its own tables in here. */
+  #fintable > tbody > tr > td:nth-child(2) { font-family: var(--font-mono); font-size: 12.5px; }
   /* Status sits right after a right-aligned number column — give it room. */
-  #fintable th:nth-child(6), #fintable td:nth-child(6) { padding-left: 26px; }
+  #fintable > thead > tr > th:nth-child(6),
+  #fintable > tbody > tr > td:nth-child(6) { padding-left: 26px; }
   #fintable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
+  #fintable tr.finrow { cursor: pointer; }
+  #fintable tr.finrow:hover td { background: var(--surface-2); }
+  #fintable tr.finrow.open td { border-bottom: none; }
+  #fintable .fincaret { display: inline-flex; color: var(--text-muted); vertical-align: middle; }
+  /* The ticket cell is a first-child td, so it inherits the table's mono
+     treatment — reset it or the whole ticket renders in Menlo. */
+  #fintable tr.findetail > td {
+    padding: 0 2px 18px; font-family: var(--font-body); font-size: 13px;
+  }
   #fintable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
 
   /* ---------- summary filters + sortable columns ---------- */
@@ -747,6 +758,7 @@ function renderQueue() {
 
 var finPeriod = 'day';                    // mirrors the Summary's period control
 var finAnchor = startOfDay(new Date());
+var expandedFinished = {};                // job name -> true when its ticket is open
 
 /**
  * When a job finished. Manual/schedule completions carry a stamp; a job that
@@ -799,11 +811,13 @@ function renderFinished() {
   }
   note.innerHTML = '';
 
+  // Caret goes last so the Date/Status column rules keep their positions.
   var html = '<thead><tr><th>Job</th><th>Date finished</th><th>Time</th>'
-    + '<th class="num">Sheets</th><th class="num">Avg run time</th><th>Status</th><th></th></tr></thead><tbody>';
+    + '<th class="num">Sheets</th><th class="num">Avg run time</th><th>Status</th><th></th><th></th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var job = r.job, company = companyFromNotes(job.notes);
-    html += '<tr>'
+    var open = !!expandedFinished[job.name];
+    html += '<tr class="finrow' + (open ? ' open' : '') + '" onclick="toggleFinishedJob(' + jsStr(job.name) + ')" title="Click for details">'
       + '<td><span class="jname">'
       +   escapeHtml(jobTitle(job)) + '</span>'
       +   (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
@@ -813,10 +827,29 @@ function renderFinished() {
       + '<td class="num">' + r.sheets + ' / ' + (job.target || 0) + '</td>'
       + '<td class="num">' + (r.sheets ? escapeHtml(fmtDur(r.avg)) : '&mdash;') + '</td>'
       + '<td><span class="done">Complete ✓</span></td>'
-      + '<td class="num"><button class="small" onclick="reopenJob(' + jsStr(job.name) + ')">Reopen</button></td>'
+      + '<td class="num"><button class="small" onclick="event.stopPropagation();reopenJob(' + jsStr(job.name) + ')">Reopen</button></td>'
+      + '<td class="num"><span class="fincaret">' + (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</span></td>'
       + '</tr>';
+    if (open) {
+      html += '<tr class="findetail" data-for="' + escapeHtml(cssId(job.name)) + '"><td colspan="8"></td></tr>';
+    }
   });
   table.innerHTML = html + '</tbody>';
+
+  // Tickets are DOM nodes, so they go in after the markup is in place.
+  rows.forEach(function (r) {
+    var job = r.job;
+    if (!expandedFinished[job.name]) return;
+    var host = table.querySelector('.findetail[data-for="' + cssId(job.name) + '"] td');
+    if (!host) return;
+    var runs = runsForJob(job);
+    host.appendChild(jobDetail(job, runs, r.sheets, Math.max(0, (job.target || 0) - r.sheets), true));
+  });
+}
+
+function toggleFinishedJob(name) {
+  expandedFinished[name] = !expandedFinished[name];
+  renderFinished();
 }
 
 function setFinPeriod(p) {
@@ -969,7 +1002,11 @@ function endPress() {
   pressState = null;
 }
 
-function jobDetail(job, runs, completed, remaining) {
+/**
+ * The full job ticket. `finished` swaps the queue's action for Reopen — a
+ * completed job has nothing left to mark complete.
+ */
+function jobDetail(job, runs, completed, remaining, finished) {
   var wrap = document.createElement('div');
   var secs = runs.map(function (r) { return r.seconds; }).sort(function (a, b) { return a - b; });
   var medianRun = secs.length ? secs[Math.floor(secs.length / 2)] : null;
@@ -1057,7 +1094,9 @@ function jobDetail(job, runs, completed, remaining) {
   var btns = document.createElement('div');
   btns.className = 'detailbtns';
   btns.innerHTML = '<button class="small" onclick="openForm(' + jsStr(job.name) + ')">Edit</button>'
-    + '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>';
+    + (finished
+        ? '<button class="small" onclick="reopenJob(' + jsStr(job.name) + ')">Reopen</button>'
+        : '<button class="small done-btn" onclick="markComplete(' + jsStr(job.name) + ')">✓ Mark complete</button>');
   wrap.appendChild(btns);
   return wrap;
 }
