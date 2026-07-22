@@ -52,7 +52,7 @@ var CONFIG = {
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
                    'Notes', 'Cut File', 'Source', 'Work Orders', 'Label', 'Status', 'Size', 'Qty'];
-var HISTORY_HEADER = ['Run #', 'Date', 'Sheets', 'Notes', 'Work Orders'];
+var HISTORY_HEADER = ['Run #', 'Date', 'Sheets', 'Notes', 'Work Orders', 'Size'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
@@ -525,7 +525,7 @@ function backfillProductionHistory() {
             || prod.getSheets()[0];
   var last = psheet.getLastRow();
   if (last < 2) return { rows: 0 };
-  var vals = psheet.getRange(1, 1, last, 13).getValues();       // A..M
+  var vals = psheet.getRange(1, 1, last, 14).getValues();       // A..N
   var sm = String(CONFIG.HISTORY_SINCE).split('-');
   var since = new Date(+sm[0], +sm[1] - 1, +sm[2]);
 
@@ -541,7 +541,8 @@ function backfillProductionHistory() {
       a.getFullYear() + '-' + pad2(a.getMonth() + 1) + '-' + pad2(a.getDate()),
       Math.round(Number(row[2])) || 0,                          // C sheets
       String(row[6] || '').trim(),                              // G notes (customer)
-      String(row[12] || '').trim()];                            // M part #/WO
+      String(row[12] || '').trim(),                             // M part #/WO
+      String(row[13] || '').trim()];                            // N size
   }
 
   var out = Object.keys(byRun).map(function (k) { return byRun[k]; });
@@ -581,7 +582,8 @@ function readHistory(ss) {
     var d = row[1];
     var date = d instanceof Date ? (d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())) : String(d || '');
     out.push({ run: run, date: date, sheets: Number(row[2]) || 0,
-      notes: String(row[3] || '').trim(), workOrders: String(row[4] || '').trim() });
+      notes: String(row[3] || '').trim(), workOrders: String(row[4] || '').trim(),
+      size: String(row[5] || '').trim() });
   });
   return out;
 }

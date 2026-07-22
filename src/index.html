@@ -543,6 +543,7 @@
     <div class="filterbar">
       <input id="f_job" placeholder="Filter job&hellip;" oninput="onFilterChange()">
       <select id="f_machine" onchange="onFilterChange()"></select>
+      <select id="f_size" onchange="onFilterChange()"></select>
       <label class="fdate">from <input id="f_from" type="date" onchange="onFilterChange()"></label>
       <label class="fdate">to <input id="f_to" type="date" onchange="onFilterChange()"></label>
       <button class="small" onclick="clearFilters()">Clear</button>
@@ -650,9 +651,29 @@ function autoRefresh() {
   load();
 }
 
+/**
+ * Tag each run with the size of its production run (schedule col N), matched by
+ * run number. History covers the full year; current tracked jobs win when both
+ * have it. Non-production runs (PS-…, jigs) have no size.
+ */
+function attachRunSizes() {
+  var byRun = {};
+  (state.history || []).forEach(function (h) { if (h.size) byRun[h.run] = h.size; });
+  (state.jobs || []).forEach(function (j) {
+    if (!j.size) return;
+    var mm = stripExt(matchKeyFor(j)).match(/(\d+)\s*$/);
+    if (mm) byRun[mm[1]] = j.size;
+  });
+  state.runs.forEach(function (r) {
+    var m = stripExt(r.job).match(/^TR-0*(\d+)/i);
+    r.size = (m && byRun[m[1]]) ? byRun[m[1]] : '';
+  });
+}
+
 function onData(data) {
   state = data;
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
+  attachRunSizes();
   // Fallback: build machine-nested daily aggregates + machine list if the
   // backend didn't send them (e.g. local mock).
   if (!state.daily) {
@@ -692,6 +713,17 @@ function populateMachineSelect() {
     }).join('');
     f.value = machines.indexOf(sumFilters.machine) >= 0 ? sumFilters.machine : '';
     sumFilters.machine = f.value;
+  }
+
+  // Size filter: the distinct sizes present across runs.
+  var fs = document.getElementById('f_size');
+  if (fs) {
+    var sizes = unique((state.runs || []).map(function (r) { return r.size; }).filter(Boolean)).sort();
+    fs.innerHTML = '<option value="">Any size</option>' + sizes.map(function (s) {
+      return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>';
+    }).join('');
+    fs.value = sizes.indexOf(sumFilters.size) >= 0 ? sumFilters.size : '';
+    sumFilters.size = fs.value;
   }
 }
 
@@ -1633,11 +1665,12 @@ var SUM_COLS = [
   { key: 'when',    label: 'Date',     get: function (r) { return r.when; },    fmt: function (r) { return fmtDateShort(r.when); } },
   { key: 'time',    label: 'Start',    get: function (r) { return r.when; },    fmt: function (r) { return fmtTime(r.when); } },
   { key: 'job',     label: 'Job',      get: function (r) { return r.job; },     fmt: function (r) { return r.job; } },
+  { key: 'size',    label: 'Size',     get: function (r) { return r.size || ''; }, fmt: function (r) { return r.size || '—'; } },
   { key: 'seconds', label: 'Run time', get: function (r) { return r.seconds; }, fmt: function (r) { return fmtDur(r.seconds); }, num: true },
   { key: 'machine', label: 'Machine',  get: function (r) { return r.machine; }, fmt: function (r) { return r.machine || '—'; } }
 ];
 var sumSort = { key: 'when', dir: -1 };     // newest first
-var sumFilters = { job: '', machine: '', from: '', to: '' };
+var sumFilters = { job: '', machine: '', size: '', from: '', to: '' };
 var SUM_MAX = 300;                          // keep the DOM sane on Yearly
 
 function sumRows(range) {
@@ -1645,6 +1678,7 @@ function sumRows(range) {
     if (r.when < range.start || r.when >= range.end) return false;
     if (selectedMachine !== 'all' && r.machine !== selectedMachine) return false;
     if (sumFilters.machine && r.machine !== sumFilters.machine) return false;
+    if (sumFilters.size && (r.size || '') !== sumFilters.size) return false;
     if (sumFilters.job && String(r.job).toLowerCase().indexOf(sumFilters.job.toLowerCase()) < 0) return false;
     if (sumFilters.from && dayKey(r.when) < sumFilters.from) return false;
     if (sumFilters.to && dayKey(r.when) > sumFilters.to) return false;
@@ -1706,27 +1740,29 @@ function renderSumTable(range, periodRuns, machineCount) {
 }
 
 function anyFilterActive() {
-  return !!(sumFilters.job || sumFilters.machine || sumFilters.from || sumFilters.to);
+  return !!(sumFilters.job || sumFilters.machine || sumFilters.size || sumFilters.from || sumFilters.to);
 }
 
 function sortSummary(key) {
   if (sumSort.key === key) sumSort.dir = -sumSort.dir;
-  else { sumSort.key = key; sumSort.dir = key === 'job' || key === 'machine' ? 1 : -1; }
+  else { sumSort.key = key; sumSort.dir = key === 'job' || key === 'machine' || key === 'size' ? 1 : -1; }
   renderSummary();
 }
 
 function onFilterChange() {
   sumFilters.job = document.getElementById('f_job').value.trim();
   sumFilters.machine = document.getElementById('f_machine').value;
+  sumFilters.size = document.getElementById('f_size').value;
   sumFilters.from = document.getElementById('f_from').value;
   sumFilters.to = document.getElementById('f_to').value;
   renderSummary();
 }
 
 function clearFilters() {
-  sumFilters = { job: '', machine: '', from: '', to: '' };
+  sumFilters = { job: '', machine: '', size: '', from: '', to: '' };
   document.getElementById('f_job').value = '';
   document.getElementById('f_machine').value = '';
+  document.getElementById('f_size').value = '';
   document.getElementById('f_from').value = '';
   document.getElementById('f_to').value = '';
   renderSummary();
