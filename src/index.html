@@ -372,6 +372,26 @@
   .rplaceholder .t { font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
   .rplaceholder .d { font-size: 13px; color: var(--text-muted); max-width: 440px; margin: 0 auto; }
   .repfoot { color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 6px 0; }
+
+  /* ---------- print: report only, forced light ---------- */
+  @media print {
+    header, .repside, #dashboardview, .banner, .no-print { display: none !important; }
+    .wrap { max-width: none; padding: 0; }
+    .repgrid { display: block; }
+    #repmain { max-width: none; }
+    .rcard, .rtwo { break-inside: avoid; }
+    .rcard { box-shadow: none; }
+    :root, :root[data-theme="dark"] {
+      --page:#fff; --surface-1:#fff; --surface-2:#fafafa;
+      --text-primary:#111; --text-secondary:#555; --text-muted:#888;
+      --border:#d8d8d8; --border-strong:#000; --grid:#e6e6e6; --baseline:#dcdcdc;
+      --accent:#0070f3; --accent-wash:#f2f7ff;
+      --job-0:#0070f3; --job-1:#45a557; --job-2:#f5a623; --job-3:#7928ca;
+      --job-4:#29bc9b; --job-5:#eb367f; --job-6:#e00000; --job-7:#0761d1;
+    }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { margin: 14mm; size: letter; }
+  }
 </style>
 </head>
 <body>
@@ -1815,11 +1835,11 @@ function showView(v) {
 // Display order mirrors the design; `available:false` types have no source data
 // in the run log yet, so they show a "not captured" state instead of charts.
 var REPORT_TYPES = [
-  { key: 'sheet',    label: 'Press Sheet', desc: 'Sheets cut by size over time',   dim: 'sheet',    filterLabel: 'Press sheet sizes', available: false },
-  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',       dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true },
-  { key: 'stock',    label: 'Stock Item',  desc: 'Volume & runtime per material',   dim: 'stock',    filterLabel: 'Stock items',  available: false },
-  { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',      dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true },
-  { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',      dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
+  { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet', dim: 'sheet',    filterLabel: 'Press sheets', available: true },
+  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',          dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true, bucket: 'Unattributed', noun: 'a customer' },
+  { key: 'stock',    label: 'Part #',      desc: 'Runs grouped by part number',       dim: 'stock',    filterLabel: 'Part numbers', available: true, sparse: true, bucket: 'No part #', noun: 'a part number' },
+  { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',        dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true, bucket: 'No WO', noun: 'a work order' },
+  { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',        dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
 ];
 
 var reportState = { type: 'run', preset: 'month', start: '', end: '', sel: {} };
@@ -1833,8 +1853,11 @@ function reportCfg() {
 /** Jobs with their run-matching key precomputed, for attributing runs. */
 function jobsForReport() {
   return (state.jobs || []).map(function (j) {
+    var hasWO = j.workOrders && hasWorkOrder(j.workOrders);
     return { job: j, key: matchKeyFor(j), customer: companyFromNotes(j.notes),
-      wo: (j.workOrders && hasWorkOrder(j.workOrders)) ? splitWorkOrders(j.workOrders).join(' · ') : '' };
+      wo: hasWO ? splitWorkOrders(j.workOrders).join(' · ') : '',
+      // Column M holds either work orders or a part number, never both.
+      partNo: (j.workOrders && !hasWO) ? j.workOrders : '' };
   });
 }
 function trackedJobForRun(run, cache) {
@@ -1845,10 +1868,18 @@ function trackedJobForRun(run, cache) {
 }
 function runGroupValue(run, dim, cache) {
   if (dim === 'runNo') return stripExt(run.job);
+  // A press-sheet run is any file that starts with PS-; grouped by the file.
+  // Non-PS runs return null and are dropped from the press-sheet report.
+  if (dim === 'sheet') {
+    var base = stripExt(run.job);
+    return /^PS-/i.test(base) ? base : null;
+  }
   var j = trackedJobForRun(run, cache);
   if (dim === 'customer') return (j && j.customer) ? j.customer : 'Unattributed';
   if (dim === 'wo') return (j && j.wo) ? j.wo : 'No WO';
-  return null;  // sheet / stock: not recorded per run
+  // Part number is column M when it isn't a work order (see splitWorkOrders).
+  if (dim === 'stock') return (j && j.partNo) ? j.partNo : 'No part #';
+  return null;
 }
 
 /* ---- range + selection ---- */
@@ -1879,6 +1910,7 @@ function reportGroupsInRange(cache) {
   state.runs.forEach(function (run) {
     if (run.when < r.start || run.when >= r.end) return;
     var g = runGroupValue(run, dim, cache);
+    if (g === null) return;
     secs[g] = (secs[g] || 0) + run.seconds;
   });
   return Object.keys(secs).sort(function (a, b) { return secs[b] - secs[a]; });
@@ -1967,6 +1999,8 @@ function renderReport() {
   var range = reportRange();
   var periodLabel = fmtDate(range.start) + ' – ' + fmtDate(new Date(range.end.getTime() - 86400000));
   var head = ''
+    + '<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:12px">'
+    + '  <button class="btn" onclick="window.print()" title="Print or save this report as PDF">Print / PDF</button></div>'
     + '<div class="rcard">'
     + '  <div class="rhead"><div style="flex:1">'
     + '    <h1>' + escapeHtml(cfg.label) + ' Report</h1>'
@@ -1993,7 +2027,9 @@ function renderReport() {
   var sel = reportSelectedSet(options);
   var runs = state.runs.filter(function (run) {
     if (run.when < range.start || run.when >= range.end) return false;
-    return sel === null || sel[runGroupValue(run, cfg.dim, cache)];
+    var g = runGroupValue(run, cfg.dim, cache);
+    if (g === null) return false;               // e.g. non-PS run in a press-sheet report
+    return sel === null || sel[g];
   });
 
   if (!runs.length) {
@@ -2002,24 +2038,26 @@ function renderReport() {
     return;
   }
 
-  // group + aggregate
-  var groups = {}, totalSecs = 0, byDay = {}, machinesInRange = {}, attributed = 0;
+  // group + aggregate (the report's dimension)
+  var groups = {}, totalSecs = 0, byDay = {}, attributed = 0;
   runs.forEach(function (run) {
     var g = runGroupValue(run, cfg.dim, cache);
     var o = groups[g] || (groups[g] = { key: g, runs: 0, secs: 0 });
     o.runs++; o.secs += run.seconds; totalSecs += run.seconds;
     var dk = dayKey(run.when); byDay[dk] = (byDay[dk] || 0) + 1;
-    machinesInRange[run.machine] = true;
-    if (g !== 'Unattributed' && g !== 'No WO') attributed++;
+    if (!cfg.bucket || g !== cfg.bucket) attributed++;
   });
   var arr = Object.keys(groups).map(function (k) { return groups[k]; })
     .sort(function (a, b) { return b.secs - a.secs; });
   var totalRuns = runs.length;
   arr.forEach(function (g, i) { g.color = i < 8 ? reportColor(i) : REPORT_OTHER; });
 
-  // utilization over the range
-  var machineCount = Math.max(1, Object.keys(machinesInRange).length);
-  var sched = scheduleStats(range.start, range.end, dayKeySecs(runs), machineCount);
+  // Utilization is a whole-router metric, so it's measured against every run in
+  // the period, not just this report's filtered subset.
+  var allInRange = state.runs.filter(function (r) { return r.when >= range.start && r.when < range.end; });
+  var allMach = {}; allInRange.forEach(function (r) { allMach[r.machine] = true; });
+  var machineCount = Math.max(1, Object.keys(allMach).length);
+  var sched = scheduleStats(range.start, range.end, dayKeySecs(allInRange), machineCount);
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
 
   // KPIs
@@ -2112,9 +2150,9 @@ function renderReport() {
   if (cfg.sparse) {
     sparseNote = '<div class="rcard" style="padding:12px 16px;background:var(--surface-2)">'
       + '<div style="font-size:12.5px;color:var(--text-secondary)">Only tracked jobs carry '
-      + (cfg.key === 'customer' ? 'a customer' : 'a work order') + ' — <strong>' + attributed + ' of '
-      + totalRuns + '</strong> runs in this period are attributed; the rest are grouped as "'
-      + (cfg.key === 'customer' ? 'Unattributed' : 'No WO') + '".</div></div>';
+      + escapeHtml(cfg.noun) + ' — <strong>' + attributed + ' of ' + totalRuns
+      + '</strong> runs in this period are attributed; the rest are grouped as "'
+      + escapeHtml(cfg.bucket) + '".</div></div>';
   }
 
   main.innerHTML = head + sparseNote + kpiHtml
