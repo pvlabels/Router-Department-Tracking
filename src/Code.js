@@ -51,7 +51,7 @@ var CONFIG = {
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
-                   'Notes', 'Cut File', 'Source', 'Work Orders', 'Label'];
+                   'Notes', 'Cut File', 'Source', 'Work Orders', 'Label', 'Status'];
 var HISTORY_HEADER = ['Run #', 'Date', 'Sheets', 'Notes', 'Work Orders'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
@@ -278,7 +278,9 @@ function readJobs(ss) {
       source: String(cell(values[r], 'Source') || '').trim(),
       workOrders: String(cell(values[r], 'Work Orders') || '').trim(),
       // Display-only override; the row is still keyed by the real file name.
-      label: String(cell(values[r], 'Label') || '').trim()
+      label: String(cell(values[r], 'Label') || '').trim(),
+      // Latest production-schedule status (col E), for the queue's status badge.
+      schedStatus: String(cell(values[r], 'Status') || '').trim()
     });
   }
 
@@ -627,7 +629,8 @@ function syncProductionQueue() {
       if (!runNo) return;
       var shapes = String(row[8] || '').toLowerCase();                                    // I
       if (shapes.indexOf(CONFIG.PROD_MACHINE) < 0) return;                                // MultiCam only
-      var status = String(row[4] || '').trim().toLowerCase();                             // E
+      var statusRaw = String(row[4] || '').trim();                                        // E (original case)
+      var status = statusRaw.toLowerCase();
       var have = existing[runNo];
 
       if (status === CONFIG.PROD_DONE_STATUS) {
@@ -657,7 +660,8 @@ function syncProductionQueue() {
         writeJobFields(sheet, col, 0, {
           'Job Name': runNo, 'Sheets to Cut': sheetsQty, 'Start Date': when, 'Active': true,
           'Pieces (JSON)': JSON.stringify({ pieces: [], baseSheets: 0 }),
-          'Notes': notes, 'Cut File': cutFile, 'Source': 'production', 'Work Orders': workOrders
+          'Notes': notes, 'Cut File': cutFile, 'Source': 'production', 'Work Orders': workOrders,
+          'Status': statusRaw
         });
         var meta = getJobMeta();
         if (!meta[runNo]) {
@@ -673,10 +677,12 @@ function syncProductionQueue() {
         var curCut = String(cur[col['Cut File']] || '').trim();
         if (String(cur[col['Notes']] || '') !== notes ||
             Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut ||
-            String(cur[col['Work Orders']] || '').trim() !== workOrders) {
+            String(cur[col['Work Orders']] || '').trim() !== workOrders ||
+            String(cur[col['Status']] || '').trim() !== statusRaw) {
           cur[col['Notes']] = notes;
           cur[col['Sheets to Cut']] = sheetsQty;
           cur[col['Work Orders']] = workOrders;
+          cur[col['Status']] = statusRaw;
           if (!curCut) cur[col['Cut File']] = cutFile;   // backfill the cut-file link
           sheet.getRange(have.row, 1, 1, cur.length).setValues([cur]);
           updated++;

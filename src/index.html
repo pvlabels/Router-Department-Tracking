@@ -190,6 +190,12 @@
   th .arrow { font-size: 9px; margin-left: 5px; }
   .navbar button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   .navbar button:disabled { opacity: .4; cursor: default; }
+  .jright { display: flex; align-items: center; gap: 10px; flex: none; }
+  .jstatus { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px;
+    border: 1px solid currentColor; white-space: nowrap; flex: none; }
+  .jstatus.printing { color: var(--job-2); }
+  .jstatus.cutting { color: var(--accent); }
+  .jstatus.complete { color: var(--delta-good); }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; flex: none; color: var(--text-secondary); }
   .jpct .done { color: var(--delta-good); }
   .jbar { height: 10px; border-radius: 999px; background: var(--grid); overflow: hidden; }
@@ -1035,6 +1041,19 @@ function finStep(delta) {
 }
 function finToday() { finAnchor = startOfDay(new Date()); renderFinished(); }
 
+/**
+ * Status pill from the production schedule (col E): On-Press → Printing,
+ * Finished Printing → Cutting, Finished Cutting → Complete. Manual jobs carry
+ * no schedule status, so they get no pill.
+ */
+function jobStatusBadge(job) {
+  var s = (job.schedStatus || '').toLowerCase();
+  var map = { 'on-press': ['Printing', 'printing'], 'finished printing': ['Cutting', 'cutting'],
+    'finished cutting': ['Complete', 'complete'] };
+  var m = map[s];
+  return m ? '<span class="jstatus ' + m[1] + '">' + m[0] + '</span>' : '';
+}
+
 function jobRow(job, idx, total) {
   var since = parseLocalDate(job.startDate || '2000-01-01');
   var runs = state.runs.filter(function (r) { return runMatchesJob(r.job, matchKeyFor(job)) && r.when >= since; });
@@ -1062,7 +1081,8 @@ function jobRow(job, idx, total) {
     +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +     (companyFromNotes(job.notes) ? '<span class="jco">' + escapeHtml(companyFromNotes(job.notes)) + '</span>' : '')
     +   '</span>'
-    +     '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></div>'
+    +     '<span class="jright">' + jobStatusBadge(job)
+    +       '<span class="jpct">' + completed + ' / ' + job.target + ' · ' + pctLabel + '</span></span></div>'
     +   '<div class="jbar"><div class="jfill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></div></div>'
     + '</div>'
     + '<button class="caret-btn" data-act="toggle" title="' + (open ? 'Hide details' : 'Show details') + '">'
