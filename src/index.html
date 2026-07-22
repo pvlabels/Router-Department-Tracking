@@ -2168,8 +2168,10 @@ function renderReport() {
   var groups = {}, totalRuns = 0, totalSheets = 0, totalSecs = 0, byDay = {}, attributed = 0;
   recs.forEach(function (rec) {
     var g = recordGroup(rec, dim);
-    var o = groups[g] || (groups[g] = { key: g, runs: 0, sheets: 0, secs: 0 });
+    var o = groups[g] || (groups[g] = { key: g, runs: 0, sheets: 0, secs: 0, sheetsH: 0 });
     o.runs++; o.sheets += (rec.sheets || 0); o.secs += rec.seconds;
+    // sheets that carry a run time, so time-per-sheet divides like by like
+    if (rec.seconds > 0) o.sheetsH += (rec.sheets || 0);
     totalRuns++; totalSheets += (rec.sheets || 0); totalSecs += rec.seconds;
     var mv = metricValue(rec, metric);
     var dk = dayKey(rec.when); byDay[dk] = (byDay[dk] || 0) + mv;
@@ -2185,14 +2187,25 @@ function renderReport() {
   var shown = cfg.bucket ? arr.filter(function (g) { return g.key !== cfg.bucket; }) : arr;
   var shownTotal = shown.reduce(function (t, g) { return t + gVal(g); }, 0);
 
-  // Utilization is a whole-router metric, measured against every Job Log run in
-  // range (durations only exist there, ~Jun 17 on).
-  var allInRange = state.runs.filter(function (r) { return r.when >= range.start && r.when < range.end; });
+  // Utilization is a whole-router metric (idle time = scheduled shift time minus
+  // every run's machine time). For the Size report it's measured over the window
+  // between the first and last sheet of the shown size(s), not the whole period,
+  // so idle time reflects the gaps while that size was in production. Durations
+  // only exist from Jun 17, so the window starts no earlier than that.
+  var utilStart = range.start, utilEnd = range.end;
+  if (cfg.key === 'size' && recs.length) {
+    var mn = recs[0].when, mx = recs[0].when;
+    recs.forEach(function (rec) { if (rec.when < mn) mn = rec.when; if (rec.when > mx) mx = rec.when; });
+    utilStart = mn < HOURS_SINCE ? HOURS_SINCE : startOfDay(mn);
+    utilEnd = new Date(startOfDay(mx).getTime() + 86400000);
+    if (utilEnd < utilStart) utilEnd = utilStart;
+  }
+  var allInRange = state.runs.filter(function (r) { return r.when >= utilStart && r.when < utilEnd; });
   var allMach = {}; allInRange.forEach(function (r) { allMach[r.machine] = true; });
   var machineCount = Math.max(1, Object.keys(allMach).length);
-  var sched = scheduleStats(range.start, range.end, dayKeySecs(allInRange), machineCount);
+  var sched = scheduleStats(utilStart, utilEnd, dayKeySecs(allInRange), machineCount);
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
-  var hoursPartial = range.start < HOURS_SINCE;
+  var hoursPartial = cfg.key === 'size' ? (utilEnd <= HOURS_SINCE) : (range.start < HOURS_SINCE);
 
   // KPIs — show every total; the metric toggle only drives the breakdowns below.
   var groupNoun = cfg.filterLabel.toLowerCase();
@@ -2305,23 +2318,31 @@ function renderReport() {
   var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
-  // breakdown table — all three measures, share by the chosen metric
+  // breakdown table — all three measures, share by the chosen metric. For the
+  // Size report the machine-time column is the time to cut ONE sheet of that
+  // size (its runs' time ÷ their sheets), not the total.
+  var perSheet = cfg.key === 'size';
+  var totalSheetsH = arr.reduce(function (t, g) { return t + g.sheetsH; }, 0);
+  var mtCell = function (secs, sheetsH) {
+    if (perSheet) return sheetsH > 0 ? fmtDur(secs / sheetsH) : '—';
+    return secs ? fmtDur(secs) : '—';
+  };
   var rows = arr.map(function (g) {
     var share = total ? (gVal(g) / total) * 100 : 0;
     return '<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:2px;flex:none;background:'
       + g.color + '"></span>' + escapeHtml(g.key) + '</span></td>'
       + '<td class="num">' + g.runs.toLocaleString() + '</td>'
       + '<td class="num">' + g.sheets.toLocaleString() + '</td>'
-      + '<td class="num">' + (g.secs ? fmtDur(g.secs) : '—') + '</td>'
+      + '<td class="num">' + mtCell(g.secs, g.sheetsH) + '</td>'
       + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
   }).join('');
   var tableCard = '<div class="rcard"><h2>Breakdown by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
     + '<div class="tablewrap"><table><thead><tr><th>' + escapeHtml(cfg.label)
-    + '</th><th class="num">Runs</th><th class="num">Sheets</th><th class="num">Machine time</th>'
+    + '</th><th class="num">Runs</th><th class="num">Sheets</th><th class="num">' + (perSheet ? 'Time / sheet' : 'Machine time') + '</th>'
     + '<th class="num">Share (' + escapeHtml(mInfo.noun) + ')</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '<tfoot><tr><td>All</td><td class="num">' + totalRuns.toLocaleString() + '</td><td class="num">'
-    + totalSheets.toLocaleString() + '</td><td class="num">' + (totalSecs ? fmtDur(totalSecs) : '—')
+    + totalSheets.toLocaleString() + '</td><td class="num">' + mtCell(totalSecs, totalSheetsH)
     + '</td><td class="num">100%</td></tr></tfoot></table></div></div>';
 
   // attribution note for customer / WO / part #
