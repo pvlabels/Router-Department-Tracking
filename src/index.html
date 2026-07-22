@@ -1842,10 +1842,69 @@ var REPORT_TYPES = [
   { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',        dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
 ];
 
-var reportState = { type: 'run', preset: 'month', start: '', end: '', sel: {} };
+var reportState = { type: 'run', metric: 'runs', preset: 'month', start: '', end: '', sel: {} };
+var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
 
 function reportCfg() {
   return REPORT_TYPES.filter(function (t) { return t.key === reportState.type; })[0];
+}
+
+// Runs & Sheets span the full year (from Production History); Hours only exists
+// where the Job Log has durations (~Jun 17 on).
+var REPORT_METRICS = {
+  runs:   { label: 'Runs',   noun: 'runs',   fmt: function (v) { return v.toLocaleString(); }, share: 'Share of runs' },
+  sheets: { label: 'Sheets', noun: 'sheets', fmt: function (v) { return v.toLocaleString(); }, share: 'Share of sheets' },
+  hours:  { label: 'Hours',  noun: 'hours',  fmt: function (v) { return fmtHours(v); },        share: 'Share of run hours' }
+};
+function setReportMetric(m) { reportState.metric = m; renderReport(); }
+
+/**
+ * One record per production run for the year (from Production History, carrying
+ * sheets + customer + WO/part#), with Job Log durations folded in by run #.
+ * Job Log files with no matching run # (press sheets, manual jobs) become their
+ * own records. So: runs & sheets cover the full year; hours only where the log
+ * has them.
+ */
+function buildReportRecords(cache) {
+  var records = [], byRun = {};
+  (state.history || []).forEach(function (h) {
+    var rec = { run: h.run, when: parseLocalDate(h.date), base: 'TR-' + h.run,
+      sheets: h.sheets, notes: h.notes, workOrders: h.workOrders, seconds: 0, hasHours: false, tracked: null };
+    records.push(rec); byRun[h.run] = rec;
+  });
+  (state.runs || []).forEach(function (r) {
+    var base = stripExt(r.job), m = base.match(/^TR-0*(\d+)/i), runNo = m ? m[1] : null;
+    if (runNo && byRun[runNo]) { byRun[runNo].seconds += r.seconds; byRun[runNo].hasHours = true; }
+    else {
+      records.push({ run: runNo, when: r.when, base: base, sheets: null, notes: null,
+        workOrders: null, seconds: r.seconds, hasHours: true, tracked: trackedJobForRun(r, cache) });
+    }
+  });
+  return records;
+}
+
+/** The group a record falls under for the current report dimension. */
+function recordGroup(rec, dim) {
+  if (dim === 'runNo') return rec.base;
+  if (dim === 'sheet') return /^PS-/i.test(rec.base) ? rec.base : null;
+  if (dim === 'customer') return companyFromNotes(rec.notes) || (rec.tracked && rec.tracked.customer) || 'Unattributed';
+  if (dim === 'wo') {
+    var w = (rec.workOrders && hasWorkOrder(rec.workOrders)) ? splitWorkOrders(rec.workOrders).join(' · ')
+      : (rec.tracked && rec.tracked.wo) || '';
+    return w || 'No WO';
+  }
+  if (dim === 'stock') {
+    var p = (rec.workOrders && !hasWorkOrder(rec.workOrders)) ? rec.workOrders : (rec.tracked && rec.tracked.partNo) || '';
+    return p || 'No part #';
+  }
+  return null;
+}
+
+/** The chosen metric's value for a single record. */
+function metricValue(rec, metric) {
+  if (metric === 'sheets') return rec.sheets || 0;
+  if (metric === 'hours') return rec.seconds || 0;
+  return 1;
 }
 
 /* ---- data dimensions (what the live run log can actually back) ---- */
@@ -1866,22 +1925,6 @@ function trackedJobForRun(run, cache) {
   }
   return null;
 }
-function runGroupValue(run, dim, cache) {
-  if (dim === 'runNo') return stripExt(run.job);
-  // A press-sheet run is any file that starts with PS-; grouped by the file.
-  // Non-PS runs return null and are dropped from the press-sheet report.
-  if (dim === 'sheet') {
-    var base = stripExt(run.job);
-    return /^PS-/i.test(base) ? base : null;
-  }
-  var j = trackedJobForRun(run, cache);
-  if (dim === 'customer') return (j && j.customer) ? j.customer : 'Unattributed';
-  if (dim === 'wo') return (j && j.wo) ? j.wo : 'No WO';
-  // Part number is column M when it isn't a work order (see splitWorkOrders).
-  if (dim === 'stock') return (j && j.partNo) ? j.partNo : 'No part #';
-  return null;
-}
-
 /* ---- range + selection ---- */
 
 function reportRange() {
@@ -1904,16 +1947,16 @@ function reportPresetLabel(p) {
   return { week: 'This week', month: 'This month', quarter: 'This quarter', ytd: 'Year to date', last30: 'Last 30 days' }[p] || p;
 }
 
-/** Group values present in the current range, most machine-time first. */
-function reportGroupsInRange(cache) {
-  var r = reportRange(), dim = reportCfg().dim, secs = {};
-  state.runs.forEach(function (run) {
-    if (run.when < r.start || run.when >= r.end) return;
-    var g = runGroupValue(run, dim, cache);
+/** Group values present in the current range, most runs first (for the filter list). */
+function reportGroupsInRange(cache, records) {
+  var r = reportRange(), dim = reportCfg().dim, n = {};
+  records.forEach(function (rec) {
+    if (rec.when < r.start || rec.when >= r.end) return;
+    var g = recordGroup(rec, dim);
     if (g === null) return;
-    secs[g] = (secs[g] || 0) + run.seconds;
+    n[g] = (n[g] || 0) + 1;
   });
-  return Object.keys(secs).sort(function (a, b) { return secs[b] - secs[a]; });
+  return Object.keys(n).sort(function (a, b) { return n[b] - n[a]; });
 }
 function reportSelectedSet(optionKeys) {
   var chosen = optionKeys.filter(function (k) { return reportState.sel[k]; });
@@ -2011,63 +2054,64 @@ function renderReport() {
     + '  </div>'
     + '</div>';
 
-  if (!cfg.available) {
-    main.innerHTML = head
-      + '<div class="rplaceholder">'
-      + '<div class="t">' + escapeHtml(cfg.label) + ' isn\'t tracked yet</div>'
-      + '<div class="d">The run log records job, machine, and run time — but not '
-      + (cfg.key === 'sheet' ? 'the press-sheet size' : 'the stock material') + ' of each run. '
-      + 'Once that\'s captured per run (on the schedule or in the job ticket), this report fills in automatically.</div>'
-      + '</div>';
-    return;
-  }
-
   var cache = jobsForReport();
-  var options = reportGroupsInRange(cache);
+  var allRecords = buildReportRecords(cache);
+  var options = reportGroupsInRange(cache, allRecords);
   var sel = reportSelectedSet(options);
-  var runs = state.runs.filter(function (run) {
-    if (run.when < range.start || run.when >= range.end) return false;
-    var g = runGroupValue(run, cfg.dim, cache);
-    if (g === null) return false;               // e.g. non-PS run in a press-sheet report
+  var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+
+  var recs = allRecords.filter(function (rec) {
+    if (rec.when < range.start || rec.when >= range.end) return false;
+    var g = recordGroup(rec, dim);
+    if (g === null) return false;               // e.g. a non-PS run in a press-sheet report
     return sel === null || sel[g];
   });
 
-  if (!runs.length) {
+  if (!recs.length) {
     main.innerHTML = head + '<div class="rplaceholder"><div class="t">No runs match these filters</div>'
       + '<div class="d">Widen the date range or change your selection.</div></div>';
     return;
   }
 
-  // group + aggregate (the report's dimension)
-  var groups = {}, totalSecs = 0, byDay = {}, attributed = 0;
-  runs.forEach(function (run) {
-    var g = runGroupValue(run, cfg.dim, cache);
-    var o = groups[g] || (groups[g] = { key: g, runs: 0, secs: 0 });
-    o.runs++; o.secs += run.seconds; totalSecs += run.seconds;
-    var dk = dayKey(run.when); byDay[dk] = (byDay[dk] || 0) + 1;
+  // group + aggregate (runs, sheets, and hours all kept; the metric picks one)
+  var groups = {}, totalRuns = 0, totalSheets = 0, totalSecs = 0, byDay = {}, attributed = 0;
+  recs.forEach(function (rec) {
+    var g = recordGroup(rec, dim);
+    var o = groups[g] || (groups[g] = { key: g, runs: 0, sheets: 0, secs: 0 });
+    o.runs++; o.sheets += (rec.sheets || 0); o.secs += rec.seconds;
+    totalRuns++; totalSheets += (rec.sheets || 0); totalSecs += rec.seconds;
+    var mv = metricValue(rec, metric);
+    var dk = dayKey(rec.when); byDay[dk] = (byDay[dk] || 0) + mv;
     if (!cfg.bucket || g !== cfg.bucket) attributed++;
   });
+  function gVal(g) { return metric === 'sheets' ? g.sheets : metric === 'hours' ? g.secs : g.runs; }
+  var total = metric === 'sheets' ? totalSheets : metric === 'hours' ? totalSecs : totalRuns;
   var arr = Object.keys(groups).map(function (k) { return groups[k]; })
-    .sort(function (a, b) { return b.secs - a.secs; });
-  var totalRuns = runs.length;
+    .sort(function (a, b) { return gVal(b) - gVal(a); });
   arr.forEach(function (g, i) { g.color = i < 8 ? reportColor(i) : REPORT_OTHER; });
+  // Charts show the attributed groups only — the catch-all ("Unattributed" /
+  // "No WO" / "No part #") would otherwise swamp them. It stays in the table.
+  var shown = cfg.bucket ? arr.filter(function (g) { return g.key !== cfg.bucket; }) : arr;
+  var shownTotal = shown.reduce(function (t, g) { return t + gVal(g); }, 0);
 
-  // Utilization is a whole-router metric, so it's measured against every run in
-  // the period, not just this report's filtered subset.
+  // Utilization is a whole-router metric, measured against every Job Log run in
+  // range (durations only exist there, ~Jun 17 on).
   var allInRange = state.runs.filter(function (r) { return r.when >= range.start && r.when < range.end; });
   var allMach = {}; allInRange.forEach(function (r) { allMach[r.machine] = true; });
   var machineCount = Math.max(1, Object.keys(allMach).length);
   var sched = scheduleStats(range.start, range.end, dayKeySecs(allInRange), machineCount);
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
+  var hoursPartial = range.start < HOURS_SINCE;
 
-  // KPIs
+  // KPIs — show every total; the metric toggle only drives the breakdowns below.
   var groupNoun = cfg.filterLabel.toLowerCase();
   var kpis = [
     { label: 'Total runs', value: totalRuns.toLocaleString() },
-    { label: 'Machine time', value: fmtDur(totalSecs) },
+    { label: 'Sheets', value: totalSheets.toLocaleString() },
+    { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '' },
     { label: cfg.label, value: String(arr.length), sub: groupNoun },
-    { label: 'Avg / run', value: fmtDur(totalRuns ? totalSecs / totalRuns : 0) },
-    { label: 'Utilization', value: Math.round(util) + '%', sub: 'vs 6 AM–5 PM shift' }
+    { label: 'Utilization', value: (hoursPartial || !totalSecs) ? '—' : Math.round(util) + '%',
+      sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift' }
   ];
   var kpiHtml = '<div class="rcard rkpis">' + kpis.map(function (k) {
     return '<div class="rkpi"><div class="label">' + escapeHtml(k.label) + '</div>'
@@ -2075,90 +2119,106 @@ function renderReport() {
       + '<div class="sub">' + escapeHtml(k.sub || '') + '</div></div>';
   }).join('') + '</div>';
 
-  // pie: top 6 + Other
-  var TOP = 6, top = arr.slice(0, TOP), rest = arr.slice(TOP);
-  var restSecs = rest.reduce(function (t, g) { return t + g.secs; }, 0);
-  var pieItems = top.map(function (g) { return { name: g.key, secs: g.secs, color: g.color }; });
-  if (restSecs > 0) pieItems.push({ name: 'Other (' + rest.length + ')', secs: restSecs, color: REPORT_OTHER });
-  var segs = pieItems.map(function (p) { return { frac: totalSecs ? p.secs / totalSecs : 0, color: p.color }; });
+  // metric toggle + coverage note
+  var metricSeg = '<div class="rcard" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">'
+    + '<span class="seclabel" style="margin:0">Measure by</span>'
+    + '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
+        return '<button class="' + (metric === m ? 'on' : '') + '" onclick="setReportMetric(' + jsStr(m) + ')">'
+          + REPORT_METRICS[m].label + '</button>';
+      }).join('') + '</div>'
+    + (metric === 'hours' && hoursPartial
+        ? '<span class="sub" style="margin:0">Run times only exist from Jun 17 — earlier runs show 0 h. Use Runs or Sheets for the full year.</span>'
+        : '<span class="sub" style="margin:0">Runs &amp; sheets cover the full period; hours cover Jun 17 on.</span>')
+    + '</div>';
+
+  // pie: top 6 + Other, by the chosen metric (attributed groups only)
+  var TOP = 6, top = shown.slice(0, TOP), rest = shown.slice(TOP);
+  var restVal = rest.reduce(function (t, g) { return t + gVal(g); }, 0);
+  var pieItems = top.map(function (g) { return { name: g.key, val: gVal(g), color: g.color }; });
+  if (restVal > 0) pieItems.push({ name: 'Other (' + rest.length + ')', val: restVal, color: REPORT_OTHER });
+  var segs = pieItems.map(function (p) { return { frac: shownTotal ? p.val / shownTotal : 0, color: p.color }; });
   var pieLegend = pieItems.map(function (p) {
     return '<div class="row"><span class="dot" style="background:' + p.color + '"></span>'
       + '<span class="nm">' + escapeHtml(p.name) + '</span>'
-      + '<span class="pct">' + Math.round(totalSecs ? (p.secs / totalSecs) * 100 : 0) + '%</span></div>';
+      + '<span class="pct">' + Math.round(shownTotal ? (p.val / shownTotal) * 100 : 0) + '%</span></div>';
   }).join('');
-  var pieCard = '<div class="rcard"><h2>Share of run hours</h2>'
+  var centerNum = metric === 'hours' ? fmtHoursNum(shownTotal) : shownTotal.toLocaleString();
+  var pieCard = '<div class="rcard"><h2>' + mInfo.share + '</h2>'
     + '<div class="h2sub">by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</div>'
     + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
     + '<div style="position:relative;flex:none">' + donutSvg(segs)
     + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">'
-    + '<div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">' + fmtHoursNum(totalSecs) + '</div>'
-    + '<div style="color:var(--text-muted);font-size:11px">total hours</div></div></div>'
+    + '<div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">' + centerNum + '</div>'
+    + '<div style="color:var(--text-muted);font-size:11px">total ' + mInfo.noun + '</div></div></div>'
     + '<div class="pielegend">' + pieLegend + '</div></div></div>';
 
-  // bars: top 8 by hours
-  var barMax = arr[0].secs || 1;
-  var barItems = arr.slice(0, 8).map(function (g) {
+  // bars: top 8 by the chosen metric (attributed groups only)
+  var barMax = (shown[0] && gVal(shown[0])) || 1;
+  var barItems = shown.slice(0, 8).map(function (g) {
     return '<div class="hbar"><div class="top"><span class="nm">' + escapeHtml(g.key) + '</span>'
-      + '<span class="val">' + fmtHours(g.secs) + '</span></div>'
-      + '<div class="track"><div class="fill" style="width:' + ((g.secs / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div></div>';
+      + '<span class="val">' + mInfo.fmt(gVal(g)) + '</span></div>'
+      + '<div class="track"><div class="fill" style="width:' + ((gVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div></div>';
   }).join('');
-  var barCard = '<div class="rcard"><h2>Hours on the router</h2>'
-    + '<div class="h2sub">machine time this period</div>' + barItems + '</div>';
+  var barCard = '<div class="rcard"><h2>' + mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
+    + '<div class="h2sub">top ' + Math.min(8, shown.length) + ' this period</div>' + barItems + '</div>';
 
-  // trend: runs per day across weekdays in range
+  // trend: chosen metric per day across weekdays in range
   var days = [], d = startOfDay(new Date(range.start)), stop = range.end < new Date() ? range.end : new Date();
   while (d < stop) {
     var dow = d.getDay();
     if (dow >= 1 && dow <= 5) days.push({ date: new Date(d), count: byDay[dayKey(d)] || 0 });
     d.setDate(d.getDate() + 1);
   }
-  var trendCard = days.length ? '<div class="rcard"><h2>Daily output</h2>'
-    + '<div class="h2sub">runs per day over the period</div>' + trendSvg(days) + '</div>' : '';
+  var trendCard = days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
+    + '<div class="h2sub">' + mInfo.noun + ' per day over the period</div>' + trendSvg(days) + '</div>' : '';
 
-  // highlights
-  var top1 = arr[0];
+  // highlights (lead with the attributed leaders, not the catch-all bucket)
   var busiest = Object.keys(byDay).sort(function (a, b) { return byDay[b] - byDay[a]; })[0];
   var hi = [];
-  hi.push('Top ' + groupNoun.replace(/s$/, '') + ' by machine time: <strong>' + escapeHtml(top1.key)
-    + '</strong> (' + Math.round((top1.secs / totalSecs) * 100) + '% of hours, ' + fmtHours(top1.secs) + ').');
-  var mostRuns = arr.slice().sort(function (a, b) { return b.runs - a.runs; })[0];
-  hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs (' + fmtHours(mostRuns.secs) + ').');
-  hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving ' + fmtHours(sched.downtime) + ' of idle time during scheduled shifts.');
-  if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> with ' + byDay[busiest] + ' runs.');
+  if (shown.length) {
+    var top1 = shown[0];
+    hi.push('Top ' + groupNoun.replace(/s$/, '') + ' by ' + mInfo.noun + ': <strong>' + escapeHtml(top1.key)
+      + '</strong> (' + Math.round(shownTotal ? (gVal(top1) / shownTotal) * 100 : 0) + '% of attributed ' + mInfo.noun + ', ' + mInfo.fmt(gVal(top1)) + ').');
+    var mostRuns = shown.slice().sort(function (a, b) { return b.runs - a.runs; })[0];
+    hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs, ' + mostRuns.sheets.toLocaleString() + ' sheets.');
+  }
+  if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving ' + fmtHours(sched.downtime) + ' of idle time during scheduled shifts.');
+  if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> (' + mInfo.fmt(byDay[busiest]) + ').');
   var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
-  // breakdown table
+  // breakdown table — all three measures, share by the chosen metric
   var rows = arr.map(function (g) {
-    var share = totalSecs ? (g.secs / totalSecs) * 100 : 0;
+    var share = total ? (gVal(g) / total) * 100 : 0;
     return '<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:2px;flex:none;background:'
       + g.color + '"></span>' + escapeHtml(g.key) + '</span></td>'
       + '<td class="num">' + g.runs.toLocaleString() + '</td>'
-      + '<td class="num">' + fmtDur(g.secs) + '</td>'
-      + '<td class="num">' + fmtDur(g.runs ? g.secs / g.runs : 0) + '</td>'
+      + '<td class="num">' + g.sheets.toLocaleString() + '</td>'
+      + '<td class="num">' + (g.secs ? fmtDur(g.secs) : '—') + '</td>'
       + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
   }).join('');
   var tableCard = '<div class="rcard"><h2>Breakdown by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
     + '<div class="tablewrap"><table><thead><tr><th>' + escapeHtml(cfg.label)
-    + '</th><th class="num">Runs</th><th class="num">Machine time</th><th class="num">Avg / run</th><th class="num">Share</th></tr></thead>'
+    + '</th><th class="num">Runs</th><th class="num">Sheets</th><th class="num">Machine time</th>'
+    + '<th class="num">Share (' + escapeHtml(mInfo.noun) + ')</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '<tfoot><tr><td>All</td><td class="num">' + totalRuns.toLocaleString() + '</td><td class="num">'
-    + fmtDur(totalSecs) + '</td><td class="num">—</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+    + totalSheets.toLocaleString() + '</td><td class="num">' + (totalSecs ? fmtDur(totalSecs) : '—')
+    + '</td><td class="num">100%</td></tr></tfoot></table></div></div>';
 
-  // sparse-data note for customer / WO
+  // attribution note for customer / WO / part #
   var sparseNote = '';
   if (cfg.sparse) {
     sparseNote = '<div class="rcard" style="padding:12px 16px;background:var(--surface-2)">'
-      + '<div style="font-size:12.5px;color:var(--text-secondary)">Only tracked jobs carry '
-      + escapeHtml(cfg.noun) + ' — <strong>' + attributed + ' of ' + totalRuns
-      + '</strong> runs in this period are attributed; the rest are grouped as "'
+      + '<div style="font-size:12.5px;color:var(--text-secondary)"><strong>' + attributed + ' of ' + totalRuns
+      + '</strong> runs in this period have ' + escapeHtml(cfg.noun) + '; the rest are grouped as "'
       + escapeHtml(cfg.bucket) + '".</div></div>';
   }
 
-  main.innerHTML = head + sparseNote + kpiHtml
+  main.innerHTML = head + sparseNote + kpiHtml + metricSeg
     + '<div class="rtwo">' + pieCard + barCard + '</div>'
     + trendCard + hiCard + tableCard
-    + '<div class="repfoot">Router Department production report · figures cover scheduled shifts Mon–Fri, 6 AM–5 PM</div>';
+    + '<div class="repfoot">Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
 }
 
 /** Per-day machine seconds for the given runs (for scheduleStats downtime). */
@@ -2190,7 +2250,7 @@ function renderRepSidebar(cfg) {
 
   var filterList = '';
   if (cfg.available) {
-    var options = reportGroupsInRange(cache);
+    var options = reportGroupsInRange(cache, buildReportRecords(cache));
     var anyChecked = options.some(function (k) { return reportState.sel[k]; });
     filterList = '<div class="group"><div class="filterhead">'
       + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
