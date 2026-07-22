@@ -2330,7 +2330,8 @@ function renderReport() {
     var mostRuns = shown.slice().sort(function (a, b) { return b.runs - a.runs; })[0];
     hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs, ' + mostRuns.sheets.toLocaleString() + ' sheets.');
   }
-  if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving ' + fmtHours(sched.downtime) + ' of idle time during scheduled shifts.');
+  if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving '
+    + fmtHours(sched.downtime) + ' of idle time' + (machineCount > 1 ? ' across ' + machineCount + ' routers' : '') + ' during scheduled shifts.');
   if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> (' + mInfo.fmt(byDay[busiest]) + ').');
   var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
