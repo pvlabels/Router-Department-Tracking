@@ -38,11 +38,21 @@ var CONFIG = {
   // Run 7881 is cut as TR-7881.cnc, so progress can be read straight from the
   // Job Log (numeric revisions like TR-7881-02.cnc are picked up automatically).
   PROD_CUT_PREFIX: 'TR-',
-  PROD_CUT_EXT: '.cnc'
+  PROD_CUT_EXT: '.cnc',
+
+  // Production History: every MultiCam scheduled run from the board since this
+  // date, mirrored into our own tab so Reports can show a full-year timeline
+  // and customer/WO/part# attribution (the Job Log only has ~5 recent weeks and
+  // no sheets/customer/WO). The board has no run durations, so hours still come
+  // from the Job Log; history supplies run counts, sheet counts, and metadata.
+  HISTORY_SHEET_NAME: 'Production History',
+  HISTORY_SINCE: '2026-01-01',
+  HISTORY_REFRESH_MINUTES: 60
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
                    'Notes', 'Cut File', 'Source', 'Work Orders', 'Label'];
+var HISTORY_HEADER = ['Run #', 'Date', 'Sheets', 'Notes', 'Work Orders'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
 var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
@@ -60,13 +70,6 @@ function doGet(e) {
     }
     return ContentService.createTextOutput(JSON.stringify(out))
       .setMimeType(ContentService.MimeType.JSON);
-  }
-  // TEMPORARY read-only diagnostic — inspect the production board before any
-  // backfill. Writes nothing. Remove once the backfill design is settled.
-  if (e && e.parameter && e.parameter.inspect === 'prod') {
-    var d;
-    try { d = inspectProduction(); } catch (err) { d = { error: String((err && err.message) || err) }; }
-    return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON);
   }
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
@@ -100,6 +103,7 @@ function handleAction(p) {
     if (p.action === 'stopJob') return stopJob(p.name);
     if (p.action === 'reorderJobs') return reorderJobs(p.order);
     if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
+    if (p.action === 'backfillHistory') return backfillProductionHistory();
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -109,9 +113,10 @@ function handleAction(p) {
 /* ---------- read ---------- */
 
 function getData() {
-  // Keep the queue in step with the production schedule (throttled, best-effort:
-  // a schedule hiccup must never take the dashboard down).
-  try { syncProductionThrottled(); } catch (err) { /* surfaced via syncStatus below */ }
+  // Keep the queue and the full-year history in step with the board (both
+  // throttled, best-effort: a schedule hiccup must never take the dashboard down).
+  try { syncProductionThrottled(); } catch (err) { /* non-fatal */ }
+  try { backfillHistoryThrottled(); } catch (err) { /* non-fatal */ }
 
   var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
   var logSheet = ss.getSheetByName(CONFIG.LOG_SHEET_NAME);
@@ -125,6 +130,7 @@ function getData() {
     daily: log.daily,
     machines: log.machines,
     jobs: readJobs(ss),
+    history: readHistory(ss),
     updatedAt: new Date().toISOString()
   };
 }
@@ -488,71 +494,91 @@ function stopJob(name) {
   return { ok: true };
 }
 
+/* ---------- production history (full-year backfill for Reports) ---------- */
+
+/** The dashboard-owned tab holding mirrored production runs (auto-created). */
+function historySheet(ss) {
+  var sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.HISTORY_SHEET_NAME);
+    sheet.getRange(1, 1, 1, HISTORY_HEADER.length).setValues([HISTORY_HEADER]).setFontWeight('bold');
+  }
+  return sheet;
+}
+
 /**
- * TEMPORARY read-only inspection of the production board, to scope a backfill
- * of history to the beginning of the year. Writes nothing. Remove afterward.
+ * Rebuilds Production History from the board: every MultiCam run (col I) with a
+ * sane date on/after HISTORY_SINCE, one row per run #. The board has no
+ * durations, so no time is stored — Reports pair these with Job Log seconds by
+ * run # for the hours view. Full rewrite each time; keyed by run # so it's
+ * idempotent. Returns how many rows were written.
  */
-function inspectProduction() {
+function backfillProductionHistory() {
   var prod = SpreadsheetApp.openById(CONFIG.PROD_SHEET_ID);
   var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
             || prod.getSheets()[0];
   var last = psheet.getLastRow();
-  var width = psheet.getLastColumn();
-  var vals = psheet.getRange(1, 1, last, width).getValues();
-  // Full header, and any column whose name hints at a time/duration.
-  var header = [], timeCols = [];
-  vals[0].forEach(function (v, i) {
-    var name = String(v).trim();
-    if (name) header.push(colLetter(i) + ': ' + name);
-    if (/time|dur|start|end|min|sec|hour|elapsed/i.test(name)) timeCols.push(colLetter(i) + ': ' + name);
-  });
+  if (last < 2) return { rows: 0 };
+  var vals = psheet.getRange(1, 1, last, 13).getValues();       // A..M
+  var sm = String(CONFIG.HISTORY_SINCE).split('-');
+  var since = new Date(+sm[0], +sm[1] - 1, +sm[2]);
 
-  var JAN1 = new Date(2026, 0, 1), JUN17 = new Date(2026, 5, 17);
-  function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-  function sane(d) { return d instanceof Date && d.getFullYear() >= 2023 && d.getFullYear() <= 2027; }
-
-  var aTypes = { date: 0, saneDate: 0, string: 0, number: 0, empty: 0 };
-  var badDates = [], saneMin = null, saneMax = null;
-  var mcTotal = 0, mcGap = 0, mcRuns = {}, statusCount = {}, sampleGap = [], gapRuns = [];
-
+  var byRun = {};                                               // run # -> row (later wins)
   for (var r = 1; r < vals.length; r++) {
     var row = vals[r], a = row[0];
-    if (a instanceof Date) { aTypes.date++; if (sane(a)) aTypes.saneDate++;
-      else if (badDates.length < 8) badDates.push({ row: r + 1, year: a.getFullYear(), iso: a.toISOString().slice(0, 10) }); }
-    else if (a === '' || a == null) aTypes.empty++;
-    else if (typeof a === 'number') aTypes.number++;
-    else { aTypes.string++; if (badDates.length < 8) badDates.push({ row: r + 1, raw: String(a).slice(0, 20), type: 'string' }); }
-    if (sane(a)) { if (!saneMin || a < saneMin) saneMin = a; if (!saneMax || a > saneMax) saneMax = a; }
-
-    if (String(row[8] || '').toLowerCase().indexOf(CONFIG.PROD_MACHINE) < 0) continue;  // MultiCam only
-    mcTotal++;
-    statusCount[String(row[4] || '').trim()] = (statusCount[String(row[4] || '').trim()] || 0) + 1;
+    if (!(a instanceof Date) || a.getFullYear() < 2023 || a.getFullYear() > 2027) continue;  // skip typos
+    if (a < since) continue;
+    if (String(row[8] || '').toLowerCase().indexOf(CONFIG.PROD_MACHINE) < 0) continue;        // MultiCam only
     var runNo = String(row[1] == null ? '' : row[1]).trim();
-    if (runNo) mcRuns[runNo] = true;
-    // The gap we'd actually backfill: sane date in [Jan 1, Jun 17).
-    if (sane(a) && a >= JAN1 && a < JUN17) {
-      mcGap++;
-      if (runNo) gapRuns.push(Number(runNo) || runNo);
-      if (sampleGap.length < 6) sampleGap.push({ row: r + 1, date: ymd(a), run: runNo, sheets: row[2],
-        status: String(row[4] || '').trim(), notes: String(row[6] || '').slice(0, 30), partwo: String(row[12] || '').slice(0, 40) });
-    }
+    if (!runNo) continue;
+    byRun[runNo] = [runNo,
+      a.getFullYear() + '-' + pad2(a.getMonth() + 1) + '-' + pad2(a.getDate()),
+      Math.round(Number(row[2])) || 0,                          // C sheets
+      String(row[6] || '').trim(),                              // G notes (customer)
+      String(row[12] || '').trim()];                            // M part #/WO
   }
-  gapRuns.sort(function (x, y) { return x - y; });
 
-  return {
-    sheetName: psheet.getName(), lastRow: last, lastColumn: width,
-    header: header, timeDurationColumns: timeCols.length ? timeCols : 'NONE FOUND',
-    colA_types: aTypes,
-    colA_saneDateRange: { min: saneMin ? ymd(saneMin) : null, max: saneMax ? ymd(saneMax) : null },
-    colA_malformedSamples: badDates,
-    multicam: { totalRows: mcTotal, distinctRunNumbers: Object.keys(mcRuns).length, statusCounts: statusCount },
-    backfillGap_Jan1_to_Jun16: { multicamRows: mcGap,
-      runNumberRange: gapRuns.length ? (gapRuns[0] + ' … ' + gapRuns[gapRuns.length - 1]) : null,
-      samples: sampleGap },
-    note: 'Read-only. `timeDurationColumns` NONE = no run durations on the board.'
-  };
+  var out = Object.keys(byRun).map(function (k) { return byRun[k]; });
+  out.sort(function (x, y) { return String(x[1]).localeCompare(String(y[1])); });
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return { skipped: 'busy' };
+  try {
+    var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    var sheet = historySheet(ss);
+    if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, HISTORY_HEADER.length).clearContent();
+    if (out.length) sheet.getRange(2, 1, out.length, HISTORY_HEADER.length).setValues(out);
+    PropertiesService.getScriptProperties().setProperty('HISTORY_AT', String(Date.now()));
+  } finally {
+    lock.releaseLock();
+  }
+  return { rows: out.length };
 }
-function colLetter(i) { var s = ''; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+
+/** Refresh Production History at most once every HISTORY_REFRESH_MINUTES. */
+function backfillHistoryThrottled() {
+  var props = PropertiesService.getScriptProperties();
+  var lastRun = Number(props.getProperty('HISTORY_AT') || 0);
+  if (Date.now() - lastRun < CONFIG.HISTORY_REFRESH_MINUTES * 60 * 1000) return null;
+  return backfillProductionHistory();
+}
+
+/** Production History rows for the browser: {run, date, sheets, notes, workOrders}. */
+function readHistory(ss) {
+  var sheet = ss.getSheetByName(CONFIG.HISTORY_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, HISTORY_HEADER.length).getValues();
+  var out = [];
+  vals.forEach(function (row) {
+    var run = String(row[0] || '').trim();
+    if (!run) return;
+    var d = row[1];
+    var date = d instanceof Date ? (d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())) : String(d || '');
+    out.push({ run: run, date: date, sheets: Number(row[2]) || 0,
+      notes: String(row[3] || '').trim(), workOrders: String(row[4] || '').trim() });
+  });
+  return out;
+}
 
 /* ---------- production schedule sync ---------- */
 
