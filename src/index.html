@@ -799,10 +799,18 @@ var expandedFinished = {};                // job name -> true when its ticket is
  * When a job finished. Manual/schedule completions carry a stamp; a job that
  * simply hit its target is dated by its last run.
  */
+/**
+ * When the job was actually last cut — its most recent run, which is a real
+ * event and matches what the Summary shows for that run. The completion stamp
+ * (a manual "Mark complete" click, or the moment the schedule sync first saw
+ * "Finished Cutting") is only a fallback for jobs with no runs to point at:
+ * that stamp can trail the real cut by hours, so it's the wrong thing to date
+ * the log by.
+ */
 function finishedWhen(job) {
-  if (job.finishedAt) return new Date(job.finishedAt);
   var runs = runsForJob(job);
-  return runs.length ? runs[runs.length - 1].when : null;
+  if (runs.length) return runs[runs.length - 1].when;
+  return job.finishedAt ? new Date(job.finishedAt) : null;
 }
 
 /** A finished job's runs, oldest first. */
