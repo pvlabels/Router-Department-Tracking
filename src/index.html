@@ -1886,8 +1886,10 @@ function buildReportRecords(cache) {
     var base = stripExt(r.job), m = base.match(/^TR-0*(\d+)/i), runNo = m ? m[1] : null;
     if (runNo && byRun[runNo]) { byRun[runNo].seconds += r.seconds; byRun[runNo].hasHours = true; }
     else {
-      records.push({ run: runNo, when: r.when, base: base, sheets: null, notes: null,
-        workOrders: null, seconds: r.seconds, hasHours: true, tracked: trackedJobForRun(r, cache) });
+      // Press-sheet runs (PS-…) aren't on the schedule, so they have no sheet
+      // count — each one cuts a single full 4'×8' sheet, so count it as 1.
+      records.push({ run: runNo, when: r.when, base: base, sheets: /^PS-/i.test(base) ? 1 : null,
+        notes: null, workOrders: null, seconds: r.seconds, hasHours: true, tracked: trackedJobForRun(r, cache) });
     }
   });
   return records;
@@ -2117,14 +2119,34 @@ function renderReport() {
 
   // KPIs — show every total; the metric toggle only drives the breakdowns below.
   var groupNoun = cfg.filterLabel.toLowerCase();
-  var kpis = [
-    { label: 'Total runs', value: totalRuns.toLocaleString() },
-    { label: 'Sheets', value: totalSheets.toLocaleString() },
-    { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '' },
-    { label: cfg.label, value: String(arr.length), sub: groupNoun },
-    { label: 'Utilization', value: (hoursPartial || !totalSecs) ? '—' : Math.round(util) + '%',
-      sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift' }
-  ];
+  var machineTimeKpi = { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '' };
+  var utilKpi = { label: 'Utilization', value: (hoursPartial || !totalSecs) ? '—' : Math.round(util) + '%',
+    sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift' };
+  var kpis;
+  if (cfg.key === 'sheet') {
+    // Press sheets: every run is one full 4'×8' sheet. Machine time moves down,
+    // the distinct-count tile is dropped, and a month-to-date tile is added.
+    var monthStart = new Date((new Date()).getFullYear(), (new Date()).getMonth(), 1);
+    var psThisMonth = allRecords.filter(function (rec) {
+      return /^PS-/i.test(rec.base) && rec.when >= monthStart;
+    }).length;
+    var monthName = monthStart.toLocaleDateString(undefined, { month: 'long' });
+    kpis = [
+      { label: 'Total runs', value: totalRuns.toLocaleString() },
+      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'one per run' },
+      utilKpi,
+      machineTimeKpi,
+      { label: 'Press sheets cut this month', value: psThisMonth.toLocaleString(), sub: monthName }
+    ];
+  } else {
+    kpis = [
+      { label: 'Total runs', value: totalRuns.toLocaleString() },
+      { label: 'Sheets', value: totalSheets.toLocaleString() },
+      machineTimeKpi,
+      { label: cfg.label, value: String(arr.length), sub: groupNoun },
+      utilKpi
+    ];
+  }
   var kpiHtml = '<div class="rcard rkpis">' + kpis.map(function (k) {
     return '<div class="rkpi"><div class="label">' + escapeHtml(k.label) + '</div>'
       + '<div class="value">' + escapeHtml(k.value) + '</div>'
