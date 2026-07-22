@@ -51,7 +51,7 @@ var CONFIG = {
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
-                   'Notes', 'Cut File', 'Source', 'Work Orders', 'Label', 'Status'];
+                   'Notes', 'Cut File', 'Source', 'Work Orders', 'Label', 'Status', 'Size'];
 var HISTORY_HEADER = ['Run #', 'Date', 'Sheets', 'Notes', 'Work Orders'];
 
 // Google Sheets duration cells come back as Dates anchored to this epoch.
@@ -280,7 +280,9 @@ function readJobs(ss) {
       // Display-only override; the row is still keyed by the real file name.
       label: String(cell(values[r], 'Label') || '').trim(),
       // Latest production-schedule status (col E), for the queue's status badge.
-      schedStatus: String(cell(values[r], 'Status') || '').trim()
+      schedStatus: String(cell(values[r], 'Status') || '').trim(),
+      // Item 1 size from the schedule (col N), shown in the queue run info.
+      size: String(cell(values[r], 'Size') || '').trim()
     });
   }
 
@@ -604,8 +606,8 @@ function syncProductionQueue() {
             || prod.getSheets()[0];
   var last = psheet.getLastRow();
   if (last < CONFIG.PROD_START_ROW) return { added: 0, removed: 0, updated: 0 };
-  // A..M — M (index 12) is Item 1's Part #, which carries the work order numbers
-  var rows = psheet.getRange(CONFIG.PROD_START_ROW, 1, last - CONFIG.PROD_START_ROW + 1, 13).getValues();
+  // A..N — M (index 12) is Item 1's Part #, N (index 13) is its size
+  var rows = psheet.getRange(CONFIG.PROD_START_ROW, 1, last - CONFIG.PROD_START_ROW + 1, 14).getValues();
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(8000)) return { skipped: 'busy' };
@@ -649,6 +651,7 @@ function syncProductionQueue() {
 
       var notes = String(row[6] || '').trim();                                            // G
       var workOrders = String(row[12] || '').trim();                                      // M
+      var size = String(row[13] || '').trim();                                            // N (Item 1 size)
       var sheetsQty = Math.round(Number(row[2])) || 0;                                    // C
       var when = row[0] instanceof Date
         ? row[0].getFullYear() + '-' + pad2(row[0].getMonth() + 1) + '-' + pad2(row[0].getDate())
@@ -661,7 +664,7 @@ function syncProductionQueue() {
           'Job Name': runNo, 'Sheets to Cut': sheetsQty, 'Start Date': when, 'Active': true,
           'Pieces (JSON)': JSON.stringify({ pieces: [], baseSheets: 0 }),
           'Notes': notes, 'Cut File': cutFile, 'Source': 'production', 'Work Orders': workOrders,
-          'Status': statusRaw
+          'Status': statusRaw, 'Size': size
         });
         var meta = getJobMeta();
         if (!meta[runNo]) {
@@ -678,11 +681,13 @@ function syncProductionQueue() {
         if (String(cur[col['Notes']] || '') !== notes ||
             Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut ||
             String(cur[col['Work Orders']] || '').trim() !== workOrders ||
-            String(cur[col['Status']] || '').trim() !== statusRaw) {
+            String(cur[col['Status']] || '').trim() !== statusRaw ||
+            String(cur[col['Size']] || '').trim() !== size) {
           cur[col['Notes']] = notes;
           cur[col['Sheets to Cut']] = sheetsQty;
           cur[col['Work Orders']] = workOrders;
           cur[col['Status']] = statusRaw;
+          cur[col['Size']] = size;
           if (!curCut) cur[col['Cut File']] = cutFile;   // backfill the cut-file link
           sheet.getRange(have.row, 1, 1, cur.length).setValues([cur]);
           updated++;

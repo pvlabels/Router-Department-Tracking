@@ -138,6 +138,8 @@
   .jtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; letter-spacing: -0.01em; }
   .jwo { font-family: var(--font-mono); color: var(--text-muted); font-size: 12px; margin-left: 10px; }
+  .jsize { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-left: 10px; }
   .jco { font-weight: 700; color: var(--text-primary); font-size: 12.5px; margin-left: 10px; }
 
   /* ---------- finished log ---------- */
@@ -1084,6 +1086,7 @@ function jobRow(job, idx, total) {
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
     +     escapeHtml(jobTitle(job)) + '</span>'
+    +     (job.size ? '<span class="jsize">' + escapeHtml(job.size) + '</span>' : '')
     +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +     (companyFromNotes(job.notes) ? '<span class="jco">' + escapeHtml(companyFromNotes(job.notes)) + '</span>' : '')
     +   '</span>'
