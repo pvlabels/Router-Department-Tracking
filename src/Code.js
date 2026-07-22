@@ -61,6 +61,13 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(out))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  // TEMPORARY read-only diagnostic — inspect the production board before any
+  // backfill. Writes nothing. Remove once the backfill design is settled.
+  if (e && e.parameter && e.parameter.inspect === 'prod') {
+    var d;
+    try { d = inspectProduction(); } catch (err) { d = { error: String((err && err.message) || err) }; }
+    return ContentService.createTextOutput(JSON.stringify(d)).setMimeType(ContentService.MimeType.JSON);
+  }
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Router Department Tracking')
@@ -480,6 +487,63 @@ function stopJob(name) {
   }
   return { ok: true };
 }
+
+/**
+ * TEMPORARY read-only inspection of the production board, to scope a backfill
+ * of history to the beginning of the year. Writes nothing. Remove afterward.
+ */
+function inspectProduction() {
+  var prod = SpreadsheetApp.openById(CONFIG.PROD_SHEET_ID);
+  var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
+            || prod.getSheets()[0];
+  var last = psheet.getLastRow();
+  var width = Math.min(psheet.getLastColumn(), 20);
+  var vals = psheet.getRange(1, 1, last, width).getValues();
+  var header = vals[0].map(function (v, i) { return colLetter(i) + ': ' + String(v).trim(); });
+
+  var JAN1 = new Date(2026, 0, 1);
+  function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+
+  var datedRows = 0, minD = null, maxD = null, jan1Row = null;
+  var mcTotal = 0, mcSinceJan = 0, mcMinD = null, mcMaxD = null;
+  var statusCount = {}, sampleSinceJan = [], distinctRun = {};
+
+  for (var r = 1; r < vals.length; r++) {
+    var row = vals[r];
+    var dt = row[0] instanceof Date ? row[0] : null;
+    if (dt) {
+      datedRows++;
+      if (!minD || dt < minD) minD = dt;
+      if (!maxD || dt > maxD) maxD = dt;
+      if (jan1Row === null && dt >= JAN1) jan1Row = r + 1;    // 1-based sheet row
+    }
+    if (String(row[8] || '').toLowerCase().indexOf(CONFIG.PROD_MACHINE) < 0) continue;  // MultiCam only
+    mcTotal++;
+    if (dt) { if (!mcMinD || dt < mcMinD) mcMinD = dt; if (!mcMaxD || dt > mcMaxD) mcMaxD = dt; }
+    var st = String(row[4] || '').trim();
+    statusCount[st] = (statusCount[st] || 0) + 1;
+    var runNo = String(row[1] == null ? '' : row[1]).trim();
+    if (runNo) distinctRun[runNo] = true;
+    if (dt && dt >= JAN1 && sampleSinceJan.length < 8) {
+      sampleSinceJan.push({ row: r + 1, date: ymd(dt), B_run: runNo, C_sheets: row[2],
+        E_status: st, G_notes: String(row[6] || '').slice(0, 40),
+        I_shapes: String(row[8] || '').slice(0, 30), M_partwo: String(row[12] || '').slice(0, 40) });
+    }
+  }
+
+  return {
+    sheetName: psheet.getName(), lastRow: last, lastColumn: psheet.getLastColumn(),
+    header: header,
+    firstRowOnOrAfterJan1: jan1Row, PROD_START_ROW_now: CONFIG.PROD_START_ROW,
+    allDatedRows: { count: datedRows, min: minD ? ymd(minD) : null, max: maxD ? ymd(maxD) : null },
+    multicam: { totalRows: mcTotal, distinctRunNumbers: Object.keys(distinctRun).length,
+      min: mcMinD ? ymd(mcMinD) : null, max: mcMaxD ? ymd(mcMaxD) : null,
+      sinceJan1: mcSinceJan, statusCounts: statusCount },
+    sampleMulticamSinceJan1: sampleSinceJan,
+    note: 'Read-only. Scan `header` for any run time / duration / start / end column.'
+  };
+}
+function colLetter(i) { var s = ''; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
 
 /* ---------- production schedule sync ---------- */
 
