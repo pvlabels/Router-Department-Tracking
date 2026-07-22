@@ -652,6 +652,23 @@ function autoRefresh() {
 }
 
 /**
+ * Canonical form of a schedule size so the same size entered different ways
+ * collapses to one group: 14" x 10", 14 x 10, 14X10 → "14 x 10"; various,
+ * Various → "Various". Quotes/inch marks dropped, whitespace and case tidied.
+ */
+function normalizeSize(s) {
+  var t = String(s || '').replace(/["'”“′″]/g, '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  var m = t.match(/^([\d.]+)\s*[x×]\s*([\d.]+)\s*(.*)$/i);
+  if (m) {
+    var extra = (m[3] || '').trim().toLowerCase();
+    return m[1] + ' x ' + m[2] + (extra ? ' ' + extra : '');
+  }
+  t = t.toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/**
  * Tag each run with the size of its production run (schedule col N), matched by
  * run number. History covers the full year; current tracked jobs win when both
  * have it. Non-production runs (PS-…, jigs) have no size.
@@ -666,7 +683,7 @@ function attachRunSizes() {
   });
   state.runs.forEach(function (r) {
     var m = stripExt(r.job).match(/^TR-0*(\d+)/i);
-    r.size = (m && byRun[m[1]]) ? byRun[m[1]] : '';
+    r.size = (m && byRun[m[1]]) ? normalizeSize(byRun[m[1]]) : '';
   });
 }
 
@@ -1290,7 +1307,7 @@ function jobDetail(job, runs, completed, remaining, finished) {
   var fromSchedule = false;
   var schedQty = parseFloat(job.qty);
   if (!pieces.length && schedQty > 0) {
-    pieces = [{ size: job.size || '—', qty: schedQty, cut: 0 }];
+    pieces = [{ size: normalizeSize(job.size) || '—', qty: schedQty, cut: 0 }];
     baseSheets = 0;
     fromSchedule = true;
   }
@@ -1307,7 +1324,7 @@ function jobDetail(job, runs, completed, remaining, finished) {
   } else if (job.size) {
     // Size on the schedule but no per-sheet quantity — show the size alone.
     html += '<div style="margin-top:18px"><div class="seclabel">Size</div>'
-      + '<div style="font-size:15px;font-weight:600;margin-top:4px">' + escapeHtml(job.size) + '</div></div>';
+      + '<div style="font-size:15px;font-weight:600;margin-top:4px">' + escapeHtml(normalizeSize(job.size)) + '</div></div>';
   }
 
   if (remaining === 0) {
@@ -1974,7 +1991,7 @@ function buildReportRecords(cache) {
 /** The group a record falls under for the current report dimension. */
 function recordGroup(rec, dim) {
   if (dim === 'runNo') return rec.base;
-  if (dim === 'size') return rec.size || null;   // only runs with a schedule size
+  if (dim === 'size') return normalizeSize(rec.size) || null;   // only runs with a schedule size
   if (dim === 'sheet') return /^PS-/i.test(rec.base) ? rec.base : null;
   if (dim === 'customer') return companyFromNotes(rec.notes) || (rec.tracked && rec.tracked.customer) || 'Unattributed';
   if (dim === 'wo') {
