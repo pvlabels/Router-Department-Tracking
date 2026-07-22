@@ -497,50 +497,59 @@ function inspectProduction() {
   var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
             || prod.getSheets()[0];
   var last = psheet.getLastRow();
-  var width = Math.min(psheet.getLastColumn(), 20);
+  var width = psheet.getLastColumn();
   var vals = psheet.getRange(1, 1, last, width).getValues();
-  var header = vals[0].map(function (v, i) { return colLetter(i) + ': ' + String(v).trim(); });
+  // Full header, and any column whose name hints at a time/duration.
+  var header = [], timeCols = [];
+  vals[0].forEach(function (v, i) {
+    var name = String(v).trim();
+    if (name) header.push(colLetter(i) + ': ' + name);
+    if (/time|dur|start|end|min|sec|hour|elapsed/i.test(name)) timeCols.push(colLetter(i) + ': ' + name);
+  });
 
-  var JAN1 = new Date(2026, 0, 1);
+  var JAN1 = new Date(2026, 0, 1), JUN17 = new Date(2026, 5, 17);
   function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function sane(d) { return d instanceof Date && d.getFullYear() >= 2023 && d.getFullYear() <= 2027; }
 
-  var datedRows = 0, minD = null, maxD = null, jan1Row = null;
-  var mcTotal = 0, mcSinceJan = 0, mcMinD = null, mcMaxD = null;
-  var statusCount = {}, sampleSinceJan = [], distinctRun = {};
+  var aTypes = { date: 0, saneDate: 0, string: 0, number: 0, empty: 0 };
+  var badDates = [], saneMin = null, saneMax = null;
+  var mcTotal = 0, mcGap = 0, mcRuns = {}, statusCount = {}, sampleGap = [], gapRuns = [];
 
   for (var r = 1; r < vals.length; r++) {
-    var row = vals[r];
-    var dt = row[0] instanceof Date ? row[0] : null;
-    if (dt) {
-      datedRows++;
-      if (!minD || dt < minD) minD = dt;
-      if (!maxD || dt > maxD) maxD = dt;
-      if (jan1Row === null && dt >= JAN1) jan1Row = r + 1;    // 1-based sheet row
-    }
+    var row = vals[r], a = row[0];
+    if (a instanceof Date) { aTypes.date++; if (sane(a)) aTypes.saneDate++;
+      else if (badDates.length < 8) badDates.push({ row: r + 1, year: a.getFullYear(), iso: a.toISOString().slice(0, 10) }); }
+    else if (a === '' || a == null) aTypes.empty++;
+    else if (typeof a === 'number') aTypes.number++;
+    else { aTypes.string++; if (badDates.length < 8) badDates.push({ row: r + 1, raw: String(a).slice(0, 20), type: 'string' }); }
+    if (sane(a)) { if (!saneMin || a < saneMin) saneMin = a; if (!saneMax || a > saneMax) saneMax = a; }
+
     if (String(row[8] || '').toLowerCase().indexOf(CONFIG.PROD_MACHINE) < 0) continue;  // MultiCam only
     mcTotal++;
-    if (dt) { if (!mcMinD || dt < mcMinD) mcMinD = dt; if (!mcMaxD || dt > mcMaxD) mcMaxD = dt; }
-    var st = String(row[4] || '').trim();
-    statusCount[st] = (statusCount[st] || 0) + 1;
+    statusCount[String(row[4] || '').trim()] = (statusCount[String(row[4] || '').trim()] || 0) + 1;
     var runNo = String(row[1] == null ? '' : row[1]).trim();
-    if (runNo) distinctRun[runNo] = true;
-    if (dt && dt >= JAN1 && sampleSinceJan.length < 8) {
-      sampleSinceJan.push({ row: r + 1, date: ymd(dt), B_run: runNo, C_sheets: row[2],
-        E_status: st, G_notes: String(row[6] || '').slice(0, 40),
-        I_shapes: String(row[8] || '').slice(0, 30), M_partwo: String(row[12] || '').slice(0, 40) });
+    if (runNo) mcRuns[runNo] = true;
+    // The gap we'd actually backfill: sane date in [Jan 1, Jun 17).
+    if (sane(a) && a >= JAN1 && a < JUN17) {
+      mcGap++;
+      if (runNo) gapRuns.push(Number(runNo) || runNo);
+      if (sampleGap.length < 6) sampleGap.push({ row: r + 1, date: ymd(a), run: runNo, sheets: row[2],
+        status: String(row[4] || '').trim(), notes: String(row[6] || '').slice(0, 30), partwo: String(row[12] || '').slice(0, 40) });
     }
   }
+  gapRuns.sort(function (x, y) { return x - y; });
 
   return {
-    sheetName: psheet.getName(), lastRow: last, lastColumn: psheet.getLastColumn(),
-    header: header,
-    firstRowOnOrAfterJan1: jan1Row, PROD_START_ROW_now: CONFIG.PROD_START_ROW,
-    allDatedRows: { count: datedRows, min: minD ? ymd(minD) : null, max: maxD ? ymd(maxD) : null },
-    multicam: { totalRows: mcTotal, distinctRunNumbers: Object.keys(distinctRun).length,
-      min: mcMinD ? ymd(mcMinD) : null, max: mcMaxD ? ymd(mcMaxD) : null,
-      sinceJan1: mcSinceJan, statusCounts: statusCount },
-    sampleMulticamSinceJan1: sampleSinceJan,
-    note: 'Read-only. Scan `header` for any run time / duration / start / end column.'
+    sheetName: psheet.getName(), lastRow: last, lastColumn: width,
+    header: header, timeDurationColumns: timeCols.length ? timeCols : 'NONE FOUND',
+    colA_types: aTypes,
+    colA_saneDateRange: { min: saneMin ? ymd(saneMin) : null, max: saneMax ? ymd(saneMax) : null },
+    colA_malformedSamples: badDates,
+    multicam: { totalRows: mcTotal, distinctRunNumbers: Object.keys(mcRuns).length, statusCounts: statusCount },
+    backfillGap_Jan1_to_Jun16: { multicamRows: mcGap,
+      runNumberRange: gapRuns.length ? (gapRuns[0] + ' … ' + gapRuns[gapRuns.length - 1]) : null,
+      samples: sampleGap },
+    note: 'Read-only. `timeDurationColumns` NONE = no run durations on the board.'
   };
 }
 function colLetter(i) { var s = ''; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
