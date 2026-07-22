@@ -287,6 +287,91 @@
   td.num, th.num { text-align: right; }
   tfoot td { border-top: 1px solid var(--border); border-bottom: none; font-weight: 600; }
   .rowcount { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
+
+  /* ---------- reports ---------- */
+  .repgrid { display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 900px) { .repgrid { grid-template-columns: 1fr; } }
+  .repside {
+    position: sticky; top: 78px; border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; background: var(--surface-1); max-height: calc(100vh - 96px); overflow-y: auto;
+  }
+  @media (max-width: 900px) { .repside { position: static; max-height: none; } }
+  .repside h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px; }
+  .repside .seclabel { margin-bottom: 8px; }
+  .repside .group { margin-bottom: 20px; }
+  .typebtn {
+    display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
+    padding: 9px 11px; margin-bottom: 6px; transition: border-color .15s, background .15s;
+  }
+  .typebtn:hover { background: var(--surface-2); }
+  .typebtn.on { border-color: var(--accent); background: var(--accent-wash); }
+  .typebtn .tl { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 13.5px; }
+  .typebtn .tl .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .typebtn .td { color: var(--text-muted); font-size: 12px; margin-top: 3px; margin-left: 18px; }
+  .typebtn.off { opacity: .62; }
+  .typebtn .tag { font-size: 10.5px; font-weight: 600; margin-left: auto; padding: 1px 6px; border-radius: 20px;
+    background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .presets button { font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer; }
+  .presets button:hover { background: var(--surface-2); }
+  .presets button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .repdates { display: flex; gap: 8px; margin-bottom: 4px; }
+  .repdates > div { flex: 1; }
+  .repdates label { display: block; color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .repdates input { font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); width: 100%; }
+  .filterhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .filterhead button { font: inherit; font-size: 12px; font-weight: 500; color: var(--accent);
+    background: none; border: none; cursor: pointer; padding: 0; }
+  .flist { display: flex; flex-direction: column; gap: 1px; max-height: 320px; overflow-y: auto; }
+  .frow-check { display: flex; align-items: center; gap: 9px; padding: 5px 6px; border-radius: 6px;
+    cursor: pointer; font-size: 13px; }
+  .frow-check:hover { background: var(--surface-2); }
+  .frow-check input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; margin: 0; flex: none; }
+  .frow-check .dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .frow-check .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 12px; }
+
+  .rcard { border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; background: var(--surface-1); margin-bottom: 16px; }
+  .rhead { display: flex; align-items: flex-start; gap: 14px; }
+  .rhead h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .rhead .rsub { color: var(--text-secondary); font-size: 13.5px; margin-top: 3px; }
+  .rhead .rper { text-align: right; flex: none; }
+  .rchips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--border); align-items: center; }
+  .rchip { font-size: 12.5px; font-weight: 500; border: 1px solid var(--border); border-radius: 20px;
+    padding: 4px 11px; background: var(--surface-2); }
+  .rkpis { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
+  .rkpi { border: 1px solid var(--border); border-radius: 10px; padding: 15px 16px; background: var(--surface-1); }
+  .rkpi .label { color: var(--text-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+  .rkpi .value { font-size: clamp(20px,2.2vw,27px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05;
+    margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .rkpi .sub { color: var(--text-secondary); font-size: 12px; margin-top: 5px; }
+  .rtwo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .rtwo { grid-template-columns: 1fr; } }
+  .rcard h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
+  .rcard .h2sub { color: var(--text-muted); font-size: 12px; margin-bottom: 14px; }
+  .pielegend { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 7px; }
+  .pielegend .row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pielegend .dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .pielegend .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pielegend .pct { font-variant-numeric: tabular-nums; font-weight: 600; flex: none; }
+  .hbar { margin-bottom: 12px; }
+  .hbar:last-child { margin-bottom: 0; }
+  .hbar .top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 5px; }
+  .hbar .nm { font-family: var(--font-mono); font-size: 12.5px; }
+  .hbar .val { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hbar .track { height: 7px; border-radius: 999px; background: var(--grid); overflow: hidden; }
+  .hbar .fill { height: 100%; border-radius: 999px; }
+  .rhi { background: var(--accent-wash); }
+  .rhi ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .rhi li { font-size: 13.5px; }
+  .rplaceholder { border: 1px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; }
+  .rplaceholder .t { font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+  .rplaceholder .d { font-size: 13px; color: var(--text-muted); max-width: 440px; margin: 0 auto; }
+  .repfoot { color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -296,6 +381,10 @@
       <h1>Router Department</h1>
       <div class="tagline">MultiCam cut queue &middot; live tracking</div>
     </div>
+    <div class="seg" id="viewseg" style="margin-left:6px">
+      <button data-v="dashboard" class="on" onclick="showView('dashboard')">Dashboard</button>
+      <button data-v="reports" onclick="showView('reports')">Reports</button>
+    </div>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading&hellip;</span></span>
     <select class="mselect" id="machineSelect" onchange="onMachineChange()" title="Filter Summary &amp; Recent runs by machine"></select>
@@ -304,6 +393,8 @@
   </header>
 
   <div class="banner" id="banner"></div>
+
+  <div id="dashboardview">
 
   <!-- ===== Job queue ===== -->
   <div class="card reveal">
@@ -425,6 +516,17 @@
     <div class="tablewrap"><table id="sumtable"></table></div>
     <div class="rowcount" id="sumnote"></div>
   </div>
+
+  </div><!-- /dashboardview -->
+
+  <!-- ===== Reports ===== -->
+  <div id="reportsview" style="display:none">
+    <div class="repgrid">
+      <aside class="repside reveal" id="repside"></aside>
+      <main id="repmain" class="reveal"></main>
+    </div>
+  </div>
+
 </div>
 <script>
 var REFRESH_MS = 60000;
@@ -656,6 +758,7 @@ function render() {
   renderQueue();
   renderFinished();
   renderSummary();
+  if (currentView === 'reports') renderReport();
 }
 
 /* ----- job queue (collapsible, colored, reorderable) ----- */
@@ -1694,8 +1797,385 @@ function mockData() {
   return { runs: runs, jobs: jobs, machines: MACHINES.slice(), updatedAt: new Date().toISOString() };
 }
 
+/* ============================ Reports ============================ */
+
+var currentView = 'dashboard';
+
+function showView(v) {
+  currentView = v;
+  document.getElementById('dashboardview').style.display = v === 'dashboard' ? '' : 'none';
+  document.getElementById('reportsview').style.display = v === 'reports' ? '' : 'none';
+  Array.prototype.forEach.call(document.querySelectorAll('#viewseg button'), function (b) {
+    b.className = b.getAttribute('data-v') === v ? 'on' : '';
+  });
+  if (v === 'reports') renderReport();
+  window.scrollTo(0, 0);
+}
+
+// Display order mirrors the design; `available:false` types have no source data
+// in the run log yet, so they show a "not captured" state instead of charts.
+var REPORT_TYPES = [
+  { key: 'sheet',    label: 'Press Sheet', desc: 'Sheets cut by size over time',   dim: 'sheet',    filterLabel: 'Press sheet sizes', available: false },
+  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',       dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true },
+  { key: 'stock',    label: 'Stock Item',  desc: 'Volume & runtime per material',   dim: 'stock',    filterLabel: 'Stock items',  available: false },
+  { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',      dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true },
+  { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',      dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
+];
+
+var reportState = { type: 'run', preset: 'month', start: '', end: '', sel: {} };
+
+function reportCfg() {
+  return REPORT_TYPES.filter(function (t) { return t.key === reportState.type; })[0];
+}
+
+/* ---- data dimensions (what the live run log can actually back) ---- */
+
+/** Jobs with their run-matching key precomputed, for attributing runs. */
+function jobsForReport() {
+  return (state.jobs || []).map(function (j) {
+    return { job: j, key: matchKeyFor(j), customer: companyFromNotes(j.notes),
+      wo: (j.workOrders && hasWorkOrder(j.workOrders)) ? splitWorkOrders(j.workOrders).join(' · ') : '' };
+  });
+}
+function trackedJobForRun(run, cache) {
+  for (var i = 0; i < cache.length; i++) {
+    if (runMatchesJob(run.job, cache[i].key)) return cache[i];
+  }
+  return null;
+}
+function runGroupValue(run, dim, cache) {
+  if (dim === 'runNo') return stripExt(run.job);
+  var j = trackedJobForRun(run, cache);
+  if (dim === 'customer') return (j && j.customer) ? j.customer : 'Unattributed';
+  if (dim === 'wo') return (j && j.wo) ? j.wo : 'No WO';
+  return null;  // sheet / stock: not recorded per run
+}
+
+/* ---- range + selection ---- */
+
+function reportRange() {
+  var s = parseLocalDate(reportState.start);
+  var e = new Date(parseLocalDate(reportState.end).getTime() + 86400000);
+  return { start: s, end: e };
+}
+function reportPreset(p) {
+  var now = new Date(), t = startOfDay(now), start, end = t;
+  if (p === 'week') { start = new Date(t); start.setDate(start.getDate() - 6); }
+  else if (p === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); }
+  else if (p === 'quarter') { var q = Math.floor(now.getMonth() / 3); start = new Date(now.getFullYear(), q * 3, 1); }
+  else if (p === 'ytd') { start = new Date(now.getFullYear(), 0, 1); }
+  else { start = new Date(t); start.setDate(start.getDate() - 29); }
+  reportState.preset = p;
+  reportState.start = dayKey(start);
+  reportState.end = dayKey(end);
+}
+function reportPresetLabel(p) {
+  return { week: 'This week', month: 'This month', quarter: 'This quarter', ytd: 'Year to date', last30: 'Last 30 days' }[p] || p;
+}
+
+/** Group values present in the current range, most machine-time first. */
+function reportGroupsInRange(cache) {
+  var r = reportRange(), dim = reportCfg().dim, secs = {};
+  state.runs.forEach(function (run) {
+    if (run.when < r.start || run.when >= r.end) return;
+    var g = runGroupValue(run, dim, cache);
+    secs[g] = (secs[g] || 0) + run.seconds;
+  });
+  return Object.keys(secs).sort(function (a, b) { return secs[b] - secs[a]; });
+}
+function reportSelectedSet(optionKeys) {
+  var chosen = optionKeys.filter(function (k) { return reportState.sel[k]; });
+  if (!chosen.length) return null;            // none checked = all
+  var set = {}; chosen.forEach(function (k) { set[k] = true; });
+  return set;
+}
+
+/* ---- interaction ---- */
+
+function setReportType(key) {
+  reportState.type = key;
+  reportState.sel = {};                        // selection is dimension-specific
+  renderReport();
+}
+function setReportPreset(p) { reportPreset(p); renderReport(); }
+function onReportDate() {
+  reportState.start = document.getElementById('rep_start').value || reportState.start;
+  reportState.end = document.getElementById('rep_end').value || reportState.end;
+  reportState.preset = '';
+  renderReport();
+}
+function toggleReportFilter(key) {
+  reportState.sel[key] = !reportState.sel[key];
+  renderReport();
+}
+function reportSelectAll() {
+  reportState.sel = {};                        // clearing = "all selected"
+  renderReport();
+}
+
+/* ---- colors ---- */
+
+function reportColor(rank) { return jobColor(rank); }       // top groups get the job palette
+var REPORT_OTHER = 'var(--text-muted)';
+
+/* ---- SVG: donut + trend ---- */
+
+function donutSvg(segs) {
+  var size = 132, sw = 21, r = (size - sw) / 2, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r, off = 0;
+  var ring = segs.map(function (s) {
+    var len = Math.max(0, s.frac) * C;
+    var c = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + s.color
+      + '" stroke-width="' + sw + '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2)
+      + '" stroke-dashoffset="' + (-off).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+    off += len; return c;
+  }).join('');
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">'
+    + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--grid)" stroke-width="' + sw + '"/>'
+    + ring + '</svg>';
+}
+
+function trendSvg(days) {
+  var W = 920, H = 150, padB = 22, padT = 10, padX = 4;
+  var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.count; })));
+  var n = days.length, span = W - padX * 2, plotH = H - padB - padT;
+  var xAt = function (i) { return padX + (n <= 1 ? span / 2 : (i / (n - 1)) * span); };
+  var yAt = function (v) { return padT + plotH - (v / max) * plotH; };
+  var pts = days.map(function (d, i) { return xAt(i) + ',' + yAt(d.count).toFixed(1); });
+  var area = 'M' + xAt(0) + ',' + (H - padB) + 'L' + pts.join('L') + 'L' + xAt(n - 1) + ',' + (H - padB) + 'Z';
+  // a few date ticks
+  var ticks = '';
+  var step = Math.max(1, Math.floor(n / 6));
+  for (var i = 0; i < n; i += step) {
+    ticks += '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - 6) + '" fill="var(--text-muted)" font-size="10" '
+      + 'font-family="var(--font-mono)" text-anchor="middle">' + fmtDateShort(days[i].date) + '</text>';
+  }
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">'
+    + '<line x1="' + padX + '" x2="' + (W - padX) + '" y1="' + (H - padB) + '" y2="' + (H - padB) + '" stroke="var(--baseline)" stroke-width="1"/>'
+    + '<path d="' + area + '" fill="var(--accent)" opacity="0.10"/>'
+    + '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+    + ticks + '</svg>';
+}
+
+/* ---- render ---- */
+
+function renderReport() {
+  var cfg = reportCfg();
+  if (!reportState.start) reportPreset(reportState.preset || 'month');
+  renderRepSidebar(cfg);
+
+  var main = document.getElementById('repmain');
+  var range = reportRange();
+  var periodLabel = fmtDate(range.start) + ' – ' + fmtDate(new Date(range.end.getTime() - 86400000));
+  var head = ''
+    + '<div class="rcard">'
+    + '  <div class="rhead"><div style="flex:1">'
+    + '    <h1>' + escapeHtml(cfg.label) + ' Report</h1>'
+    + '    <div class="rsub">Router Department · MultiCam cut operations</div></div>'
+    + '    <div class="rper"><div class="seclabel">Period</div>'
+    + '      <div style="font-weight:600;font-size:14px;margin-top:2px">' + escapeHtml(reportState.preset ? reportPresetLabel(reportState.preset) : periodLabel) + '</div>'
+    + '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:6px">' + escapeHtml(periodLabel) + '</div></div>'
+    + '  </div>'
+    + '</div>';
+
+  if (!cfg.available) {
+    main.innerHTML = head
+      + '<div class="rplaceholder">'
+      + '<div class="t">' + escapeHtml(cfg.label) + ' isn\'t tracked yet</div>'
+      + '<div class="d">The run log records job, machine, and run time — but not '
+      + (cfg.key === 'sheet' ? 'the press-sheet size' : 'the stock material') + ' of each run. '
+      + 'Once that\'s captured per run (on the schedule or in the job ticket), this report fills in automatically.</div>'
+      + '</div>';
+    return;
+  }
+
+  var cache = jobsForReport();
+  var options = reportGroupsInRange(cache);
+  var sel = reportSelectedSet(options);
+  var runs = state.runs.filter(function (run) {
+    if (run.when < range.start || run.when >= range.end) return false;
+    return sel === null || sel[runGroupValue(run, cfg.dim, cache)];
+  });
+
+  if (!runs.length) {
+    main.innerHTML = head + '<div class="rplaceholder"><div class="t">No runs match these filters</div>'
+      + '<div class="d">Widen the date range or change your selection.</div></div>';
+    return;
+  }
+
+  // group + aggregate
+  var groups = {}, totalSecs = 0, byDay = {}, machinesInRange = {}, attributed = 0;
+  runs.forEach(function (run) {
+    var g = runGroupValue(run, cfg.dim, cache);
+    var o = groups[g] || (groups[g] = { key: g, runs: 0, secs: 0 });
+    o.runs++; o.secs += run.seconds; totalSecs += run.seconds;
+    var dk = dayKey(run.when); byDay[dk] = (byDay[dk] || 0) + 1;
+    machinesInRange[run.machine] = true;
+    if (g !== 'Unattributed' && g !== 'No WO') attributed++;
+  });
+  var arr = Object.keys(groups).map(function (k) { return groups[k]; })
+    .sort(function (a, b) { return b.secs - a.secs; });
+  var totalRuns = runs.length;
+  arr.forEach(function (g, i) { g.color = i < 8 ? reportColor(i) : REPORT_OTHER; });
+
+  // utilization over the range
+  var machineCount = Math.max(1, Object.keys(machinesInRange).length);
+  var sched = scheduleStats(range.start, range.end, dayKeySecs(runs), machineCount);
+  var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
+
+  // KPIs
+  var groupNoun = cfg.filterLabel.toLowerCase();
+  var kpis = [
+    { label: 'Total runs', value: totalRuns.toLocaleString() },
+    { label: 'Machine time', value: fmtDur(totalSecs) },
+    { label: cfg.label, value: String(arr.length), sub: groupNoun },
+    { label: 'Avg / run', value: fmtDur(totalRuns ? totalSecs / totalRuns : 0) },
+    { label: 'Utilization', value: Math.round(util) + '%', sub: 'vs 6 AM–5 PM shift' }
+  ];
+  var kpiHtml = '<div class="rcard rkpis">' + kpis.map(function (k) {
+    return '<div class="rkpi"><div class="label">' + escapeHtml(k.label) + '</div>'
+      + '<div class="value">' + escapeHtml(k.value) + '</div>'
+      + '<div class="sub">' + escapeHtml(k.sub || '') + '</div></div>';
+  }).join('') + '</div>';
+
+  // pie: top 6 + Other
+  var TOP = 6, top = arr.slice(0, TOP), rest = arr.slice(TOP);
+  var restSecs = rest.reduce(function (t, g) { return t + g.secs; }, 0);
+  var pieItems = top.map(function (g) { return { name: g.key, secs: g.secs, color: g.color }; });
+  if (restSecs > 0) pieItems.push({ name: 'Other (' + rest.length + ')', secs: restSecs, color: REPORT_OTHER });
+  var segs = pieItems.map(function (p) { return { frac: totalSecs ? p.secs / totalSecs : 0, color: p.color }; });
+  var pieLegend = pieItems.map(function (p) {
+    return '<div class="row"><span class="dot" style="background:' + p.color + '"></span>'
+      + '<span class="nm">' + escapeHtml(p.name) + '</span>'
+      + '<span class="pct">' + Math.round(totalSecs ? (p.secs / totalSecs) * 100 : 0) + '%</span></div>';
+  }).join('');
+  var pieCard = '<div class="rcard"><h2>Share of run hours</h2>'
+    + '<div class="h2sub">by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</div>'
+    + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
+    + '<div style="position:relative;flex:none">' + donutSvg(segs)
+    + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">'
+    + '<div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">' + fmtHoursNum(totalSecs) + '</div>'
+    + '<div style="color:var(--text-muted);font-size:11px">total hours</div></div></div>'
+    + '<div class="pielegend">' + pieLegend + '</div></div></div>';
+
+  // bars: top 8 by hours
+  var barMax = arr[0].secs || 1;
+  var barItems = arr.slice(0, 8).map(function (g) {
+    return '<div class="hbar"><div class="top"><span class="nm">' + escapeHtml(g.key) + '</span>'
+      + '<span class="val">' + fmtHours(g.secs) + '</span></div>'
+      + '<div class="track"><div class="fill" style="width:' + ((g.secs / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div></div>';
+  }).join('');
+  var barCard = '<div class="rcard"><h2>Hours on the router</h2>'
+    + '<div class="h2sub">machine time this period</div>' + barItems + '</div>';
+
+  // trend: runs per day across weekdays in range
+  var days = [], d = startOfDay(new Date(range.start)), stop = range.end < new Date() ? range.end : new Date();
+  while (d < stop) {
+    var dow = d.getDay();
+    if (dow >= 1 && dow <= 5) days.push({ date: new Date(d), count: byDay[dayKey(d)] || 0 });
+    d.setDate(d.getDate() + 1);
+  }
+  var trendCard = days.length ? '<div class="rcard"><h2>Daily output</h2>'
+    + '<div class="h2sub">runs per day over the period</div>' + trendSvg(days) + '</div>' : '';
+
+  // highlights
+  var top1 = arr[0];
+  var busiest = Object.keys(byDay).sort(function (a, b) { return byDay[b] - byDay[a]; })[0];
+  var hi = [];
+  hi.push('Top ' + groupNoun.replace(/s$/, '') + ' by machine time: <strong>' + escapeHtml(top1.key)
+    + '</strong> (' + Math.round((top1.secs / totalSecs) * 100) + '% of hours, ' + fmtHours(top1.secs) + ').');
+  var mostRuns = arr.slice().sort(function (a, b) { return b.runs - a.runs; })[0];
+  hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs (' + fmtHours(mostRuns.secs) + ').');
+  hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving ' + fmtHours(sched.downtime) + ' of idle time during scheduled shifts.');
+  if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> with ' + byDay[busiest] + ' runs.');
+  var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
+    + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
+
+  // breakdown table
+  var rows = arr.map(function (g) {
+    var share = totalSecs ? (g.secs / totalSecs) * 100 : 0;
+    return '<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:2px;flex:none;background:'
+      + g.color + '"></span>' + escapeHtml(g.key) + '</span></td>'
+      + '<td class="num">' + g.runs.toLocaleString() + '</td>'
+      + '<td class="num">' + fmtDur(g.secs) + '</td>'
+      + '<td class="num">' + fmtDur(g.runs ? g.secs / g.runs : 0) + '</td>'
+      + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
+  }).join('');
+  var tableCard = '<div class="rcard"><h2>Breakdown by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
+    + '<div class="tablewrap"><table><thead><tr><th>' + escapeHtml(cfg.label)
+    + '</th><th class="num">Runs</th><th class="num">Machine time</th><th class="num">Avg / run</th><th class="num">Share</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '<tfoot><tr><td>All</td><td class="num">' + totalRuns.toLocaleString() + '</td><td class="num">'
+    + fmtDur(totalSecs) + '</td><td class="num">—</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+
+  // sparse-data note for customer / WO
+  var sparseNote = '';
+  if (cfg.sparse) {
+    sparseNote = '<div class="rcard" style="padding:12px 16px;background:var(--surface-2)">'
+      + '<div style="font-size:12.5px;color:var(--text-secondary)">Only tracked jobs carry '
+      + (cfg.key === 'customer' ? 'a customer' : 'a work order') + ' — <strong>' + attributed + ' of '
+      + totalRuns + '</strong> runs in this period are attributed; the rest are grouped as "'
+      + (cfg.key === 'customer' ? 'Unattributed' : 'No WO') + '".</div></div>';
+  }
+
+  main.innerHTML = head + sparseNote + kpiHtml
+    + '<div class="rtwo">' + pieCard + barCard + '</div>'
+    + trendCard + hiCard + tableCard
+    + '<div class="repfoot">Router Department production report · figures cover scheduled shifts Mon–Fri, 6 AM–5 PM</div>';
+}
+
+/** Per-day machine seconds for the given runs (for scheduleStats downtime). */
+function dayKeySecs(runs) {
+  var m = {};
+  runs.forEach(function (r) { var k = dayKey(r.when); m[k] = (m[k] || 0) + r.seconds; });
+  return m;
+}
+
+function fmtHours(s) { var h = s / 3600; return (h >= 100 ? Math.round(h) : h.toFixed(1)) + ' h'; }
+function fmtHoursNum(s) { var h = s / 3600; return h >= 100 ? String(Math.round(h)) : h.toFixed(1); }
+
+function renderRepSidebar(cfg) {
+  var side = document.getElementById('repside');
+  var cache = jobsForReport();
+
+  var types = REPORT_TYPES.map(function (t, i) {
+    var on = t.key === reportState.type;
+    return '<button class="typebtn' + (on ? ' on' : '') + (t.available ? '' : ' off') + '" onclick="setReportType(' + jsStr(t.key) + ')">'
+      + '<div class="tl"><span class="dot" style="background:' + jobColor(i) + '"></span>' + escapeHtml(t.label)
+      + (t.available ? '' : '<span class="tag">no data</span>') + '</div>'
+      + '<div class="td">' + escapeHtml(t.desc) + '</div></button>';
+  }).join('');
+
+  var presets = ['week', 'month', 'quarter', 'ytd', 'last30'].map(function (p) {
+    return '<button class="' + (reportState.preset === p ? 'on' : '') + '" onclick="setReportPreset(' + jsStr(p) + ')">'
+      + escapeHtml(reportPresetLabel(p)) + '</button>';
+  }).join('');
+
+  var filterList = '';
+  if (cfg.available) {
+    var options = reportGroupsInRange(cache);
+    var anyChecked = options.some(function (k) { return reportState.sel[k]; });
+    filterList = '<div class="group"><div class="filterhead">'
+      + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
+      + '<button onclick="reportSelectAll()">' + (anyChecked ? 'Select all' : 'All selected') + '</button></div>'
+      + '<div class="flist">' + (options.length ? options.map(function (k, i) {
+          return '<label class="frow-check"><input type="checkbox"' + (reportState.sel[k] ? ' checked' : '')
+            + ' onchange="toggleReportFilter(' + jsStr(k) + ')">'
+            + '<span class="dot" style="background:' + (i < 8 ? jobColor(i) : REPORT_OTHER) + '"></span>'
+            + '<span class="nm">' + escapeHtml(k) + '</span></label>';
+        }).join('') : '<div class="sub" style="padding:6px">No data in this period.</div>') + '</div></div>';
+  }
+
+  side.innerHTML = '<h3>Build a report</h3>'
+    + '<div class="group"><div class="seclabel">Type of report</div>' + types + '</div>'
+    + '<div class="group"><div class="seclabel">Period</div><div class="presets">' + presets + '</div>'
+    + '<div class="repdates"><div><label>Start</label><input id="rep_start" type="date" value="' + reportState.start + '" onchange="onReportDate()"></div>'
+    + '<div><label>End</label><input id="rep_end" type="date" value="' + reportState.end + '" onchange="onReportDate()"></div></div></div>'
+    + filterList;
+}
+
 // Paint the static chrome (theme + icons) before the first data render.
 applyTheme(currentTheme());
+reportPreset('month');
 document.getElementById('periodprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('periodnext').innerHTML = ICON.chevronRight(16);
 document.getElementById('finprev').innerHTML = ICON.chevronLeft(16);
