@@ -71,6 +71,11 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(out))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  if (e && e.parameter && e.parameter.inspect === 'cols') {
+    var out;
+    try { out = inspectItemCols(); } catch (err) { out = { error: String((err && err.message) || err) }; }
+    return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+  }
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Router Department Tracking')
@@ -496,6 +501,25 @@ function stopJob(name) {
     lock.releaseLock();
   }
   return { ok: true };
+}
+
+/** TEMPORARY: dump columns J–R for the most recent MultiCam rows to locate the size. Remove after. */
+function inspectItemCols() {
+  var prod = SpreadsheetApp.openById(CONFIG.PROD_SHEET_ID);
+  var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
+            || prod.getSheets()[0];
+  var last = psheet.getLastRow();
+  var startRow = Math.max(2, last - 40);
+  var vals = psheet.getRange(startRow, 1, last - startRow + 1, 18).getValues();  // A..R
+  var out = [];
+  for (var r = vals.length - 1; r >= 0 && out.length < 12; r--) {
+    var row = vals[r];
+    if (String(row[8] || '').toLowerCase().indexOf(CONFIG.PROD_MACHINE) < 0) continue;  // MultiCam
+    out.push({ run: String(row[1] || '').trim(),
+      K: String(row[10] || ''), L_item1: String(row[11] || ''), M: String(row[12] || ''),
+      N: String(row[13] || ''), O_item2: String(row[14] || ''), P: String(row[15] || ''), Q: String(row[16] || '') });
+  }
+  return { rows: out };
 }
 
 /* ---------- production history (full-year backfill for Reports) ---------- */
