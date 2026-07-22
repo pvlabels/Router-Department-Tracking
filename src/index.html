@@ -1922,12 +1922,12 @@ function showView(v) {
 var REPORT_TYPES = [
   { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet', dim: 'sheet',    filterLabel: 'Press sheets', available: true },
   { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',          dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
-  { key: 'stock',    label: 'Part #',      desc: 'Runs grouped by part number',       dim: 'stock',    filterLabel: 'Part numbers', available: true, sparse: true, bucket: 'No part #', noun: 'a part number', hideBucket: true },
+  { key: 'stock',    label: 'Stock Item',  desc: 'Runs grouped by stock item',        dim: 'stock',    filterLabel: 'Stock items',  available: true, sparse: true, bucket: 'No stock item', noun: 'a stock item', hideBucket: true },
   { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',        dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true, bucket: 'No WO', noun: 'a work order', hideBucket: true },
-  { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',        dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
+  { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',        dim: 'size',     filterLabel: 'Sizes',        available: true }
 ];
 
-var reportState = { type: 'run', metric: 'runs', preset: 'month', start: '', end: '', sel: {} };
+var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {} };
 var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
 var reportFilterQuery = '';                // live search text for the filter list
 
@@ -1955,7 +1955,7 @@ function buildReportRecords(cache) {
   var records = [], byRun = {};
   (state.history || []).forEach(function (h) {
     var rec = { run: h.run, when: parseLocalDate(h.date), base: 'TR-' + h.run,
-      sheets: h.sheets, notes: h.notes, workOrders: h.workOrders, seconds: 0, hasHours: false, tracked: null };
+      sheets: h.sheets, notes: h.notes, workOrders: h.workOrders, size: h.size, seconds: 0, hasHours: false, tracked: null };
     records.push(rec); byRun[h.run] = rec;
   });
   (state.runs || []).forEach(function (r) {
@@ -1965,7 +1965,7 @@ function buildReportRecords(cache) {
       // Press-sheet runs (PS-…) aren't on the schedule, so they have no sheet
       // count — each one cuts a single full 4'×8' sheet, so count it as 1.
       records.push({ run: runNo, when: r.when, base: base, sheets: /^PS-/i.test(base) ? 1 : null,
-        notes: null, workOrders: null, seconds: r.seconds, hasHours: true, tracked: trackedJobForRun(r, cache) });
+        notes: null, workOrders: null, size: r.size || '', seconds: r.seconds, hasHours: true, tracked: trackedJobForRun(r, cache) });
     }
   });
   return records;
@@ -1974,6 +1974,7 @@ function buildReportRecords(cache) {
 /** The group a record falls under for the current report dimension. */
 function recordGroup(rec, dim) {
   if (dim === 'runNo') return rec.base;
+  if (dim === 'size') return rec.size || null;   // only runs with a schedule size
   if (dim === 'sheet') return /^PS-/i.test(rec.base) ? rec.base : null;
   if (dim === 'customer') return companyFromNotes(rec.notes) || (rec.tracked && rec.tracked.customer) || 'Unattributed';
   if (dim === 'wo') {
@@ -1983,7 +1984,7 @@ function recordGroup(rec, dim) {
   }
   if (dim === 'stock') {
     var p = (rec.workOrders && !hasWorkOrder(rec.workOrders)) ? rec.workOrders : (rec.tracked && rec.tracked.partNo) || '';
-    return p || 'No part #';
+    return p || 'No stock item';
   }
   return null;
 }
