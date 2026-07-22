@@ -1836,8 +1836,8 @@ function showView(v) {
 // in the run log yet, so they show a "not captured" state instead of charts.
 var REPORT_TYPES = [
   { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet', dim: 'sheet',    filterLabel: 'Press sheets', available: true },
-  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',          dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true, bucket: 'Unattributed', noun: 'a customer' },
-  { key: 'stock',    label: 'Part #',      desc: 'Runs grouped by part number',       dim: 'stock',    filterLabel: 'Part numbers', available: true, sparse: true, bucket: 'No part #', noun: 'a part number' },
+  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',          dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
+  { key: 'stock',    label: 'Part #',      desc: 'Runs grouped by part number',       dim: 'stock',    filterLabel: 'Part numbers', available: true, sparse: true, bucket: 'No part #', noun: 'a part number', hideBucket: true },
   { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',        dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true, bucket: 'No WO', noun: 'a work order' },
   { key: 'run',      label: 'Run #',       desc: 'Runs grouped by run number',        dim: 'runNo',    filterLabel: 'Run numbers',  available: true }
 ];
@@ -2060,12 +2060,15 @@ function renderReport() {
   var sel = reportSelectedSet(options);
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
 
-  var recs = allRecords.filter(function (rec) {
+  var inRange = allRecords.filter(function (rec) {
     if (rec.when < range.start || rec.when >= range.end) return false;
     var g = recordGroup(rec, dim);
     if (g === null) return false;               // e.g. a non-PS run in a press-sheet report
     return sel === null || sel[g];
   });
+  // Customer / Part # drop their catch-all bucket entirely (not just from charts).
+  var recs = cfg.hideBucket ? inRange.filter(function (rec) { return recordGroup(rec, dim) !== cfg.bucket; }) : inRange;
+  var hiddenCount = inRange.length - recs.length;
 
   if (!recs.length) {
     main.innerHTML = head + '<div class="rplaceholder"><div class="t">No runs match these filters</div>'
@@ -2208,7 +2211,12 @@ function renderReport() {
 
   // attribution note for customer / WO / part #
   var sparseNote = '';
-  if (cfg.sparse) {
+  if (cfg.hideBucket) {
+    sparseNote = '<div class="rcard" style="padding:12px 16px;background:var(--surface-2)">'
+      + '<div style="font-size:12.5px;color:var(--text-secondary)">Showing only runs with ' + escapeHtml(cfg.noun)
+      + ' — <strong>' + totalRuns + '</strong> of ' + (totalRuns + hiddenCount) + ' in this period ('
+      + hiddenCount + ' with none are hidden).</div></div>';
+  } else if (cfg.sparse) {
     sparseNote = '<div class="rcard" style="padding:12px 16px;background:var(--surface-2)">'
       + '<div style="font-size:12.5px;color:var(--text-secondary)"><strong>' + attributed + ' of ' + totalRuns
       + '</strong> runs in this period have ' + escapeHtml(cfg.noun) + '; the rest are grouped as "'
@@ -2251,6 +2259,7 @@ function renderRepSidebar(cfg) {
   var filterList = '';
   if (cfg.available) {
     var options = reportGroupsInRange(cache, buildReportRecords(cache));
+    if (cfg.hideBucket) options = options.filter(function (k) { return k !== cfg.bucket; });
     var anyChecked = options.some(function (k) { return reportState.sel[k]; });
     filterList = '<div class="group"><div class="filterhead">'
       + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
