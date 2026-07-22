@@ -2124,19 +2124,26 @@ function renderReport() {
     sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift' };
   var kpis;
   if (cfg.key === 'sheet') {
-    // Press sheets: every run is one full 4'×8' sheet. Machine time moves down,
-    // the distinct-count tile is dropped, and a month-to-date tile is added.
-    var monthStart = new Date((new Date()).getFullYear(), (new Date()).getMonth(), 1);
-    var psThisMonth = allRecords.filter(function (rec) {
-      return /^PS-/i.test(rec.base) && rec.when >= monthStart;
-    }).length;
-    var monthName = monthStart.toLocaleDateString(undefined, { month: 'long' });
+    // Press sheets: every run is one full 4'×8' sheet, so volume scales with the
+    // period. Management view = volume, throughput, peak, machine time, util.
+    var sheetsByDay = {};
+    recs.forEach(function (rec) { var k = dayKey(rec.when); sheetsByDay[k] = (sheetsByDay[k] || 0) + (rec.sheets || 0); });
+    var dayKeys = Object.keys(sheetsByDay).sort();
+    var peakDay = dayKeys.slice().sort(function (a, b) { return sheetsByDay[b] - sheetsByDay[a]; })[0];
+    // Rate over working days actually covered (data starts Jun 17), not the
+    // whole period, so a YTD view isn't diluted by months with no press-sheet log.
+    var wd = 0;
+    if (dayKeys.length) {
+      var d2 = parseLocalDate(dayKeys[0]), end2 = range.end < new Date() ? range.end : new Date();
+      while (d2 < end2) { var dw = d2.getDay(); if (dw >= 1 && dw <= 5) wd++; d2.setDate(d2.getDate() + 1); }
+    }
+    var perDay = wd ? totalSheets / wd : totalSheets;
     kpis = [
-      { label: 'Total runs', value: totalRuns.toLocaleString() },
-      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'one per run' },
-      utilKpi,
+      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'cut this period' },
+      { label: 'Sheets / day', value: (perDay % 1 ? perDay.toFixed(1) : String(perDay)), sub: 'working days cut' },
+      { label: 'Busiest day', value: peakDay ? sheetsByDay[peakDay].toLocaleString() : '—', sub: peakDay ? fmtDate(parseLocalDate(peakDay)) : '' },
       machineTimeKpi,
-      { label: 'Press sheets cut this month', value: psThisMonth.toLocaleString(), sub: monthName }
+      utilKpi
     ];
   } else {
     kpis = [
