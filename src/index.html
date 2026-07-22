@@ -138,8 +138,6 @@
   .jtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .jname { font-family: var(--font-mono); font-weight: 500; font-size: 13.5px; letter-spacing: -0.01em; }
   .jwo { font-family: var(--font-mono); color: var(--text-muted); font-size: 12px; margin-left: 10px; }
-  .jsize { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; margin-left: 10px; }
   .jco { font-weight: 700; color: var(--text-primary); font-size: 12.5px; margin-left: 10px; }
 
   /* ---------- finished log ---------- */
@@ -1086,7 +1084,6 @@ function jobRow(job, idx, total) {
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
     +     escapeHtml(jobTitle(job)) + '</span>'
-    +     (job.size ? '<span class="jsize">' + escapeHtml(job.size) + '</span>' : '')
     +     (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
     +     (companyFromNotes(job.notes) ? '<span class="jco">' + escapeHtml(companyFromNotes(job.notes)) + '</span>' : '')
     +   '</span>'
@@ -1253,11 +1250,21 @@ function jobDetail(job, runs, completed, remaining, finished) {
     html += '</div>';
   }
 
-  // pieces table
+  // pieces table — manual pieces if set, otherwise synthesized from the
+  // schedule's size (col N) + quantity-per-sheet (col H) so a production job
+  // reads like a manually-entered one when its ticket is opened.
   var pieces = Array.isArray(job.pieces) ? job.pieces : [];
+  var baseSheets = job.baseSheets || 0;
+  var fromSchedule = false;
+  var schedQty = parseFloat(job.qty);
+  if (!pieces.length && schedQty > 0) {
+    pieces = [{ size: job.size || '—', qty: schedQty, cut: 0 }];
+    baseSheets = 0;
+    fromSchedule = true;
+  }
   if (pieces.length) {
-    var baseSheets = job.baseSheets || 0;
-    html += '<div style="margin-top:18px"><div class="seclabel">Pieces</div>'
+    html += '<div style="margin-top:18px"><div class="seclabel">Pieces'
+      + (fromSchedule ? ' <span style="text-transform:none;letter-spacing:0;color:var(--text-muted);font-weight:400">· from the schedule</span>' : '') + '</div>'
       + '<table class="ptable"><thead><tr><th>Size</th><th>Per sheet</th><th>Cut so far</th><th>At target</th></tr></thead><tbody>'
       + pieces.map(function (p) {
           return '<tr><td>' + escapeHtml(p.size) + '</td><td>' + p.qty + '</td>'
@@ -1265,6 +1272,10 @@ function jobDetail(job, runs, completed, remaining, finished) {
             + '<td class="tot">' + piecesTotal(p, baseSheets, job.target).toLocaleString() + '</td></tr>';
         }).join('')
       + '</tbody></table></div>';
+  } else if (job.size) {
+    // Size on the schedule but no per-sheet quantity — show the size alone.
+    html += '<div style="margin-top:18px"><div class="seclabel">Size</div>'
+      + '<div style="font-size:15px;font-weight:600;margin-top:4px">' + escapeHtml(job.size) + '</div></div>';
   }
 
   if (remaining === 0) {
