@@ -168,14 +168,20 @@
   .modalnote { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
   .modalbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
+  /* Each finished job is a bordered card, like the Job queue. */
+  #fintable { border-collapse: separate; border-spacing: 0 9px; }
   #fintable tr.finrow { cursor: pointer; }
-  #fintable tr.finrow:hover td { background: var(--surface-2); }
-  #fintable tr.finrow.open td { border-bottom: none; }
+  #fintable > tbody > tr.finrow > td { background: var(--surface-1);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  #fintable > tbody > tr.finrow > td:first-child { border-left: 1px solid var(--border); border-radius: 10px 0 0 10px; }
+  #fintable > tbody > tr.finrow > td:last-child { border-right: 1px solid var(--border); border-radius: 0 10px 10px 0; }
+  #fintable > tbody > tr.finrow:hover > td { background: var(--surface-2); }
   #fintable .fincaret { display: inline-flex; color: var(--text-muted); vertical-align: middle; }
-  /* The ticket cell is a first-child td, so it inherits the table's mono
-     treatment — reset it or the whole ticket renders in Menlo. */
-  #fintable tr.findetail > td {
-    padding: 0 2px 18px; font-family: var(--font-body); font-size: 13px;
+  /* Expanded ticket: its own bordered card just below the row. Reset the mono
+     the first-child td would otherwise inherit, or the ticket renders in Menlo. */
+  #fintable > tbody > tr.findetail > td {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 6px 16px 16px; font-family: var(--font-body); font-size: 13px;
   }
   #fintable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
 
