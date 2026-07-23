@@ -381,6 +381,27 @@
   .hbar .track { height: 7px; border-radius: 999px; background: var(--grid); overflow: hidden; }
   .hbar .fill { height: 100%; border-radius: 999px; }
   .rhi { background: var(--hl-bg); }
+
+  /* ---------- time estimator (Size report) ---------- */
+  .estrow { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .estrow > div { display: flex; flex-direction: column; }
+  .estrow label { color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .estrow select, .estrow input {
+    font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
+  .estrow select { min-width: 180px; }
+  .estrow input { width: 130px; }
+  .estrow select:focus, .estrow input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .estfinish {
+    border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-wash);
+    padding: 14px 18px; margin-bottom: 12px;
+  }
+  .estfinish .l { color: var(--text-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+  .estfinish .v { font-size: clamp(20px,2.4vw,28px); font-weight: 600; letter-spacing: -0.02em; margin-top: 5px; color: var(--accent); }
+  .estfinish .s { color: var(--text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .esttiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
+  .estnote { color: var(--text-muted); font-size: 11.5px; margin-top: 10px; }
   .rhi ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
   .rhi li { font-size: 13.5px; }
   .rplaceholder { border: 1px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; }
@@ -1946,6 +1967,7 @@ var REPORT_TYPES = [
 
 var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {} };
 var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
+var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
 var reportFilterQuery = '';                // live search text for the filter list
 
 function reportCfg() {
@@ -2310,15 +2332,21 @@ function renderReport() {
   var barCard = '<div class="rcard"><h2>' + mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
     + '<div class="h2sub">top ' + Math.min(8, shown.length) + ' this period</div>' + barItems + '</div>';
 
-  // trend: chosen metric per day across weekdays in range
-  var days = [], d = startOfDay(new Date(range.start)), stop = range.end < new Date() ? range.end : new Date();
-  while (d < stop) {
-    var dow = d.getDay();
-    if (dow >= 1 && dow <= 5) days.push({ date: new Date(d), count: byDay[dayKey(d)] || 0 });
-    d.setDate(d.getDate() + 1);
+  // trend: chosen metric per day across weekdays in range. The Size report
+  // trades this card for the time-estimator calculator.
+  var trendCard = '';
+  if (cfg.key === 'size') {
+    trendCard = estimatorCard(allRecords);
+  } else {
+    var days = [], d = startOfDay(new Date(range.start)), stop = range.end < new Date() ? range.end : new Date();
+    while (d < stop) {
+      var dow = d.getDay();
+      if (dow >= 1 && dow <= 5) days.push({ date: new Date(d), count: byDay[dayKey(d)] || 0 });
+      d.setDate(d.getDate() + 1);
+    }
+    trendCard = days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
+      + '<div class="h2sub">' + mInfo.noun + ' per day over the period</div>' + trendSvg(days) + '</div>' : '';
   }
-  var trendCard = days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
-    + '<div class="h2sub">' + mInfo.noun + ' per day over the period</div>' + trendSvg(days) + '</div>' : '';
 
   // highlights (lead with the attributed leaders, not the catch-all bucket)
   var busiest = Object.keys(byDay).sort(function (a, b) { return byDay[b] - byDay[a]; })[0];
@@ -2392,6 +2420,98 @@ function dayKeySecs(runs) {
 
 function fmtHours(s) { var h = s / 3600; return (h >= 100 ? Math.round(h) : h.toFixed(1)) + ' h'; }
 function fmtHoursNum(s) { var h = s / 3600; return h >= 100 ? String(Math.round(h)) : h.toFixed(1); }
+
+/* ----- time estimator: pick a size + quantity, project a finish date ----- */
+
+/**
+ * Recent cutting pace: machine seconds actually run per working day, averaged
+ * over the last 14 calendar days of the Job Log (all routers combined). This is
+ * real throughput — it already bakes in idle time, other jobs, and breakdowns.
+ */
+function recentDailyCutSecs() {
+  var now = new Date(), since = startOfDay(new Date(now.getTime() - 14 * 86400000));
+  var secs = 0;
+  state.runs.forEach(function (r) { if (r.when >= since) secs += r.seconds; });
+  var wd = 0, d = new Date(since);
+  while (d < now) { var dw = d.getDay(); if (dw >= 1 && dw <= 5) wd++; d.setDate(d.getDate() + 1); }
+  return wd ? secs / wd : 0;
+}
+
+function estimatorCard(allRecords) {
+  // Per-size history over ALL records (not the report's period filter): the
+  // estimate should lean on every sheet ever timed at that size.
+  var stats = {}, allSecs = 0, allSheetsH = 0;
+  allRecords.forEach(function (rec) {
+    var s = normalizeSize(rec.size);
+    if (!s) return;
+    var o = stats[s] || (stats[s] = { sheets: 0, secs: 0, sheetsH: 0 });
+    o.sheets += (rec.sheets || 0);
+    if (rec.seconds > 0) { o.secs += rec.seconds; o.sheetsH += (rec.sheets || 0); allSecs += rec.seconds; allSheetsH += (rec.sheets || 0); }
+  });
+  var sizes = Object.keys(stats).sort(function (a, b) { return stats[b].sheets - stats[a].sheets; });
+  if (!sizes.length) return '';
+  if (sizes.indexOf(estimator.size) < 0) estimator.size = sizes[0];
+
+  var st = stats[estimator.size];
+  var overallTps = allSheetsH > 0 ? allSecs / allSheetsH : 0;
+  var tps = st.sheetsH > 0 ? st.secs / st.sheetsH : overallTps;   // time to cut one sheet
+  var usedFallback = !(st.sheetsH > 0);
+  var qty = Math.max(0, Math.round(Number(estimator.qty)) || 0);
+  var daily = recentDailyCutSecs();
+
+  var controls = '<div class="estrow">'
+    + '<div><label>Size</label><select id="est_size" onchange="onEstChange()">'
+    +   sizes.map(function (s) { return '<option value="' + escapeHtml(s) + '"' + (s === estimator.size ? ' selected' : '') + '>' + escapeHtml(s) + '</option>'; }).join('')
+    + '</select></div>'
+    + '<div><label>Sheets to cut</label><input id="est_qty" type="number" min="1" step="1" value="' + qty + '" oninput="onEstChange()"></div>'
+    + '</div>';
+
+  var body;
+  if (!qty || !tps || !daily) {
+    body = '<div class="sub" style="padding:10px 2px">'
+      + (!qty ? 'Enter how many sheets need cutting.'
+        : !tps ? 'No run times recorded yet for any size — the estimate needs cutting history.'
+        : 'No cutting activity in the last 14 days to base a pace on.') + '</div>';
+  } else {
+    var needed = qty * tps;
+    var sheetsPerDay = daily / tps;
+    // Walk working days from today, spending the recent daily pace each day.
+    var remaining = needed, d2 = startOfDay(new Date()), workDays = 0, guard = 0;
+    while (remaining > 0 && guard++ < 730) {
+      var dw2 = d2.getDay();
+      if (dw2 >= 1 && dw2 <= 5) { remaining -= daily; workDays++; }
+      if (remaining > 0) d2.setDate(d2.getDate() + 1);
+    }
+    var finishLabel = d2.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    body = ''
+      + '<div class="estfinish"><div class="l">Estimated finish</div>'
+      +   '<div class="v">' + escapeHtml(finishLabel) + '</div>'
+      +   '<div class="s">' + workDays + ' working day' + (workDays === 1 ? '' : 's') + ' from today</div></div>'
+      + '<div class="esttiles">'
+      +   '<div class="rkpi"><div class="label">Machine time</div><div class="value">' + fmtDur(needed) + '</div><div class="sub">' + qty.toLocaleString() + ' sheets</div></div>'
+      +   '<div class="rkpi"><div class="label">Time / sheet</div><div class="value">' + fmtDur(tps) + '</div><div class="sub">' + (usedFallback ? 'shop average — no history for this size' : 'from ' + st.sheetsH.toLocaleString() + ' timed sheets') + '</div></div>'
+      +   '<div class="rkpi"><div class="label">Sheets / day</div><div class="value">' + (sheetsPerDay >= 10 ? Math.round(sheetsPerDay) : sheetsPerDay.toFixed(1)) + '</div><div class="sub">at recent pace</div></div>'
+      + '</div>'
+      + '<div class="estnote">Pace = ' + fmtHours(daily) + ' of actual cutting per working day (all routers, last 14 days), so idle time and other jobs are already accounted for. Mon–Fri only.</div>';
+  }
+
+  return '<div class="rcard"><h2>Time estimator</h2>'
+    + '<div class="h2sub">how long a job of this size will take at the shop\'s recent pace</div>'
+    + controls + body + '</div>';
+}
+
+function onEstChange() {
+  var s = document.getElementById('est_size'), q = document.getElementById('est_qty');
+  if (s) estimator.size = s.value;
+  if (q) estimator.qty = q.value;
+  // Re-render replaces the inputs; put focus back where the user was typing.
+  var focusId = document.activeElement && document.activeElement.id;
+  renderReport();
+  if (focusId) {
+    var el = document.getElementById(focusId);
+    if (el) el.focus();
+  }
+}
 
 function renderRepSidebar(cfg) {
   var side = document.getElementById('repside');
