@@ -345,9 +345,13 @@
   .filterhead button { font: inherit; font-size: 12px; font-weight: 500; color: var(--accent);
     background: none; border: none; cursor: pointer; padding: 0; }
   .flist { display: flex; flex-direction: column; gap: 1px; }
-  .repsearch { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); margin-bottom: 6px; }
+  .repsearchwrap { position: relative; margin-bottom: 6px; }
+  .repsearch { width: 100%; font: inherit; font-size: 13px; padding: 7px 26px 7px 9px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
   .repsearch:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .clearq { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font: inherit; font-size: 15px;
+    line-height: 1; border: none; background: none; color: var(--text-muted); cursor: pointer; padding: 2px 5px; }
+  .clearq:hover { color: var(--text-primary); }
   .frow-check { display: flex; align-items: center; gap: 9px; padding: 5px 6px; border-radius: 6px;
     cursor: pointer; font-size: 13px; }
   .frow-check:hover { background: var(--surface-2); }
@@ -355,6 +359,10 @@
   .frow-check .dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
   .frow-check .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-family: var(--font-mono); font-size: 12px; }
+  .frow-check .nm mark { background: var(--accent-wash); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+  .frow-check .fcount { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
+  .fquick { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    font-weight: 500; padding: 8px 6px 3px; }
 
   .rcard { border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; background: var(--surface-1); margin-bottom: 16px; }
   .rhead { display: flex; align-items: flex-start; gap: 14px; }
@@ -405,6 +413,12 @@
   .cmpitems select { width: 100%; font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
   .cmpitems select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cmpitems .rmitem { margin-left: auto; font: inherit; font-size: 15px; line-height: 1; border: none;
+    background: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+  .cmpitems .rmitem:hover { color: var(--delta-bad); }
+  .additem { font: inherit; font-size: 12.5px; font-weight: 500; padding: 8px; border-radius: 6px; width: 100%;
+    border: 1px dashed var(--border); background: none; color: var(--accent); cursor: pointer; margin-top: 8px; }
+  .additem:hover { background: var(--surface-2); border-color: var(--accent); }
   .rkpi .vsrow { display: flex; align-items: center; gap: 8px; margin-top: 8px;
     font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .rkpi .vsrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
@@ -1994,7 +2008,8 @@ var REPORT_TYPES = [
   { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',        dim: 'size',     filterLabel: 'Sizes',        available: true }
 ];
 
-var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', itemA: '', itemB: '' };
+var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', items: [] };
+var MAX_COMPARE_ITEMS = 6;
 var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
 var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
 var reportFilterQuery = '';                // live search text for the filter list
@@ -2140,28 +2155,44 @@ function onCompareDate() {
   renderReport();
 }
 
-/* ---- item-vs-item comparison ("Two items" mode) ---- */
+/* ---- item-vs-item comparison ("Items" mode) ---- */
 
 /** The pickable items for the current report type, in the current period. */
 function itemOptionsFor(cfg, cache) {
   var opts = reportGroupsInRange(cache, buildReportRecords(cache));
   return cfg.bucket ? opts.filter(function (k) { return k !== cfg.bucket; }) : opts;
 }
-function normalizeItemPicks(opts) {
-  if (opts.indexOf(reportState.itemA) < 0) reportState.itemA = opts[0] || '';
-  if (opts.indexOf(reportState.itemB) < 0 || reportState.itemB === reportState.itemA) {
-    reportState.itemB = opts.filter(function (k) { return k !== reportState.itemA; })[0] || '';
-  }
+/** Keep the picked list valid: drop unknowns + dupes, top up to two items. */
+function normalizeItems(opts) {
+  var seen = {}, out = [];
+  (reportState.items || []).forEach(function (k) {
+    if (opts.indexOf(k) >= 0 && !seen[k]) { seen[k] = true; out.push(k); }
+  });
+  var fill = opts.filter(function (k) { return !seen[k]; });
+  while (out.length < 2 && fill.length) out.push(fill.shift());
+  reportState.items = out.slice(0, MAX_COMPARE_ITEMS);
 }
-function onCompareItem() {
-  var a = document.getElementById('cmpitem_a'), b = document.getElementById('cmpitem_b');
-  if (a) reportState.itemA = a.value;
-  if (b) reportState.itemB = b.value;
+function onCompareItem(i) {
+  var s = document.getElementById('cmpitem_' + i);
+  if (s) {
+    // picking an item already used in another slot is a no-op (revert the select)
+    if (reportState.items.indexOf(s.value) >= 0 && reportState.items[i] !== s.value) { renderReport(); return; }
+    reportState.items[i] = s.value;
+  }
+  renderReport();
+}
+function addCompareItem() {
+  var opts = itemOptionsFor(reportCfg(), jobsForReport());
+  var next = opts.filter(function (k) { return reportState.items.indexOf(k) < 0; })[0];
+  if (next && reportState.items.length < MAX_COMPARE_ITEMS) { reportState.items.push(next); renderReport(); }
+}
+function removeCompareItem(i) {
+  reportState.items.splice(i, 1);
   renderReport();
 }
 
-/** Group values present in the current range, most runs first (for the filter list). */
-function reportGroupsInRange(cache, records) {
+/** Run counts per group value in the current range (feeds the filter list). */
+function reportGroupCounts(cache, records) {
   var r = reportRange(), dim = reportCfg().dim, n = {};
   records.forEach(function (rec) {
     if (rec.when < r.start || rec.when >= r.end) return;
@@ -2169,6 +2200,11 @@ function reportGroupsInRange(cache, records) {
     if (g === null) return;
     n[g] = (n[g] || 0) + 1;
   });
+  return n;
+}
+/** Group values present in the current range, most runs first. */
+function reportGroupsInRange(cache, records) {
+  var n = reportGroupCounts(cache, records);
   return Object.keys(n).sort(function (a, b) { return n[b] - n[a]; });
 }
 function reportSelectedSet(optionKeys) {
@@ -2212,7 +2248,7 @@ function reportAgg(records, range, dim, sel, cfg, metric) {
 function setReportType(key) {
   reportState.type = key;
   reportState.sel = {};                        // selection is dimension-specific
-  reportState.itemA = reportState.itemB = ''; // so are the item-compare picks
+  reportState.items = [];                      // so are the item-compare picks
   reportFilterQuery = '';
   renderReport();
 }
@@ -2253,40 +2289,51 @@ function donutSvg(segs) {
     + ring + '</svg>';
 }
 
-function trendSvg(days, cmpDays, cmpStyle) {
+/**
+ * Any number of day-series on one chart. Each series: {days:[{date,count}],
+ * stroke, width, dash, opacity, area}. Series are stretched to the full width
+ * (so unequal periods align start-to-end) and drawn in order, first = bottom.
+ * Date ticks come from tickDays.
+ */
+function multiTrendSvg(seriesList, tickDays) {
   var W = 920, H = 150, padB = 22, padT = 10, padX = 4;
-  var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.count; })));
-  if (cmpDays && cmpDays.length) max = Math.max(max, Math.max.apply(null, cmpDays.map(function (d) { return d.count; })));
-  var n = days.length, span = W - padX * 2, plotH = H - padB - padT;
-  var xAt = function (i) { return padX + (n <= 1 ? span / 2 : (i / (n - 1)) * span); };
+  var max = 1;
+  seriesList.forEach(function (s) { s.days.forEach(function (d) { if (d.count > max) max = d.count; }); });
+  var span = W - padX * 2, plotH = H - padB - padT;
   var yAt = function (v) { return padT + plotH - (v / max) * plotH; };
-  var pts = days.map(function (d, i) { return xAt(i) + ',' + yAt(d.count).toFixed(1); });
-  var area = 'M' + xAt(0) + ',' + (H - padB) + 'L' + pts.join('L') + 'L' + xAt(n - 1) + ',' + (H - padB) + 'Z';
-  // second series (dashed grey by default), stretched to the same width so
-  // periods of different lengths still line up start-to-end
-  var cmpLine = '';
-  if (cmpDays && cmpDays.length) {
-    var cs = cmpStyle || { stroke: 'var(--text-muted)', dash: '5 4', width: 1.6, opacity: 0.8 };
-    var n2 = cmpDays.length;
-    var xAt2 = function (i) { return padX + (n2 <= 1 ? span / 2 : (i / (n2 - 1)) * span); };
-    var pts2 = cmpDays.map(function (d, i) { return xAt2(i) + ',' + yAt(d.count).toFixed(1); });
-    cmpLine = '<polyline points="' + pts2.join(' ') + '" fill="none" stroke="' + cs.stroke + '" stroke-width="' + (cs.width || 2) + '" '
-      + (cs.dash ? 'stroke-dasharray="' + cs.dash + '" ' : '')
-      + 'stroke-linejoin="round" stroke-linecap="round" opacity="' + (cs.opacity || 1) + '"/>';
-  }
-  // a few date ticks
-  var ticks = '';
-  var step = Math.max(1, Math.floor(n / 6));
-  for (var i = 0; i < n; i += step) {
-    ticks += '<text x="' + xAt(i).toFixed(1) + '" y="' + (H - 6) + '" fill="var(--text-muted)" font-size="10" '
-      + 'font-family="var(--font-mono)" text-anchor="middle">' + fmtDateShort(days[i].date) + '</text>';
+  var xFor = function (n) { return function (i) { return padX + (n <= 1 ? span / 2 : (i / (n - 1)) * span); }; };
+  var areas = '', lines = '';
+  seriesList.forEach(function (s) {
+    var n = s.days.length;
+    if (!n) return;
+    var xAt = xFor(n);
+    var pts = s.days.map(function (d, i) { return xAt(i) + ',' + yAt(d.count).toFixed(1); });
+    if (s.area) areas += '<path d="M' + xAt(0) + ',' + (H - padB) + 'L' + pts.join('L') + 'L' + xAt(n - 1) + ',' + (H - padB)
+      + 'Z" fill="' + s.stroke + '" opacity="0.10"/>';
+    lines += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + s.stroke + '" stroke-width="' + (s.width || 2) + '" '
+      + (s.dash ? 'stroke-dasharray="' + s.dash + '" ' : '')
+      + 'stroke-linejoin="round" stroke-linecap="round" opacity="' + (s.opacity || 1) + '"/>';
+  });
+  var ticks = '', td = tickDays || (seriesList[0] && seriesList[0].days) || [];
+  var xT = xFor(td.length), step = Math.max(1, Math.floor(td.length / 6));
+  for (var i = 0; i < td.length; i += step) {
+    ticks += '<text x="' + xT(i).toFixed(1) + '" y="' + (H - 6) + '" fill="var(--text-muted)" font-size="10" '
+      + 'font-family="var(--font-mono)" text-anchor="middle">' + fmtDateShort(td[i].date) + '</text>';
   }
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">'
     + '<line x1="' + padX + '" x2="' + (W - padX) + '" y1="' + (H - padB) + '" y2="' + (H - padB) + '" stroke="var(--baseline)" stroke-width="1"/>'
-    + '<path d="' + area + '" fill="var(--accent)" opacity="0.10"/>'
-    + cmpLine
-    + '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-    + ticks + '</svg>';
+    + areas + lines + ticks + '</svg>';
+}
+
+/** Main series (accent, filled) with an optional second one behind it. */
+function trendSvg(days, cmpDays, cmpStyle) {
+  var list = [];
+  if (cmpDays && cmpDays.length) {
+    var cs = cmpStyle || { stroke: 'var(--text-muted)', dash: '5 4', width: 1.6, opacity: 0.8 };
+    list.push({ days: cmpDays, stroke: cs.stroke, dash: cs.dash, width: cs.width, opacity: cs.opacity });
+  }
+  list.push({ days: days, stroke: 'var(--accent)', width: 2, area: true });
+  return multiTrendSvg(list, days);
 }
 
 /* ---- render ---- */
@@ -2319,10 +2366,10 @@ function renderReport() {
   var sel = reportSelectedSet(options);
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
 
-  // "Two items" mode swaps the whole report body for a head-to-head layout.
+  // "Items" mode swaps the whole report body for a head-to-head layout.
   if (reportState.compare === 'items') {
     var iopts = cfg.bucket ? options.filter(function (k) { return k !== cfg.bucket; }) : options;
-    normalizeItemPicks(iopts);
+    normalizeItems(iopts);
     main.innerHTML = head + itemCompareHtml(cfg, allRecords, range);
     return;
   }
@@ -2652,61 +2699,65 @@ function deltaPtsHtml(cur, prev) {
 }
 
 /**
- * Head-to-head report body for "Compare with → Two items": item A vs item B of
- * the current report type, over the selected period.
+ * Head-to-head report body for "Compare with → Items": any number of items of
+ * the current report type, side by side over the selected period. With exactly
+ * two items the tiles and table also show change badges.
  */
 function itemCompareHtml(cfg, records, range) {
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
-  var A = reportState.itemA, B = reportState.itemB;
-  if (!A || !B) {
+  var items = reportState.items;
+  if (items.length < 2) {
     return '<div class="rplaceholder"><div class="t">Nothing to compare</div>'
       + '<div class="d">This period needs at least two ' + escapeHtml(cfg.filterLabel.toLowerCase())
       + ' with activity — widen the date range or pick another report type.</div></div>';
   }
-  var selA = {}, selB = {}; selA[A] = true; selB[B] = true;
-  var aA = reportAgg(records, range, dim, selA, cfg, metric);
-  var aB = reportAgg(records, range, dim, selB, cfg, metric);
-  var colA = jobColor(0), colB = jobColor(1);
+  var two = items.length === 2;
   var hoursPartial = range.start < HOURS_SINCE;
   var short = function (s) { return s.length > 22 ? s.slice(0, 21) + '…' : s; };
+  // one aggregate per item, plus its color and time-to-cut-one-sheet
+  var its = items.map(function (key, i) {
+    var s = {}; s[key] = true;
+    var a = reportAgg(records, range, dim, s, cfg, metric);
+    var g = a.groups[key] || { sheetsH: 0, secs: 0 };
+    return { key: key, col: jobColor(i), agg: a, tps: g.sheetsH > 0 ? g.secs / g.sheetsH : 0 };
+  });
 
   // chips + measure toggle
-  var chip = function (name, col) {
+  var chips = its.map(function (it) {
     return '<span class="rchip" style="display:inline-flex;align-items:center;gap:8px">'
-      + '<span style="width:9px;height:9px;border-radius:3px;flex:none;background:' + col + '"></span>'
-      + escapeHtml(name) + '</span>';
-  };
+      + '<span style="width:9px;height:9px;border-radius:3px;flex:none;background:' + it.col + '"></span>'
+      + escapeHtml(it.key) + '</span>';
+  }).join('<span class="sub" style="margin:0">vs</span>');
   var seg = '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
     return '<button class="' + (metric === m ? 'on' : '') + '" onclick="setReportMetric(' + jsStr(m) + ')">'
       + REPORT_METRICS[m].label + '</button>';
   }).join('') + '</div>';
   var headRow = '<div class="rcard" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">'
-    + chip(A, colA) + '<span class="sub" style="margin:0">vs</span>' + chip(B, colB)
+    + chips
     + '<span style="flex:1"></span><span class="seclabel" style="margin:0">Measure by</span>' + seg
     + (metric === 'hours' && hoursPartial
       ? '<span class="sub" style="margin:0;flex-basis:100%">Run times only exist from Jun 17 — earlier runs show 0 h.</span>' : '')
     + '</div>';
 
-  // time to cut one sheet, over timed sheets only
-  var gA = aA.groups[A] || { sheetsH: 0, secs: 0 }, gB = aB.groups[B] || { sheetsH: 0, secs: 0 };
-  var tpsA = gA.sheetsH > 0 ? gA.secs / gA.sheetsH : 0;
-  var tpsB = gB.sheetsH > 0 ? gB.secs / gB.sheetsH : 0;
-
   var count = function (v) { return v.toLocaleString(); };
   var dur = function (v) { return v ? fmtDur(v) : '—'; };
+  var allSecs = its.every(function (it) { return it.agg.totalSecs > 0; });
+  var allTps = its.every(function (it) { return it.tps > 0; });
   var tiles = [
-    { label: 'Runs', a: aA.totalRuns, b: aB.totalRuns, fmt: count, badge: true },
-    { label: 'Sheets', a: aA.totalSheets, b: aB.totalSheets, fmt: count, badge: true },
-    { label: 'Machine time', a: aA.totalSecs, b: aB.totalSecs, fmt: dur,
-      badge: !hoursPartial && aA.totalSecs > 0 && aB.totalSecs > 0, sub: hoursPartial ? 'Jun 17 on' : '' },
-    { label: 'Time / sheet', a: tpsA, b: tpsB, fmt: dur, invert: true,
-      badge: tpsA > 0 && tpsB > 0, sub: 'lower is better' }
+    { label: 'Runs', get: function (it) { return it.agg.totalRuns; }, fmt: count, badge: two },
+    { label: 'Sheets', get: function (it) { return it.agg.totalSheets; }, fmt: count, badge: two },
+    { label: 'Machine time', get: function (it) { return it.agg.totalSecs; }, fmt: dur,
+      badge: two && !hoursPartial && allSecs, sub: hoursPartial ? 'Jun 17 on' : '' },
+    { label: 'Time / sheet', get: function (it) { return it.tps; }, fmt: dur, invert: true,
+      badge: two && allTps, sub: 'lower is better' }
   ];
   var kpiHtml = '<div class="rcard rkpis">' + tiles.map(function (t) {
     return '<div class="rkpi"><div class="label">' + escapeHtml(t.label) + '</div>'
-      + '<div class="vsrow"><span class="dot" style="background:' + colA + '"></span>' + t.fmt(t.a) + '</div>'
-      + '<div class="vsrow"><span class="dot" style="background:' + colB + '"></span>' + t.fmt(t.b) + '</div>'
-      + (t.badge ? '<div class="kdelta">' + deltaHtml(t.a, t.b, t.invert) + ' <span class="dvs">vs ' + escapeHtml(short(B)) + '</span></div>' : '')
+      + its.map(function (it) {
+          return '<div class="vsrow"><span class="dot" style="background:' + it.col + '"></span>' + t.fmt(t.get(it)) + '</div>';
+        }).join('')
+      + (t.badge ? '<div class="kdelta">' + deltaHtml(t.get(its[0]), t.get(its[1]), t.invert)
+          + ' <span class="dvs">vs ' + escapeHtml(short(its[1].key)) + '</span></div>' : '')
       + '<div class="sub">' + escapeHtml(t.sub || '') + '</div></div>';
   }).join('') + '</div>';
 
@@ -2720,53 +2771,65 @@ function itemCompareHtml(cfg, records, range) {
     }
     return out;
   };
-  var daysA = mkDays(aA.byDay), daysB = mkDays(aB.byDay);
-  var legendDot = function (name, col) {
+  var series = its.map(function (it) { return { days: mkDays(it.agg.byDay), stroke: it.col, width: 2 }; });
+  var legend = its.map(function (it) {
     return '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:'
-      + col + '"></span>' + escapeHtml(short(name)) + '</span>';
-  };
-  var trendCard = daysA.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
-    + '<div class="h2sub">' + legendDot(A, colA) + ' &nbsp;·&nbsp; ' + legendDot(B, colB) + '</div>'
-    + trendSvg(daysA, daysB, { stroke: colB, width: 2, opacity: 1 }) + '</div>' : '';
+      + it.col + '"></span>' + escapeHtml(short(it.key)) + '</span>';
+  }).join(' &nbsp;·&nbsp; ');
+  var trendCard = series[0].days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
+    + '<div class="h2sub">' + legend + '</div>'
+    + multiTrendSvg(series, series[0].days) + '</div>' : '';
 
   // share of the whole period, for context
   var allAgg = reportAgg(records, range, dim, null, cfg, metric);
   var pick = function (a) { return metric === 'sheets' ? a.totalSheets : metric === 'hours' ? a.totalSecs : a.totalRuns; };
   var total = pick(allAgg);
-  var shareA = total ? (pick(aA) / total) * 100 : 0;
-  var shareB = total ? (pick(aB) / total) * 100 : 0;
+  its.forEach(function (it) { it.val = pick(it.agg); it.share = total ? (it.val / total) * 100 : 0; });
 
   // highlights
   var hi = [];
-  var lead = pick(aA) >= pick(aB) ? { n: A, v: pick(aA), o: pick(aB) } : { n: B, v: pick(aB), o: pick(aA) };
-  hi.push('<strong>' + escapeHtml(lead.n) + '</strong> leads on ' + mInfo.noun + ': '
-    + mInfo.fmt(lead.v) + ' vs ' + mInfo.fmt(lead.o) + ' ' + deltaHtml(lead.v, lead.o) + '.');
-  if (tpsA > 0 && tpsB > 0 && Math.round(tpsA) !== Math.round(tpsB)) {
-    var fast = tpsA <= tpsB ? { n: A, v: tpsA, o: tpsB } : { n: B, v: tpsB, o: tpsA };
-    hi.push('<strong>' + escapeHtml(fast.n) + '</strong> cuts faster: ' + fmtDur(fast.v) + ' vs ' + fmtDur(fast.o) + ' per sheet.');
+  var ranked = its.slice().sort(function (a, b) { return b.val - a.val; });
+  hi.push('<strong>' + escapeHtml(ranked[0].key) + '</strong> leads on ' + mInfo.noun + ': '
+    + mInfo.fmt(ranked[0].val) + ' vs ' + mInfo.fmt(ranked[1].val)
+    + (two ? '' : ' for ' + escapeHtml(short(ranked[1].key)))
+    + ' ' + deltaHtml(ranked[0].val, ranked[1].val) + '.');
+  var timed = its.filter(function (it) { return it.tps > 0; });
+  if (timed.length >= 2) {
+    var fast = timed.slice().sort(function (a, b) { return a.tps - b.tps; });
+    if (Math.round(fast[0].tps) !== Math.round(fast[1].tps)) {
+      hi.push('<strong>' + escapeHtml(fast[0].key) + '</strong> cuts fastest: ' + fmtDur(fast[0].tps)
+        + ' per sheet vs ' + fmtDur(fast[1].tps) + (two ? '' : ' for the next best') + '.');
+    }
   }
-  hi.push('Together they account for <strong>' + Math.round(shareA + shareB) + '%</strong> of the period\'s ' + mInfo.noun
-    + ' (' + Math.round(shareA) + '% + ' + Math.round(shareB) + '%).');
+  var shareSum = its.reduce(function (t, it) { return t + it.share; }, 0);
+  hi.push('Together the ' + its.length + ' account for <strong>' + Math.round(shareSum) + '%</strong> of the period\'s '
+    + mInfo.noun + ' (' + its.map(function (it) { return Math.round(it.share) + '%'; }).join(' + ') + ').');
   var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
-  // measures table: one row per measure, A / B / difference
-  var trow = function (label, va, vb, fmt, invert, diff) {
+  // measures table: one row per measure, one column per item
+  var trow = function (label, get, fmt, invert, diffOverride) {
+    var diff = two
+      ? (diffOverride !== undefined ? diffOverride : deltaHtml(get(its[0]), get(its[1]), invert))
+      : null;
     return '<tr><td>' + escapeHtml(label) + '</td>'
-      + '<td class="num">' + fmt(va) + '</td><td class="num">' + fmt(vb) + '</td>'
-      + '<td class="num">' + (diff !== undefined ? diff : deltaHtml(va, vb, invert)) + '</td></tr>';
+      + its.map(function (it) { return '<td class="num">' + fmt(get(it)) + '</td>'; }).join('')
+      + (diff !== null ? '<td class="num">' + diff + '</td>' : '') + '</tr>';
   };
   var tableCard = '<div class="rcard"><h2>Side by side</h2>'
     + '<div class="tablewrap"><table><thead><tr><th>Measure</th>'
-    + '<th class="num">' + escapeHtml(short(A)) + '</th><th class="num">' + escapeHtml(short(B)) + '</th>'
-    + '<th class="num">A vs B</th></tr></thead><tbody>'
-    + trow('Runs', aA.totalRuns, aB.totalRuns, count)
-    + trow('Sheets', aA.totalSheets, aB.totalSheets, count)
-    + trow('Machine time', aA.totalSecs, aB.totalSecs, dur, false,
-        (!hoursPartial && aA.totalSecs > 0 && aB.totalSecs > 0) ? undefined : '&mdash;')
-    + trow('Time / sheet', tpsA, tpsB, dur, true, (tpsA > 0 && tpsB > 0) ? undefined : '&mdash;')
-    + trow('Share of period ' + mInfo.noun, shareA, shareB,
-        function (v) { return Math.round(v) + '%'; }, false, deltaPtsHtml(shareA, shareB))
+    + its.map(function (it) {
+        return '<th class="num"><span style="display:inline-flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:'
+          + it.col + '"></span>' + escapeHtml(short(it.key)) + '</span></th>';
+      }).join('')
+    + (two ? '<th class="num">Difference</th>' : '') + '</tr></thead><tbody>'
+    + trow('Runs', function (it) { return it.agg.totalRuns; }, count)
+    + trow('Sheets', function (it) { return it.agg.totalSheets; }, count)
+    + trow('Machine time', function (it) { return it.agg.totalSecs; }, dur, false,
+        (!hoursPartial && allSecs) ? undefined : '&mdash;')
+    + trow('Time / sheet', function (it) { return it.tps; }, dur, true, allTps ? undefined : '&mdash;')
+    + trow('Share of period ' + mInfo.noun, function (it) { return it.share; },
+        function (v) { return Math.round(v) + '%'; }, false, two ? deltaPtsHtml(its[0].share, its[1].share) : undefined)
     + '</tbody></table></div></div>';
 
   return headRow + kpiHtml + trendCard + hiCard + tableCard
@@ -2887,7 +2950,7 @@ function renderRepSidebar(cfg) {
       + '<div><label>End</label><input id="rep_end" type="date" value="' + reportState.end + '" onchange="onReportDate()"></div></div>'
     : '';
 
-  var cmpModes = [['', 'None'], ['prev', 'Previous period'], ['custom', 'Custom range'], ['items', 'Two items']];
+  var cmpModes = [['', 'None'], ['prev', 'Previous period'], ['custom', 'Custom range'], ['items', 'Items']];
   var cmpBtns = cmpModes.map(function (m) {
     return '<button class="' + (reportState.compare === m[0] ? 'on' : '') + '" onclick="setReportCompare(' + jsStr(m[0]) + ')">'
       + m[1] + '</button>';
@@ -2899,19 +2962,22 @@ function renderRepSidebar(cfg) {
       + '<div><label>End</label><input id="cmp_end" type="date" value="' + reportState.cend + '" onchange="onCompareDate()"></div></div>';
   } else if (reportState.compare === 'items') {
     var iopts = itemOptionsFor(cfg, cache);
-    normalizeItemPicks(iopts);
+    normalizeItems(iopts);
     var optHtml = function (selKey) {
       return iopts.map(function (k) {
         return '<option value="' + escapeHtml(k) + '"' + (k === selKey ? ' selected' : '') + '>' + escapeHtml(k) + '</option>';
       }).join('');
     };
+    var itemRows = reportState.items.map(function (key, i) {
+      return '<div><label><span class="dot" style="background:' + jobColor(i) + '"></span>Item ' + (i + 1)
+        + (reportState.items.length > 2
+          ? '<button class="rmitem" onclick="removeCompareItem(' + i + ')" title="Remove this item">&#10005;</button>' : '')
+        + '</label><select id="cmpitem_' + i + '" onchange="onCompareItem(' + i + ')">' + optHtml(key) + '</select></div>';
+    }).join('');
+    var addBtn = (iopts.length > reportState.items.length && reportState.items.length < MAX_COMPARE_ITEMS)
+      ? '<button class="additem" onclick="addCompareItem()">+ Add an item</button>' : '';
     cmpExtra = iopts.length >= 2
-      ? '<div class="cmpitems">'
-        + '<div><label><span class="dot" style="background:' + jobColor(0) + '"></span>Item A</label>'
-        + '<select id="cmpitem_a" onchange="onCompareItem()">' + optHtml(reportState.itemA) + '</select></div>'
-        + '<div><label><span class="dot" style="background:' + jobColor(1) + '"></span>Item B</label>'
-        + '<select id="cmpitem_b" onchange="onCompareItem()">' + optHtml(reportState.itemB) + '</select></div>'
-        + '</div>'
+      ? '<div class="cmpitems">' + itemRows + '</div>' + addBtn
       : '<div class="sub" style="margin-top:2px">Needs at least two ' + escapeHtml(cfg.filterLabel.toLowerCase()) + ' with activity in this period.</div>';
   } else if (cmpR) {
     cmpExtra = '<div class="sub" style="margin-top:2px">vs ' + escapeHtml(rangeLabel(cmpR)) + '</div>';
@@ -2924,8 +2990,10 @@ function renderRepSidebar(cfg) {
   var filterList = (cfg.available && reportState.compare !== 'items') ? '<div class="group"><div class="filterhead">'
       + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
       + '<button onclick="reportSelectAll()">' + (anyChecked ? 'Clear' : 'All selected') + '</button></div>'
-      + '<input id="rep_search" class="repsearch" placeholder="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '&hellip;"'
+      + '<div class="repsearchwrap"><input id="rep_search" class="repsearch" placeholder="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '&hellip;"'
       + ' value="' + escapeHtml(reportFilterQuery) + '" oninput="onReportSearch(this.value)" autocomplete="off">'
+      + '<button class="clearq" id="rep_clearq" onclick="clearReportSearch()" title="Clear search"'
+      + ' style="display:' + (reportFilterQuery ? '' : 'none') + '">&#10005;</button></div>'
       + '<div class="flist" id="rep_filter_results"></div></div>' : '';
 
   side.innerHTML = '<h3>Build a report</h3>'
@@ -2936,43 +3004,75 @@ function renderRepSidebar(cfg) {
   renderReportFilterResults();
 }
 
+/** escapeHtml plus a <mark> around the first match of the search query. */
+function markMatch(text, q) {
+  var i = q ? text.toLowerCase().indexOf(q) : -1;
+  if (i < 0) return escapeHtml(text);
+  return escapeHtml(text.slice(0, i)) + '<mark>' + escapeHtml(text.slice(i, i + q.length)) + '</mark>'
+    + escapeHtml(text.slice(i + q.length));
+}
+
 /**
  * The filter options for the current report, matched against the search box in
- * real time — no long scrolling list. Empty search shows just what's selected
- * (unselected = everything is included), typing surfaces matches.
+ * real time — no long scrolling list. Empty search shows what's selected plus a
+ * quick-select of the period's busiest items (unselected = everything is
+ * included); typing surfaces matches with the hit highlighted.
  */
 function renderReportFilterResults() {
   var host = document.getElementById('rep_filter_results');
   if (!host) return;
   var cfg = reportCfg(), cache = jobsForReport();
-  var options = reportGroupsInRange(cache, buildReportRecords(cache));
+  var counts = reportGroupCounts(cache, buildReportRecords(cache));
+  var options = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
   if (cfg.hideBucket) options = options.filter(function (k) { return k !== cfg.bucket; });
   var idx = {}; options.forEach(function (k, i) { idx[k] = i; });
 
   var q = (reportFilterQuery || '').trim().toLowerCase();
   var checked = options.filter(function (k) { return reportState.sel[k]; });
-  var list = q
-    ? checked.concat(options.filter(function (k) { return !reportState.sel[k] && k.toLowerCase().indexOf(q) >= 0; }))
-    : checked.slice();
-
-  var CAP = 24, extra = list.length - CAP;
-  var rows = list.slice(0, CAP).map(function (k) {
+  var row = function (k) {
     var i = idx[k];
     return '<label class="frow-check"><input type="checkbox"' + (reportState.sel[k] ? ' checked' : '')
       + ' onchange="toggleReportFilter(' + jsStr(k) + ')">'
       + '<span class="dot" style="background:' + (i < 8 ? jobColor(i) : REPORT_OTHER) + '"></span>'
-      + '<span class="nm">' + escapeHtml(k) + '</span></label>';
-  }).join('');
+      + '<span class="nm">' + markMatch(k, q) + '</span>'
+      + '<span class="fcount" title="runs this period">' + counts[k] + '</span></label>';
+  };
 
-  var hint = '';
-  if (!options.length) hint = '<div class="sub" style="padding:6px">No data in this period.</div>';
-  else if (extra > 0) hint = '<div class="sub" style="padding:6px 6px 0">+' + extra + ' more — keep typing to narrow</div>';
-  else if (!q && !checked.length) hint = '<div class="sub" style="padding:6px 6px 0">'
-    + options.length + ' ' + escapeHtml(cfg.filterLabel.toLowerCase()) + ' · type to filter (all shown by default)</div>';
+  var rows = '', hint = '';
+  if (!options.length) {
+    hint = '<div class="sub" style="padding:6px">No data in this period.</div>';
+  } else if (q) {
+    var list = checked.concat(options.filter(function (k) { return !reportState.sel[k] && k.toLowerCase().indexOf(q) >= 0; }));
+    var CAP = 24, extra = list.length - CAP;
+    rows = list.slice(0, CAP).map(row).join('');
+    if (!list.length) hint = '<div class="sub" style="padding:6px">No matches for &ldquo;' + escapeHtml(reportFilterQuery.trim()) + '&rdquo;.</div>';
+    else if (extra > 0) hint = '<div class="sub" style="padding:6px 6px 0">+' + extra + ' more — keep typing to narrow</div>';
+  } else {
+    // no search: selection first, then a quick-select of the busiest items
+    var TOPN = 8;
+    var top = options.filter(function (k) { return !reportState.sel[k]; }).slice(0, TOPN);
+    rows = checked.map(row).join('')
+      + (top.length ? '<div class="fquick">Top ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '</div>' + top.map(row).join('') : '');
+    hint = '<div class="sub" style="padding:6px 6px 0">' + options.length + ' ' + escapeHtml(cfg.filterLabel.toLowerCase())
+      + ' this period · unchecked = all included</div>';
+  }
   host.innerHTML = rows + hint;
 }
 
-function onReportSearch(v) { reportFilterQuery = v; renderReportFilterResults(); }
+function onReportSearch(v) {
+  reportFilterQuery = v;
+  var c = document.getElementById('rep_clearq');
+  if (c) c.style.display = v ? '' : 'none';
+  renderReportFilterResults();
+}
+function clearReportSearch() {
+  reportFilterQuery = '';
+  var inp = document.getElementById('rep_search');
+  if (inp) { inp.value = ''; inp.focus(); }
+  var c = document.getElementById('rep_clearq');
+  if (c) c.style.display = 'none';
+  renderReportFilterResults();
+}
 
 // Paint the static chrome (theme + icons) before the first data render.
 applyTheme(currentTheme());
