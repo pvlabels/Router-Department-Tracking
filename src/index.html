@@ -389,6 +389,16 @@
   .hbar .fill { height: 100%; border-radius: 999px; }
   .rhi { background: var(--hl-bg); }
 
+  /* ---------- period comparison ---------- */
+  .delta { font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .delta.up { color: var(--delta-good); }
+  .delta.down { color: var(--delta-bad); }
+  .delta.flat { color: var(--text-muted); }
+  .dvs { color: var(--text-muted); font-size: 11.5px; font-weight: 400; }
+  .rkpi .kdelta { margin-top: 7px; }
+  .hbar .val .prev { color: var(--text-muted); font-weight: 400; }
+  .hbar .track.cmp { height: 5px; margin-top: 3px; opacity: .5; }
+
   /* ---------- time estimator (Size report) ---------- */
   .estrow { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
   .estrow > div { display: flex; flex-direction: column; }
@@ -429,6 +439,7 @@
       --text-primary:#111; --text-secondary:#555; --text-muted:#888;
       --border:#d8d8d8; --border-strong:#000; --grid:#e6e6e6; --baseline:#dcdcdc;
       --accent:#0070f3; --accent-wash:#f2f7ff;
+      --delta-good:#0f9d58; --delta-bad:#e00000;
       --job-0:#0070f3; --job-1:#45a557; --job-2:#f5a623; --job-3:#7928ca;
       --job-4:#29bc9b; --job-5:#eb367f; --job-6:#e00000; --job-7:#0761d1;
     }
@@ -1973,7 +1984,7 @@ var REPORT_TYPES = [
   { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',        dim: 'size',     filterLabel: 'Sizes',        available: true }
 ];
 
-var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {} };
+var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '' };
 var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
 var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
 var reportFilterQuery = '';                // live search text for the filter list
@@ -2083,6 +2094,40 @@ function reportPresetLabel(p) {
   return { week: 'This week', month: 'This month', quarter: 'This quarter', ytd: 'Year to date', last30: 'Last 30 days' }[p] || p;
 }
 
+/* ---- comparison period ---- */
+
+// 'prev' = the same number of days immediately before the report period;
+// 'custom' = user-picked dates. (No "same period last year" preset — the
+// Production History only reaches back to Jan 2026, so last year is all zeros.)
+function compareRange() {
+  if (!reportState.compare) return null;
+  var r = reportRange();
+  if (reportState.compare === 'prev') {
+    var len = r.end.getTime() - r.start.getTime();
+    return { start: new Date(r.start.getTime() - len), end: new Date(r.start.getTime()) };
+  }
+  if (!reportState.cstart || !reportState.cend) return null;
+  var s = parseLocalDate(reportState.cstart);
+  var e = new Date(parseLocalDate(reportState.cend).getTime() + 86400000);
+  return e > s ? { start: s, end: e } : null;
+}
+function rangeLabel(r) { return fmtDate(r.start) + ' – ' + fmtDate(new Date(r.end.getTime() - 86400000)); }
+function setReportCompare(m) {
+  reportState.compare = m;
+  if (m === 'custom' && (!reportState.cstart || !reportState.cend)) {
+    // seed the pickers with the previous period so the report compares instantly
+    var r = reportRange(), len = r.end.getTime() - r.start.getTime();
+    reportState.cstart = dayKey(new Date(r.start.getTime() - len));
+    reportState.cend = dayKey(new Date(r.start.getTime() - 86400000));
+  }
+  renderReport();
+}
+function onCompareDate() {
+  reportState.cstart = document.getElementById('cmp_start').value || reportState.cstart;
+  reportState.cend = document.getElementById('cmp_end').value || reportState.cend;
+  renderReport();
+}
+
 /** Group values present in the current range, most runs first (for the filter list). */
 function reportGroupsInRange(cache, records) {
   var r = reportRange(), dim = reportCfg().dim, n = {};
@@ -2099,6 +2144,35 @@ function reportSelectedSet(optionKeys) {
   if (!chosen.length) return null;            // none checked = all
   var set = {}; chosen.forEach(function (k) { set[k] = true; });
   return set;
+}
+
+/**
+ * Filter records to a range + selection and aggregate per group. Used for the
+ * report period and, when a comparison is on, again for the comparison period
+ * (same dimension, same selection — only the dates differ).
+ */
+function reportAgg(records, range, dim, sel, cfg, metric) {
+  var inRange = records.filter(function (rec) {
+    if (rec.when < range.start || rec.when >= range.end) return false;
+    var g = recordGroup(rec, dim);
+    if (g === null) return false;               // e.g. a non-PS run in a press-sheet report
+    return sel === null || sel[g];
+  });
+  // Customer / Part # drop their catch-all bucket entirely (not just from charts).
+  var recs = cfg.hideBucket ? inRange.filter(function (rec) { return recordGroup(rec, dim) !== cfg.bucket; }) : inRange;
+  var a = { recs: recs, hiddenCount: inRange.length - recs.length,
+    groups: {}, totalRuns: 0, totalSheets: 0, totalSecs: 0, byDay: {}, attributed: 0 };
+  recs.forEach(function (rec) {
+    var g = recordGroup(rec, dim);
+    var o = a.groups[g] || (a.groups[g] = { key: g, runs: 0, sheets: 0, secs: 0, sheetsH: 0 });
+    o.runs++; o.sheets += (rec.sheets || 0); o.secs += rec.seconds;
+    // sheets that carry a run time, so time-per-sheet divides like by like
+    if (rec.seconds > 0) o.sheetsH += (rec.sheets || 0);
+    a.totalRuns++; a.totalSheets += (rec.sheets || 0); a.totalSecs += rec.seconds;
+    var dk = dayKey(rec.when); a.byDay[dk] = (a.byDay[dk] || 0) + metricValue(rec, metric);
+    if (!cfg.bucket || g !== cfg.bucket) a.attributed++;
+  });
+  return a;
 }
 
 /* ---- interaction ---- */
@@ -2146,14 +2220,25 @@ function donutSvg(segs) {
     + ring + '</svg>';
 }
 
-function trendSvg(days) {
+function trendSvg(days, cmpDays) {
   var W = 920, H = 150, padB = 22, padT = 10, padX = 4;
   var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.count; })));
+  if (cmpDays && cmpDays.length) max = Math.max(max, Math.max.apply(null, cmpDays.map(function (d) { return d.count; })));
   var n = days.length, span = W - padX * 2, plotH = H - padB - padT;
   var xAt = function (i) { return padX + (n <= 1 ? span / 2 : (i / (n - 1)) * span); };
   var yAt = function (v) { return padT + plotH - (v / max) * plotH; };
   var pts = days.map(function (d, i) { return xAt(i) + ',' + yAt(d.count).toFixed(1); });
   var area = 'M' + xAt(0) + ',' + (H - padB) + 'L' + pts.join('L') + 'L' + xAt(n - 1) + ',' + (H - padB) + 'Z';
+  // comparison series: dashed grey, stretched to the same width so periods of
+  // different lengths still line up start-to-end
+  var cmpLine = '';
+  if (cmpDays && cmpDays.length) {
+    var n2 = cmpDays.length;
+    var xAt2 = function (i) { return padX + (n2 <= 1 ? span / 2 : (i / (n2 - 1)) * span); };
+    var pts2 = cmpDays.map(function (d, i) { return xAt2(i) + ',' + yAt(d.count).toFixed(1); });
+    cmpLine = '<polyline points="' + pts2.join(' ') + '" fill="none" stroke="var(--text-muted)" stroke-width="1.6" '
+      + 'stroke-dasharray="5 4" stroke-linejoin="round" stroke-linecap="round" opacity="0.8"/>';
+  }
   // a few date ticks
   var ticks = '';
   var step = Math.max(1, Math.floor(n / 6));
@@ -2164,6 +2249,7 @@ function trendSvg(days) {
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">'
     + '<line x1="' + padX + '" x2="' + (W - padX) + '" y1="' + (H - padB) + '" y2="' + (H - padB) + '" stroke="var(--baseline)" stroke-width="1"/>'
     + '<path d="' + area + '" fill="var(--accent)" opacity="0.10"/>'
+    + cmpLine
     + '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
     + ticks + '</svg>';
 }
@@ -2177,15 +2263,18 @@ function renderReport() {
 
   var main = document.getElementById('repmain');
   var range = reportRange();
-  var periodLabel = fmtDate(range.start) + ' – ' + fmtDate(new Date(range.end.getTime() - 86400000));
+  var cmpRange = compareRange();
+  var periodLabel = rangeLabel(range);
   var head = ''
     + '<div class="rcard">'
     + '  <div class="rhead"><div style="flex:1">'
-    + '    <h1>' + escapeHtml(cfg.label) + ' Report</h1>'
+    + '    <h1>' + escapeHtml(cfg.label) + (cmpRange ? ' Comparison' : '') + ' Report</h1>'
     + '    <div class="rsub">Router Department · MultiCam cut operations</div></div>'
     + '    <div class="rper"><div class="seclabel">Period</div>'
     + '      <div style="font-weight:600;font-size:14px;margin-top:2px">' + escapeHtml(reportState.preset ? reportPresetLabel(reportState.preset) : periodLabel) + '</div>'
-    + '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:6px">' + escapeHtml(periodLabel) + '</div></div>'
+    + '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:6px">' + escapeHtml(periodLabel) + '</div>'
+    + (cmpRange ? '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:3px">vs ' + escapeHtml(rangeLabel(cmpRange)) + '</div>' : '')
+    + '    </div>'
     + '  </div>'
     + '</div>';
 
@@ -2195,15 +2284,9 @@ function renderReport() {
   var sel = reportSelectedSet(options);
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
 
-  var inRange = allRecords.filter(function (rec) {
-    if (rec.when < range.start || rec.when >= range.end) return false;
-    var g = recordGroup(rec, dim);
-    if (g === null) return false;               // e.g. a non-PS run in a press-sheet report
-    return sel === null || sel[g];
-  });
-  // Customer / Part # drop their catch-all bucket entirely (not just from charts).
-  var recs = cfg.hideBucket ? inRange.filter(function (rec) { return recordGroup(rec, dim) !== cfg.bucket; }) : inRange;
-  var hiddenCount = inRange.length - recs.length;
+  var agg = reportAgg(allRecords, range, dim, sel, cfg, metric);
+  var recs = agg.recs, hiddenCount = agg.hiddenCount;
+  var cmp = cmpRange ? reportAgg(allRecords, cmpRange, dim, sel, cfg, metric) : null;
 
   if (!recs.length) {
     main.innerHTML = head + '<div class="rplaceholder"><div class="t">No runs match these filters</div>'
@@ -2211,19 +2294,9 @@ function renderReport() {
     return;
   }
 
-  // group + aggregate (runs, sheets, and hours all kept; the metric picks one)
-  var groups = {}, totalRuns = 0, totalSheets = 0, totalSecs = 0, byDay = {}, attributed = 0;
-  recs.forEach(function (rec) {
-    var g = recordGroup(rec, dim);
-    var o = groups[g] || (groups[g] = { key: g, runs: 0, sheets: 0, secs: 0, sheetsH: 0 });
-    o.runs++; o.sheets += (rec.sheets || 0); o.secs += rec.seconds;
-    // sheets that carry a run time, so time-per-sheet divides like by like
-    if (rec.seconds > 0) o.sheetsH += (rec.sheets || 0);
-    totalRuns++; totalSheets += (rec.sheets || 0); totalSecs += rec.seconds;
-    var mv = metricValue(rec, metric);
-    var dk = dayKey(rec.when); byDay[dk] = (byDay[dk] || 0) + mv;
-    if (!cfg.bucket || g !== cfg.bucket) attributed++;
-  });
+  // aggregates (runs, sheets, and hours all kept; the metric picks one)
+  var groups = agg.groups, totalRuns = agg.totalRuns, totalSheets = agg.totalSheets,
+      totalSecs = agg.totalSecs, byDay = agg.byDay, attributed = agg.attributed;
   function gVal(g) { return metric === 'sheets' ? g.sheets : metric === 'hours' ? g.secs : g.runs; }
   var total = metric === 'sheets' ? totalSheets : metric === 'hours' ? totalSecs : totalRuns;
   var arr = Object.keys(groups).map(function (k) { return groups[k]; })
@@ -2254,11 +2327,28 @@ function renderReport() {
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
   var hoursPartial = cfg.key === 'size' ? (utilEnd <= HOURS_SINCE) : (range.start < HOURS_SINCE);
 
+  // Comparison-period hours coverage + whole-router utilization (plain range —
+  // the Size report's first/last-sheet windowing isn't replayed for the
+  // comparison, so its utilization tile compares periods, not windows).
+  var cmpHoursPartial = cmp ? cmpRange.start < HOURS_SINCE : false;
+  var cmpUtil = null;
+  if (cmp && !cmpHoursPartial && cmp.totalSecs) {
+    var cAll = state.runs.filter(function (r) { return r.when >= cmpRange.start && r.when < cmpRange.end; });
+    var cMach = {}; cAll.forEach(function (r) { cMach[r.machine] = true; });
+    var cSched = scheduleStats(cmpRange.start, cmpRange.end, dayKeySecs(cAll), Math.max(1, Object.keys(cMach).length));
+    cmpUtil = cSched.scheduled > 0 ? Math.min(100, (cSched.weekdayMachine / cSched.scheduled) * 100) : 0;
+  }
+  var hoursComparable = cmp && !hoursPartial && !cmpHoursPartial;
+
   // KPIs — show every total; the metric toggle only drives the breakdowns below.
   var groupNoun = cfg.filterLabel.toLowerCase();
-  var machineTimeKpi = { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '' };
+  var machineTimeKpi = { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '',
+    delta: hoursComparable ? deltaHtml(totalSecs, cmp.totalSecs) : '',
+    prev: (hoursComparable && cmp.totalSecs) ? fmtDur(cmp.totalSecs) : '' };
   var utilKpi = { label: 'Utilization', value: (hoursPartial || !totalSecs) ? '—' : Math.round(util) + '%',
-    sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift' };
+    sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift',
+    delta: (cmpUtil !== null && !hoursPartial && totalSecs) ? deltaPtsHtml(util, cmpUtil) : '',
+    prev: (cmpUtil !== null && !hoursPartial && totalSecs) ? Math.round(cmpUtil) + '%' : '' };
   var kpis;
   if (cfg.key === 'sheet') {
     // Press sheets: every run is one full 4'×8' sheet, so volume scales with the
@@ -2275,25 +2365,41 @@ function renderReport() {
       while (d2 < end2) { var dw = d2.getDay(); if (dw >= 1 && dw <= 5) wd++; d2.setDate(d2.getDate() + 1); }
     }
     var perDay = wd ? totalSheets / wd : totalSheets;
+    // comparison sheets/day, over the same "working days actually cut" rule
+    var cmpPerDay = null;
+    if (cmp && cmp.recs.length) {
+      var cKeys = {};
+      cmp.recs.forEach(function (rec) { cKeys[dayKey(rec.when)] = 1; });
+      var cFirst = Object.keys(cKeys).sort()[0];
+      var cwd = 0, cd2 = parseLocalDate(cFirst), cEnd2 = cmpRange.end < new Date() ? cmpRange.end : new Date();
+      while (cd2 < cEnd2) { var cdw2 = cd2.getDay(); if (cdw2 >= 1 && cdw2 <= 5) cwd++; cd2.setDate(cd2.getDate() + 1); }
+      cmpPerDay = cwd ? cmp.totalSheets / cwd : cmp.totalSheets;
+    }
     kpis = [
-      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'cut this period' },
-      { label: 'Sheets / day', value: (perDay % 1 ? perDay.toFixed(1) : String(perDay)), sub: 'working days cut' },
+      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'cut this period',
+        delta: cmp ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
+      { label: 'Sheets / day', value: (perDay % 1 ? perDay.toFixed(1) : String(perDay)), sub: 'working days cut',
+        delta: cmpPerDay !== null ? deltaHtml(perDay, cmpPerDay) : '', prev: cmpPerDay !== null ? (cmpPerDay % 1 ? cmpPerDay.toFixed(1) : String(cmpPerDay)) : '' },
       { label: 'Busiest day', value: peakDay ? sheetsByDay[peakDay].toLocaleString() : '—', sub: peakDay ? fmtDate(parseLocalDate(peakDay)) : '' },
       machineTimeKpi,
       utilKpi
     ];
   } else {
     kpis = [
-      { label: 'Total runs', value: totalRuns.toLocaleString() },
-      { label: 'Sheets', value: totalSheets.toLocaleString() },
+      { label: 'Total runs', value: totalRuns.toLocaleString(),
+        delta: cmp ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
+      { label: 'Sheets', value: totalSheets.toLocaleString(),
+        delta: cmp ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
       machineTimeKpi,
-      { label: cfg.label, value: String(arr.length), sub: groupNoun },
+      { label: cfg.label, value: String(arr.length), sub: groupNoun,
+        delta: cmp ? deltaHtml(arr.length, Object.keys(cmp.groups).length) : '', prev: cmp ? String(Object.keys(cmp.groups).length) : '' },
       utilKpi
     ];
   }
   var kpiHtml = '<div class="rcard rkpis">' + kpis.map(function (k) {
     return '<div class="rkpi"><div class="label">' + escapeHtml(k.label) + '</div>'
       + '<div class="value">' + escapeHtml(k.value) + '</div>'
+      + (k.delta ? '<div class="kdelta">' + k.delta + (k.prev ? ' <span class="dvs">vs ' + escapeHtml(k.prev) + '</span>' : '') + '</div>' : '')
       + '<div class="sub">' + escapeHtml(k.sub || '') + '</div></div>';
   }).join('') + '</div>';
 
@@ -2304,8 +2410,10 @@ function renderReport() {
         return '<button class="' + (metric === m ? 'on' : '') + '" onclick="setReportMetric(' + jsStr(m) + ')">'
           + REPORT_METRICS[m].label + '</button>';
       }).join('') + '</div>'
-    + (metric === 'hours' && hoursPartial
-        ? '<span class="sub" style="margin:0">Run times only exist from Jun 17 — earlier runs show 0 h. Use Runs or Sheets for the full year.</span>'
+    + (metric === 'hours' && (hoursPartial || cmpHoursPartial)
+        ? '<span class="sub" style="margin:0">Run times only exist from Jun 17 — '
+          + (hoursPartial ? 'earlier runs show 0 h. Use Runs or Sheets for the full year.'
+            : 'the comparison period predates them, so its hours read low.') + '</span>'
         : '<span class="sub" style="margin:0">Runs &amp; sheets cover the full period; hours cover Jun 17 on.</span>')
     + '</div>';
 
@@ -2330,15 +2438,24 @@ function renderReport() {
     + '<div style="color:var(--text-muted);font-size:11px">total ' + mInfo.noun + '</div></div></div>'
     + '<div class="pielegend">' + pieLegend + '</div></div></div>';
 
-  // bars: top 8 by the chosen metric (attributed groups only)
-  var barMax = (shown[0] && gVal(shown[0])) || 1;
+  // bars: top 8 by the chosen metric (attributed groups only); when comparing,
+  // a thin grey bar underneath shows the same group in the comparison period.
+  var cmpVal = function (key) { var c = cmp && cmp.groups[key]; return c ? gVal(c) : 0; };
+  var barMax = shown.slice(0, 8).reduce(function (m, g) {
+    return Math.max(m, gVal(g), cmp ? cmpVal(g.key) : 0);
+  }, 1);
   var barItems = shown.slice(0, 8).map(function (g) {
+    var cv = cmpVal(g.key);
     return '<div class="hbar"><div class="top"><span class="nm">' + escapeHtml(g.key) + '</span>'
-      + '<span class="val">' + mInfo.fmt(gVal(g)) + '</span></div>'
-      + '<div class="track"><div class="fill" style="width:' + ((gVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div></div>';
+      + '<span class="val">' + mInfo.fmt(gVal(g))
+      + (cmp ? ' <span class="prev">vs ' + mInfo.fmt(cv) + '</span> ' + deltaHtml(gVal(g), cv) : '') + '</span></div>'
+      + '<div class="track"><div class="fill" style="width:' + ((gVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div>'
+      + (cmp ? '<div class="track cmp"><div class="fill" style="width:' + ((cv / barMax) * 100).toFixed(1) + '%;background:var(--text-muted)"></div></div>' : '')
+      + '</div>';
   }).join('');
   var barCard = '<div class="rcard"><h2>' + mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
-    + '<div class="h2sub">top ' + Math.min(8, shown.length) + ' this period</div>' + barItems + '</div>';
+    + '<div class="h2sub">top ' + Math.min(8, shown.length) + ' this period'
+    + (cmp ? ' · grey bar = comparison period' : '') + '</div>' + barItems + '</div>';
 
   // trend: chosen metric per day across weekdays in range. The Size report
   // trades this card for the time-estimator calculator.
@@ -2352,8 +2469,19 @@ function renderReport() {
       if (dow >= 1 && dow <= 5) days.push({ date: new Date(d), count: byDay[dayKey(d)] || 0 });
       d.setDate(d.getDate() + 1);
     }
+    var cmpDays = null;
+    if (cmp) {
+      cmpDays = [];
+      var cd = startOfDay(new Date(cmpRange.start)), cstop = cmpRange.end < new Date() ? cmpRange.end : new Date();
+      while (cd < cstop) {
+        var cdow = cd.getDay();
+        if (cdow >= 1 && cdow <= 5) cmpDays.push({ date: new Date(cd), count: cmp.byDay[dayKey(cd)] || 0 });
+        cd.setDate(cd.getDate() + 1);
+      }
+    }
     trendCard = days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
-      + '<div class="h2sub">' + mInfo.noun + ' per day over the period</div>' + trendSvg(days) + '</div>' : '';
+      + '<div class="h2sub">' + mInfo.noun + ' per day over the period'
+      + (cmp ? ' · dashed grey = comparison period' : '') + '</div>' + trendSvg(days, cmpDays) + '</div>' : '';
   }
 
   // highlights (lead with the attributed leaders, not the catch-all bucket)
@@ -2369,6 +2497,24 @@ function renderReport() {
   if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving '
     + fmtHours(sched.downtime) + ' of idle time' + (machineCount > 1 ? ' across ' + machineCount + ' routers' : '') + ' during scheduled shifts.');
   if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> (' + mInfo.fmt(byDay[busiest]) + ').');
+  if (cmp) {
+    var cmpTotalAll = metric === 'sheets' ? cmp.totalSheets : metric === 'hours' ? cmp.totalSecs : cmp.totalRuns;
+    hi.unshift('Total ' + mInfo.noun + ': <strong>' + mInfo.fmt(total) + '</strong> vs ' + mInfo.fmt(cmpTotalAll)
+      + ' in ' + escapeHtml(rangeLabel(cmpRange)) + ' ' + deltaHtml(total, cmpTotalAll) + '.');
+    // biggest movers by the chosen metric (catch-all bucket excluded)
+    var uni = {};
+    shown.forEach(function (g) { uni[g.key] = true; });
+    Object.keys(cmp.groups).forEach(function (k) { if (!cfg.bucket || k !== cfg.bucket) uni[k] = true; });
+    var moves = Object.keys(uni).map(function (k) {
+      var cur = groups[k] ? gVal(groups[k]) : 0, prev = cmp.groups[k] ? gVal(cmp.groups[k]) : 0;
+      return { key: k, cur: cur, prev: prev, diff: cur - prev };
+    }).sort(function (a, b) { return b.diff - a.diff; });
+    var up = moves[0], down = moves[moves.length - 1];
+    if (up && up.diff > 0) hi.push('Biggest gain: <strong>' + escapeHtml(up.key) + '</strong> — '
+      + mInfo.fmt(up.prev) + ' &rarr; ' + mInfo.fmt(up.cur) + ' ' + mInfo.noun + '.');
+    if (down && down.diff < 0 && (!up || down.key !== up.key)) hi.push('Biggest drop: <strong>' + escapeHtml(down.key) + '</strong> — '
+      + mInfo.fmt(down.prev) + ' &rarr; ' + mInfo.fmt(down.cur) + ' ' + mInfo.noun + '.');
+  }
   var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
@@ -2383,21 +2529,33 @@ function renderReport() {
   };
   var rows = arr.map(function (g) {
     var share = total ? (gVal(g) / total) * 100 : 0;
+    var c = cmp && cmp.groups[g.key], cv = c ? gVal(c) : 0;
     return '<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:2px;flex:none;background:'
       + g.color + '"></span>' + escapeHtml(g.key) + '</span></td>'
       + '<td class="num">' + g.runs.toLocaleString() + '</td>'
       + '<td class="num">' + g.sheets.toLocaleString() + '</td>'
       + '<td class="num">' + mtCell(g.secs, g.sheetsH) + '</td>'
+      + (cmp ? '<td class="num">' + (c ? mInfo.fmt(cv) : '—') + '</td><td class="num">' + deltaHtml(gVal(g), cv) + '</td>' : '')
       + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
   }).join('');
+  var cmpTotal = cmp ? (metric === 'sheets' ? cmp.totalSheets : metric === 'hours' ? cmp.totalSecs : cmp.totalRuns) : 0;
+  // groups active only in the comparison period have no row of their own
+  var goneCount = cmp ? Object.keys(cmp.groups).filter(function (k) {
+    return !groups[k] && (!cfg.bucket || k !== cfg.bucket);
+  }).length : 0;
   var tableCard = '<div class="rcard"><h2>Breakdown by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
     + '<div class="tablewrap"><table><thead><tr><th>' + escapeHtml(cfg.label)
     + '</th><th class="num">Runs</th><th class="num">Sheets</th><th class="num">' + (perSheet ? 'Time / sheet' : 'Machine time') + '</th>'
+    + (cmp ? '<th class="num">Prev ' + escapeHtml(mInfo.noun) + '</th><th class="num">Change</th>' : '')
     + '<th class="num">Share (' + escapeHtml(mInfo.noun) + ')</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
     + '<tfoot><tr><td>All</td><td class="num">' + totalRuns.toLocaleString() + '</td><td class="num">'
     + totalSheets.toLocaleString() + '</td><td class="num">' + mtCell(totalSecs, totalSheetsH)
-    + '</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+    + (cmp ? '</td><td class="num">' + mInfo.fmt(cmpTotal) + '</td><td class="num">' + deltaHtml(total, cmpTotal) : '')
+    + '</td><td class="num">100%</td></tr></tfoot></table></div>'
+    + (goneCount ? '<div class="rowcount">' + goneCount + ' ' + escapeHtml(goneCount === 1 ? groupNoun.replace(/s$/, '') : groupNoun)
+      + ' had activity only in the comparison period.</div>' : '')
+    + '</div>';
 
   // attribution note for customer / WO / part #
   var sparseNote = '';
@@ -2428,6 +2586,24 @@ function dayKeySecs(runs) {
 
 function fmtHours(s) { var h = s / 3600; return (h >= 100 ? Math.round(h) : h.toFixed(1)) + ' h'; }
 function fmtHoursNum(s) { var h = s / 3600; return h >= 100 ? String(Math.round(h)) : h.toFixed(1); }
+
+/** ▲ 12% / ▼ 8% badge for a value vs its comparison-period value. */
+function deltaHtml(cur, prev) {
+  if (prev == null) return '';
+  if (!prev) return cur ? '<span class="delta up">&#9650; new</span>' : '<span class="delta flat">&mdash;</span>';
+  var pct = ((cur - prev) / prev) * 100, mag = Math.abs(pct);
+  if (mag < 0.5) return '<span class="delta flat">no change</span>';
+  return '<span class="delta ' + (pct > 0 ? 'up' : 'down') + '">' + (pct > 0 ? '&#9650;' : '&#9660;') + ' '
+    + (mag >= 10 ? Math.round(mag) : mag.toFixed(1)) + '%</span>';
+}
+/** Percentage-point version, for rates like utilization. */
+function deltaPtsHtml(cur, prev) {
+  if (prev == null) return '';
+  var d = cur - prev;
+  if (Math.abs(d) < 0.5) return '<span class="delta flat">no change</span>';
+  return '<span class="delta ' + (d > 0 ? 'up' : 'down') + '">' + (d > 0 ? '&#9650;' : '&#9660;') + ' '
+    + Math.abs(Math.round(d)) + ' pts</span>';
+}
 
 /* ----- time estimator: pick a size + quantity, project a finish date ----- */
 
@@ -2538,6 +2714,19 @@ function renderRepSidebar(cfg) {
       + escapeHtml(reportPresetLabel(p)) + '</button>';
   }).join('');
 
+  var cmpModes = [['', 'None'], ['prev', 'Previous period'], ['custom', 'Custom range']];
+  var cmpBtns = cmpModes.map(function (m) {
+    return '<button class="' + (reportState.compare === m[0] ? 'on' : '') + '" onclick="setReportCompare(' + jsStr(m[0]) + ')">'
+      + m[1] + '</button>';
+  }).join('');
+  var cmpR = compareRange();
+  var cmpExtra = reportState.compare === 'custom'
+    ? '<div class="repdates"><div><label>Start</label><input id="cmp_start" type="date" value="' + reportState.cstart + '" onchange="onCompareDate()"></div>'
+      + '<div><label>End</label><input id="cmp_end" type="date" value="' + reportState.cend + '" onchange="onCompareDate()"></div></div>'
+    : (cmpR ? '<div class="sub" style="margin-top:2px">vs ' + escapeHtml(rangeLabel(cmpR)) + '</div>' : '');
+  var compareGroup = '<div class="group"><div class="seclabel">Compare with</div>'
+    + '<div class="presets">' + cmpBtns + '</div>' + cmpExtra + '</div>';
+
   var anyChecked = Object.keys(reportState.sel).some(function (k) { return reportState.sel[k]; });
   var filterList = cfg.available ? '<div class="group"><div class="filterhead">'
       + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
@@ -2551,6 +2740,7 @@ function renderRepSidebar(cfg) {
     + '<div class="group"><div class="seclabel">Period</div><div class="presets">' + presets + '</div>'
     + '<div class="repdates"><div><label>Start</label><input id="rep_start" type="date" value="' + reportState.start + '" onchange="onReportDate()"></div>'
     + '<div><label>End</label><input id="rep_end" type="date" value="' + reportState.end + '" onchange="onReportDate()"></div></div></div>'
+    + compareGroup
     + filterList;
   renderReportFilterResults();
 }
