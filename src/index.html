@@ -24,7 +24,7 @@
     --accent:#0070f3; --accent-wash:#f0f7ff; --accent-ink:#fff;
     --delta-good:#0f9d58; --delta-bad:#e00000;
     --series-1:#0070f3; --series-2:#0f9d58;
-    --logo-bg:#ffffff; --logo-fg:#111111; --logo-track:#f8f8f8;
+    --logo-fg:#111111; --logo-track:#f8f8f8;
     --shadow-menu: 0 8px 30px rgba(0,0,0,0.12);
     --job-0:#0070f3; --job-1:#45a557; --job-2:#f5a623; --job-3:#7928ca;
     --job-4:#29bc9b; --job-5:#eb367f; --job-6:#e00000; --job-7:#0761d1;
@@ -40,7 +40,7 @@
       --accent:#3291ff; --accent-wash:#0e2740;
       --delta-good:#4ac66a; --delta-bad:#ff5c5c;
       --series-1:#3291ff; --series-2:#4ac66a;
-      --logo-bg:#111111; --logo-fg:#ffffff; --logo-track:#242424;
+      --logo-fg:#ffffff; --logo-track:#242424;
       --shadow-menu: 0 8px 30px rgba(0,0,0,0.6);
       --job-0:#3291ff; --job-1:#62c073; --job-2:#f7b955; --job-3:#a063e0;
       --job-4:#50e3c2; --job-5:#ff4d94; --job-6:#ff5c5c; --job-7:#3291ff;
@@ -55,7 +55,7 @@
     --accent:#3291ff; --accent-wash:#0e2740;
     --delta-good:#4ac66a; --delta-bad:#ff5c5c;
     --series-1:#3291ff; --series-2:#4ac66a;
-    --logo-bg:#111111; --logo-fg:#ffffff; --logo-track:#242424;
+    --logo-fg:#ffffff; --logo-track:#242424;
     --shadow-menu: 0 8px 30px rgba(0,0,0,0.6);
     --job-0:#3291ff; --job-1:#62c073; --job-2:#f7b955; --job-3:#a063e0;
     --job-4:#50e3c2; --job-5:#ff4d94; --job-6:#ff5c5c; --job-7:#3291ff;
@@ -477,10 +477,9 @@
 </head>
 <body>
 <div class="wrap">
-  <header>    <svg class="applogo" width="42" height="42" viewBox="0 0 256 256" role="img" aria-label="Digital Department">
-      <rect width="256" height="256" fill="var(--logo-bg)"/>
-      <path fill="var(--logo-fg)" fill-rule="evenodd" d="M44 32 H132 C194 32 224 70 224 128 C224 186 194 224 132 224 H44 V176 H116 C160 176 176 155 176 128 C176 101 160 80 116 80 H44 Z"/>
-      <rect x="12" y="98" width="120" height="60" rx="30" fill="var(--logo-track)"/>
+  <header>    <svg class="applogo" width="42" height="42" viewBox="12 16 221 224" role="img" aria-label="Digital Department">
+      <path fill="var(--logo-track)" d="M42,98h60c16.57,0,30,13.43,30,30h0c0,16.57-13.43,30-30,30h-60c-16.57,0-30-13.43-30-30h0c0-16.57,13.43-30,30-30Z"/>
+      <path fill="var(--logo-fg)" d="M125.67,16H31c-4.42,0-8,3.58-8,8v58.67c0,4.42,3.58,8,8,8h40c4.42,0,8-3.58,8-8v-2.67c0-4.42,3.58-8,8-8h20c51.33,0,70,24.5,70,56s-18.67,56-70,56h-20c-4.42,0-8-3.58-8-8v-2.67c0-4.42-3.58-8-8-8H31c-4.42,0-8,3.58-8,8v58.67c0,4.42,3.58,8,8,8h94.67c72.33,0,107.33-44.33,107.33-112S198,16,125.67,16Z"/>
       <circle cx="102" cy="128" r="22" fill="#FF453A"/>
     </svg>
     <div>
