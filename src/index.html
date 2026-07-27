@@ -661,11 +661,12 @@
   <!-- ===== How it works (translated from How It Works.dc.html) ===== -->
   <div id="howview" style="display:none">
 
-    <header class="reveal" style="max-width:720px;margin-bottom:36px">
+    <!-- a <div>, not <header>: the global header{} rules make that tag sticky -->
+    <div class="reveal" style="max-width:720px;margin-bottom:36px">
       <div style="color:var(--accent);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Reference</div>
       <h1 style="font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.2;margin:0 0 12px">How it works</h1>
       <p style="color:var(--text-secondary);font-size:16px;margin:0;text-wrap:pretty">Every job on the router is one step in cutting a full sheet down to finished parts. The filename tells you which step you're looking at &mdash; and that's what the tracker and reports are built on.</p>
-    </header>
+    </div>
 
     <!-- Three-stage flow -->
     <section class="reveal">
