@@ -31,7 +31,7 @@ Zero manual data entry. Everything derives from two sources the department alrea
 - PV Labels router department; jobs are cut from 4'×8' sheets on MultiCam routers.
 - Data sources: "Press Sheet Tracking" spreadsheet (Job Log tab, machine-written) and the "Live Production Copy" schedule (auto-queues runs marked multicam; statuses Pre-Press → On-Press → Finished Printing → Finished Cutting).
 - Shop schedule: Mon–Fri 6 AM–5 PM shifts; weekend what-if scenarios assume 8 h shifts.
-- Terminology: runs (TR-<run#>.cnc), press sheets (PS-*), work orders (WO-######), part numbers, sheets-to-cut targets, pieces per sheet.
+- Terminology: a **Run #** is a numbered cut of an already-printed sheet into finished parts; every run file is either **SR-** (Short Run — stock items) or **TR-** (Today's Run — custom orders, TR-<run#>.cnc). **PS-** files cut the raw 4'×8' sheet down to a press sheet before printing. Also: work orders (WO-######), part numbers, sheets-to-cut targets, pieces per sheet.
 - Reached via a public URL (GitHub Pages front end fetching Apps Script JSON); a desktop shortcut exists in the department.
 
 ## Capabilities and Constraints
