@@ -25,6 +25,8 @@
     --accent:#0070f3; --accent-wash:#f0f7ff; --accent-ink:#fff;
     --delta-good:#0f9d58; --delta-bad:#e00000;
     --series-1:#0070f3; --series-2:#0f9d58;
+    --violet:#7928ca; --violet-wash:#f8f2ff; --amber:#f5a623; --amber-wash:#fff8ec;
+    --amber-strong:#8a5200; --good-wash:#eefaf3;
     --logo-fg:#111111; --logo-track:#f8f8f8;
     --shadow-menu: 0 8px 30px rgba(0,0,0,0.12);
     --job-0:#0070f3; --job-1:#45a557; --job-2:#f5a623; --job-3:#7928ca;
@@ -56,6 +58,8 @@
     --accent:#3291ff; --accent-wash:#0e2740; --accent-ink:#000;
     --delta-good:#4ac66a; --delta-bad:#ff5c5c;
     --series-1:#3291ff; --series-2:#4ac66a;
+    --violet:#a063e0; --violet-wash:#1b1030; --amber:#f7b955; --amber-wash:#2a1e08;
+    --amber-strong:#f7b955; --good-wash:#07240f;
     --logo-fg:#ffffff; --logo-track:#242424;
     --shadow-menu: 0 8px 30px rgba(0,0,0,0.6);
     --job-0:#3291ff; --job-1:#62c073; --job-2:#f7b955; --job-3:#a063e0;
@@ -459,28 +463,15 @@
   .rplaceholder .d { font-size: 13px; color: var(--text-muted); max-width: 440px; margin: 0 auto; }
   .repfoot { color: var(--text-muted); font-size: 12px; text-align: center; padding: 6px 0; }
 
-  /* ---------- how it works ---------- */
-  #howview { max-width: 980px; margin: 0 auto; }
-  .howmap svg { width: 100%; height: auto; display: block; }
-  .howgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
-  @media (max-width: 760px) { .howgrid { grid-template-columns: 1fr; } }
-  .howcard { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface-1); font-size: 13px; }
-  .howcard.key { border-color: var(--accent); background: var(--accent-wash); }
-  .howcard .t { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .howcard .n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none;
-    border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 600; }
-  .howcard .r { color: var(--text-secondary); margin-bottom: 6px; }
-  .howcard .d { margin: 3px 0; }
-  .howcard .d b { font-weight: 600; }
-  .howcard .mono { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; color: var(--text-secondary); }
-  .howcard .flag { color: var(--job-2); font-weight: 600; }
-  .howcard a, .howrecover a { color: var(--accent); text-decoration: none; }
-  .howcard a:hover, .howrecover a:hover { text-decoration: underline; }
-  .howrecover { margin-top: 16px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-wash); padding: 14px 18px; font-size: 13px; }
-  .howrecover h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
-  .howrecover ul { margin: 0; padding-left: 20px; }
-  .howrecover li { margin: 5px 0; }
-  .howrecover .mono { font-family: var(--font-mono); font-size: 11.5px; }
+  /* ---------- how it works (from the How it works.zip design) ---------- */
+  #howview { max-width: 1180px; margin: 0 auto; }
+  #howview a { color: var(--accent); text-decoration: none; }
+  #howview a:hover { text-decoration: underline; }
+  #howview h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; }
+  #howview section { margin-bottom: 40px; }
+  #howview .secsub { color: var(--text-secondary); font-size: 14px; margin: 0 0 18px; }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: stretch; }
+  @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } .flow .arrow { transform: rotate(90deg); } }
 
   /* ---------- print: report only, forced light ---------- */
   @media print {
@@ -488,7 +479,7 @@
     .wrap { max-width: none; padding: 0; }
     .repgrid { display: block; }
     #repmain { max-width: none; }
-    .rcard, .rtwo, .howcard, .howrecover { break-inside: avoid; }
+    .rcard, .rtwo, .hcard { break-inside: avoid; }
     .rcard { box-shadow: none; }
     :root, :root[data-theme="dark"] {
       --page:#fff; --surface-1:#fff; --surface-2:#fafafa;
@@ -496,6 +487,8 @@
       --border:#d8d8d8; --border-strong:#000; --grid:#e6e6e6; --baseline:#dcdcdc;
       --accent:#0070f3; --accent-wash:#f2f7ff;
       --delta-good:#0f9d58; --delta-bad:#e00000;
+      --violet:#7928ca; --violet-wash:#f8f2ff; --amber:#f5a623; --amber-wash:#fff8ec;
+      --amber-strong:#8a5200; --good-wash:#eefaf3;
       --job-0:#0070f3; --job-1:#45a557; --job-2:#f5a623; --job-3:#7928ca;
       --job-4:#29bc9b; --job-5:#eb367f; --job-6:#e00000; --job-7:#0761d1;
     }
@@ -665,153 +658,284 @@
     </div>
   </div>
 
-  <!-- ===== How it works ===== -->
+  <!-- ===== How it works (translated from How It Works.dc.html) ===== -->
   <div id="howview" style="display:none">
-    <div class="rcard reveal">
-      <div class="rhead"><div style="flex:1">
-        <h1>How it works</h1>
-        <div class="rsub">How cut data flows from the machines to this dashboard — and what to check when something breaks.</div>
-      </div></div>
-    </div>
 
-    <div class="rcard reveal howmap">
-      <svg viewBox="0 0 800 452" role="img" aria-label="System map: two MultiCam routers write runs through the shop PC logger into the Press Sheet Tracking sheet; Apps Script reads that sheet and the Live Production Copy schedule, and serves JSON to the GitHub Pages dashboard that everyone opens; GitHub auto-deploys both on push to main.">
-        <defs>
-          <marker id="howarrow" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="var(--text-muted)"/>
-          </marker>
-          <marker id="howarrowB" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
-            <path d="M0,0 L7,3 L0,6 Z" fill="var(--accent)"/>
-          </marker>
-        </defs>
-        <g stroke="var(--text-muted)" stroke-width="1.4" fill="none">
-          <path d="M120,64 L165,92" marker-end="url(#howarrow)"/>
-          <path d="M290,64 L245,92" marker-end="url(#howarrow)"/>
-          <path d="M205,138 L205,168" marker-end="url(#howarrow)"/>
-          <path d="M210,228 L350,266" marker-end="url(#howarrow)"/>
-          <path d="M590,228 L470,266" marker-end="url(#howarrow)"/>
-          <path d="M400,320 L400,352" marker-end="url(#howarrow)"/>
-          <path d="M400,404 L400,436" marker-end="url(#howarrow)"/>
-        </g>
-        <g stroke="var(--accent)" stroke-width="1.4" fill="none" stroke-dasharray="4 3">
-          <path d="M628,300 L572,294" marker-end="url(#howarrowB)"/>
-          <path d="M660,340 Q560,392 552,384" marker-end="url(#howarrowB)"/>
-        </g>
-        <g fill="var(--text-muted)" font-size="8.5">
-          <text x="212" y="156">writes run rows</text>
-          <text x="238" y="250">read server-side</text>
-          <text x="486" y="250">read server-side</text>
-          <text x="406" y="340">serves JSON (/exec)</text>
-          <text x="406" y="424">opened by</text>
-        </g>
-        <g fill="var(--accent)" font-size="8">
-          <text x="500" y="286">deploy code (clasp)</text>
-          <text x="470" y="372">deploy page</text>
-        </g>
-        <g>
-          <rect x="40" y="22" width="160" height="42" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
-          <text x="120" y="40" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">MultiCam 3-202-R16</text>
-          <text x="120" y="54" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">router &#183; #37137</text>
-          <rect x="210" y="22" width="160" height="42" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
-          <text x="290" y="40" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">MultiCam 3-205-R16</text>
-          <text x="290" y="54" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">router &#183; #41334</text>
-        </g>
-        <rect x="70" y="92" width="270" height="46" rx="6" fill="var(--surface-2)" stroke="var(--job-2)" stroke-width="1.3"/>
-        <text x="205" y="110" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">Shop PC &#183; MultiCam logger</text>
-        <text x="205" y="124" text-anchor="middle" font-size="8" fill="var(--job-2)">&#9888; upload path not in repo — verify &amp; note</text>
-        <rect x="60" y="168" width="300" height="60" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
-        <text x="210" y="186" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Google Sheet — RAW DATA</text>
-        <text x="210" y="200" text-anchor="middle" font-size="9" fill="var(--accent)">&#8220;Press Sheet Tracking&#8221;</text>
-        <text x="210" y="214" text-anchor="middle" font-size="8" fill="var(--text-secondary)">Job Log &#183; Dashboard Jobs &#183; Production History</text>
-        <rect x="460" y="168" width="300" height="60" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
-        <text x="610" y="186" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Google Sheet — SCHEDULE</text>
-        <text x="610" y="200" text-anchor="middle" font-size="9" fill="var(--text-primary)">&#8220;Live Production Copy&#8221;</text>
-        <text x="610" y="214" text-anchor="middle" font-size="8" fill="var(--text-secondary)">production schedule (read-only)</text>
-        <rect x="230" y="266" width="340" height="54" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
-        <text x="400" y="286" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Apps Script web app</text>
-        <text x="400" y="300" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">reads both sheets &#8594; serves JSON + write API</text>
-        <text x="400" y="313" text-anchor="middle" font-size="8" fill="var(--accent)">runs as stickersquicktesting@gmail.com</text>
-        <rect x="608" y="262" width="168" height="92" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
-        <text x="692" y="282" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">GitHub</text>
-        <text x="692" y="296" text-anchor="middle" font-size="8.2" fill="var(--text-secondary)">repo + Actions</text>
-        <text x="692" y="311" text-anchor="middle" font-size="8" fill="var(--text-primary)">source of truth</text>
-        <text x="692" y="324" text-anchor="middle" font-size="8" fill="var(--text-primary)">auto-deploy on</text>
-        <text x="692" y="336" text-anchor="middle" font-size="8" fill="var(--text-primary)">push to main</text>
-        <rect x="250" y="352" width="300" height="52" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
-        <text x="400" y="372" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">GitHub Pages — the dashboard</text>
-        <text x="400" y="386" text-anchor="middle" font-size="8" fill="var(--accent)">pvlabels.github.io/Router-Department-Tracking</text>
-        <text x="400" y="398" text-anchor="middle" font-size="8" fill="var(--text-secondary)">fetches JSON from Apps Script (no Google login)</text>
-        <rect x="288" y="410" width="224" height="40" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
-        <text x="400" y="428" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">Shop browsers &amp; phones</text>
-        <text x="400" y="442" text-anchor="middle" font-size="8" fill="var(--text-secondary)">everyone views the live dashboard</text>
-      </svg>
-    </div>
+    <header class="reveal" style="max-width:720px;margin-bottom:36px">
+      <div style="color:var(--accent);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Reference</div>
+      <h1 style="font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.2;margin:0 0 12px">How it works</h1>
+      <p style="color:var(--text-secondary);font-size:16px;margin:0;text-wrap:pretty">Every job on the router is one step in cutting a full sheet down to finished parts. The filename tells you which step you're looking at &mdash; and that's what the tracker and reports are built on.</p>
+    </header>
 
-    <div class="howgrid reveal">
-      <div class="howcard">
-        <div class="t"><span class="n">1</span>MultiCam routers (&#215;2)</div>
-        <div class="r">The two cutting machines. Names appear in the Job Log &#8220;Machine&#8221; column.</div>
-        <div class="d mono">MultiCam 3-202-R16 (37137)</div>
-        <div class="d mono">MultiCam 3-205-R16 (41334)</div>
+    <!-- Three-stage flow -->
+    <section class="reveal">
+      <h2>The three stages</h2>
+      <p class="secsub">Material moves left to right. Each cut is a separate machine file, and each one gets tracked.</p>
+      <div class="flow">
+        <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:20px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <span style="width:22px;height:22px;border-radius:6px;background:var(--text-primary);color:var(--page);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">1</span>
+            <span style="font-size:15.5px;font-weight:600;letter-spacing:-0.01em">Full Sheet</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">Raw import size</div>
+          <div style="border:1.5px solid var(--text-secondary);border-radius:4px;background:var(--surface-2);aspect-ratio:96 / 48;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+            <span style="font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text-secondary)">4&prime; &times; 8&prime;</span>
+          </div>
+          <p style="margin:0;font-size:13.5px;color:var(--text-secondary)">Stock arrives as a full 4&prime; &times; 8&prime; sheet &mdash; the raw import size, before anything is cut.</p>
+        </div>
+        <div class="arrow" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="hcard" style="border:1px solid var(--accent);border-radius:12px;padding:20px;background:var(--accent-wash)">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <span style="width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">2</span>
+            <span style="font-size:15.5px;font-weight:600;letter-spacing:-0.01em">Press Sheet</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">Cut by a <span style="font-family:var(--font-mono);color:var(--accent);font-weight:500">PS-</span> file</div>
+          <div style="border:1.5px solid var(--accent);border-radius:4px;aspect-ratio:96 / 48;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:3px;padding:3px;margin-bottom:14px">
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--accent);border-radius:2px"></div>
+          </div>
+          <p style="margin:0;font-size:13.5px;color:var(--text-secondary)">A <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">PS-</span> file cuts the full sheet into a printable size called a <strong style="font-weight:600;color:var(--text-primary)">Press Sheet</strong>. Can be a custom size.</p>
+        </div>
+        <div class="arrow" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="hcard" style="border:1px solid var(--violet);border-radius:12px;padding:20px;background:var(--violet-wash)">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <span style="width:22px;height:22px;border-radius:6px;background:var(--violet);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">3</span>
+            <span style="font-size:15.5px;font-weight:600;letter-spacing:-0.01em">Final Size</span>
+          </div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">Cut by <span style="font-family:var(--font-mono);color:var(--violet);font-weight:500">SR- / TR- / Run #</span></div>
+          <div style="border:1.5px solid var(--violet);border-radius:4px;aspect-ratio:31.5 / 23.5;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:3px;padding:3px;margin-bottom:14px">
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+            <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
+          </div>
+          <p style="margin:0;font-size:13.5px;color:var(--text-secondary)">After printing, the sheet is cut to finished parts &mdash; <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">SR-</span> for stock items, <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">TR-</span> when several small orders are ganged on one sheet.</p>
+        </div>
       </div>
-      <div class="howcard">
-        <div class="t"><span class="n">2</span>Shop PC &#183; logger</div>
-        <div class="r">Software on the router PC appends each finished cut (date, start/end, job, machine, status) as a row in the Job Log.</div>
-        <div class="d"><span class="flag">&#9888; Verify:</span> the exact logger software &amp; upload method aren&#8217;t recorded here — confirm on the shop PC and write it in.</div>
-        <div class="d">Note: its &#8220;Total Time&#8221; column runs +3&#8202;h high; the dashboard ignores it and uses End &#8722; Start.</div>
-      </div>
-      <div class="howcard key">
-        <div class="t"><span class="n">3</span>Raw data sheet — &#8220;Press Sheet Tracking&#8221;</div>
-        <div class="r">Where the machines write. Also holds the dashboard-owned tabs.</div>
-        <div class="d"><b>Access:</b> owned by the production office &#183; shared with stickersquicktesting@gmail.com</div>
-        <div class="d"><b>Tabs:</b> Job Log (machine runs) &#183; Dashboard Jobs &#183; Production History</div>
-        <div class="d mono">1532iOs5fdQxJQyeQUatdDDq5jIEVKLYdYh-tRfXkXIc</div>
-      </div>
-      <div class="howcard">
-        <div class="t"><span class="n">4</span>Schedule sheet — &#8220;Live Production Copy&#8221;</div>
-        <div class="r">Read for the queue, sizes, quantities, work orders, and the full-year history backfill.</div>
-        <div class="d"><b>Access:</b> owned by the production office &#183; read access for stickersquicktesting@gmail.com</div>
-        <div class="d mono">1E0C4hanKBmYCrZw1V8DcknU60UxFtXAqMF48_XpDTik &nbsp;(Sheet1 / gid 0)</div>
-      </div>
-      <div class="howcard key">
-        <div class="t"><span class="n">5</span>Apps Script web app</div>
-        <div class="r">Reads both sheets server-side; serves the dashboard JSON and the write API. Access: Anyone (anonymous).</div>
-        <div class="d"><b>Account (owns/runs):</b> stickersquicktesting@gmail.com — the two sheets must stay shared with it.</div>
-        <div class="d mono"><b>script:</b> 1J7W2WMz5ewvHzaH976p7eHy4nwX91c0ooHKz0Qc8t_XfrreYQT7aF6tO</div>
-        <div class="d mono"><b>deployment:</b> AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g</div>
-      </div>
-      <div class="howcard">
-        <div class="t"><span class="n">6</span>GitHub — source &amp; auto-deploy</div>
-        <div class="r">The real source of truth. Push to <b>main</b> &#8594; Actions pushes code to Apps Script (clasp), redeploys the web app, and publishes Pages.</div>
-        <div class="d mono"><a href="https://github.com/pvlabels/Router-Department-Tracking" target="_blank" rel="noopener">github.com/pvlabels/Router-Department-Tracking</a></div>
-        <div class="d"><b>Files:</b> src/Code.js (backend) &#183; src/index.html (dashboard) &#183; .github/workflows/deploy.yml</div>
-        <div class="d"><b>Secret:</b> CLASPRC_JSON (clasp token) &#183; <b>Var:</b> DEPLOYMENT_ID = the #5 deployment &#183; clasp pinned @2.4.2</div>
-      </div>
-      <div class="howcard key">
-        <div class="t"><span class="n">7</span>GitHub Pages — this dashboard</div>
-        <div class="r">The page everyone opens. Serves src/index.html and fetches JSON from #5 without Google cookies, so Workspace&#8217;s block on script.google.com can&#8217;t interfere.</div>
-        <div class="d mono"><a href="https://pvlabels.github.io/Router-Department-Tracking/">pvlabels.github.io/Router-Department-Tracking</a></div>
-        <div class="d">The &#8220;Router Dashboard&#8221; desktop shortcut points here.</div>
-      </div>
-      <div class="howcard">
-        <div class="t"><span class="n">8</span>Local dev</div>
-        <div class="r">Where the code is edited before publishing.</div>
-        <div class="d">Edit <span class="mono">src/</span> in the local working copy, commit, push to <b>main</b> — Actions does the rest.</div>
-      </div>
-    </div>
+    </section>
 
-    <div class="howrecover reveal">
-      <h2>If something&#8217;s down — start here</h2>
-      <ul>
-        <li><b>Dashboard blank or stale:</b> open the <a href="https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec?format=json" target="_blank" rel="noopener">raw JSON feed</a> (#5). If it errors, confirm sheets #3 and #4 are still shared with <span class="mono">stickersquicktesting@gmail.com</span>.</li>
-        <li><b>New cuts not appearing:</b> the shop logger (#2) isn&#8217;t writing to the Job Log — check the router PC / logging software.</li>
-        <li><b>Queue, sizes, or WOs wrong/empty:</b> the schedule sheet (#4) moved, was renamed, or lost read access for the Apps Script account.</li>
-        <li><b>A code change didn&#8217;t go live:</b> check <a href="https://github.com/pvlabels/Router-Department-Tracking/actions" target="_blank" rel="noopener">GitHub Actions</a> (#6) for a failed run. Pages OIDC hiccup &#8594; re-run with <b>&#8220;Run workflow&#8221;</b>, not &#8220;re-run failed jobs&#8221; (that duplicates the Pages artifact).</li>
-        <li><b>clasp / Apps Script login broke:</b> run <span class="mono">clasp login</span> with <span class="mono">@google/clasp@2.4.2</span>, then update the <span class="mono">CLASPRC_JSON</span> repo secret.</li>
-      </ul>
-    </div>
+    <!-- Filename glossary -->
+    <section class="reveal">
+      <h2>Reading a filename</h2>
+      <p class="secsub">The prefix tells you which cut it is. This is how the tracker groups runs.</p>
+      <div class="hcard" style="border:1px solid var(--border);border-radius:12px;background:var(--surface-1);overflow:hidden">
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px">
+          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent)">PS-</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Press Sheet cut</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">Cuts a 4&prime; &times; 8&prime; full sheet down to a printable press sheet size. Can be a custom size.</div>
+          </div>
+          <div style="flex:none;width:190px">
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
+            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">PS-24x18-18x12.cnc</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
+          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">SR-</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Short Run &mdash; stock items</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">Cuts a printed press sheet to final size. Used for stock items: one item repeated across the sheet.</div>
+          </div>
+          <div style="flex:none;width:190px">
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
+            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">SR-07-111-m3.cnc</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
+          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">TR-</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Today&rsquo;s Run &mdash; ganged orders</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">Same final-size cut, but for small orders: several different orders are ganged onto one sheet and cut apart.</div>
+          </div>
+          <div style="flex:none;width:190px">
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
+            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">TR-7881.cnc</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
+          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--amber);background:var(--amber-wash);border:1px solid var(--amber)">Run #</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Run number</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">A numbered production run off the schedule. Also a final-size cut of a printed sheet.</div>
+          </div>
+          <div style="flex:none;width:190px">
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
+            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">Run 7881</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-    <div class="repfoot">Verified against the repo (README, .clasp.json, deploy.yml) and the live dashboard &#183; the one item not documented in code — how the machines physically upload (#2) — is flagged above &#183; updated Jul 2026</div>
+    <!-- Press sheet sizes -->
+    <section class="reveal">
+      <h2>Standard press sheet sizes</h2>
+      <p class="secsub">Four standard sizes, drawn to scale relative to each other. Custom sizes are allowed.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px">
+        <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:18px;background:var(--surface-1)">
+          <div style="height:132px;display:flex;align-items:center;justify-content:center">
+            <div style="height:100%;width:auto;aspect-ratio:31.5 / 23.5;border:1.5px solid var(--accent);background:var(--accent-wash);border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--text-primary)">PS-A</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap">31.5&Prime; &times; 23.5&Prime;</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:7px;margin-top:14px;padding-top:11px;border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">6</span>
+            <span style="color:var(--text-muted);font-size:12.5px">per full sheet</span>
+          </div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:18px;background:var(--surface-1)">
+          <div style="height:132px;display:flex;align-items:center;justify-content:center">
+            <div style="height:100%;width:auto;aspect-ratio:27.5 / 23.5;border:1.5px solid var(--accent);background:var(--accent-wash);border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--text-primary)">PS-D</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap">27.5&Prime; &times; 23.5&Prime;</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:7px;margin-top:14px;padding-top:11px;border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">6</span>
+            <span style="color:var(--text-muted);font-size:12.5px">per full sheet</span>
+          </div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:18px;background:var(--surface-1)">
+          <div style="height:132px;display:flex;align-items:center;justify-content:center">
+            <div style="height:78.7%;width:auto;aspect-ratio:23.5 / 18.5;border:1.5px solid var(--accent);background:var(--accent-wash);border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--text-primary)">PS-B</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap">23.5&Prime; &times; 18.5&Prime;</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:7px;margin-top:14px;padding-top:11px;border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">10</span>
+            <span style="color:var(--text-muted);font-size:12.5px">per full sheet</span>
+          </div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:18px;background:var(--surface-1)">
+          <div style="height:132px;display:flex;align-items:center;justify-content:center">
+            <div style="height:76.6%;width:auto;aspect-ratio:18 / 18;border:1.5px solid var(--accent);background:var(--accent-wash);border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+              <span style="font-family:var(--font-mono);font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--text-primary)">PS-C</span>
+              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap">18&Prime; &times; 18&Prime;</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:7px;margin-top:14px;padding-top:11px;border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-mono);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">10</span>
+            <span style="color:var(--text-muted);font-size:12.5px">per full sheet</span>
+          </div>
+        </div>
+      </div>
+      <div style="color:var(--text-muted);font-size:12.5px">&ldquo;Max per full sheet&rdquo; is a straight grid fit on a 48&Prime; &times; 96&Prime; sheet with no trim or grain allowance &mdash; real layouts and nesting will differ.</div>
+    </section>
+
+    <!-- Label anatomy -->
+    <section class="reveal">
+      <h2>Anatomy of a press sheet label</h2>
+      <p class="secsub">Every press sheet carries a header line. These fields are exactly what the reports filter and group on.</p>
+      <div class="hcard" style="border:1px solid var(--border);border-radius:12px;padding:22px 24px;background:var(--surface-1);margin-bottom:16px">
+        <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:10px">As printed on the sheet</div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:var(--surface-2);font-family:var(--font-mono);font-size:12.5px;line-height:1.9;display:flex;flex-wrap:wrap;gap:0 6px">
+          <span style="padding:1px 6px;border-radius:4px;font-weight:600;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">ShortRun #5369</span>
+          <span style="padding:1px 6px;border-radius:4px;font-weight:600;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent)">Work Order #59-308</span>
+          <span style="color:var(--text-secondary)">Customer: STOCK</span>
+          <span style="color:var(--text-secondary)">#of Colors: 3</span>
+          <span style="color:var(--text-secondary)">1 of 2: Fire Red,</span>
+          <span style="color:var(--text-secondary)">2 of 3: 109C</span>
+          <span style="color:var(--text-secondary)">3 OF 3: BLACK</span>
+          <span style="padding:1px 6px;border-radius:4px;font-weight:600;color:var(--delta-good);background:var(--good-wash);border:1px solid var(--delta-good)">Metal Sheet Size: 23.5&rdquo; x 31.5&rdquo;</span>
+          <span style="padding:1px 6px;border-radius:4px;font-weight:600;color:var(--amber-strong);background:var(--amber-wash);border:1px solid var(--amber-strong)">Press Sheet A</span>
+          <span style="color:var(--text-secondary)">Metal Thickness: .040</span>
+          <span style="color:var(--text-secondary)">Qty of Sheets: 30</span>
+          <span style="color:var(--text-secondary)">Date: 10-17-2024</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px">
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--violet)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Short Run / Run #</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">#5369</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">Identifies this specific cut run. Drives the Run # report.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--accent)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Work Order #</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">59-308</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">The order this sheet belongs to. Drives the WO # report.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--text-muted)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Customer</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">STOCK</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">Who the work is for. &ldquo;STOCK&rdquo; means built to inventory, not a customer order.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--text-muted)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Colors</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">3 &mdash; Fire Red, 109C, Black</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">Ink count and sequence for the printed sheet.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--delta-good)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Metal Sheet Size</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">23.5&Prime; &times; 31.5&Prime;</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">The press sheet&rsquo;s cut dimensions. Drives the Press Sheet report.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--amber)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Press Sheet</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">A</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">Which standard press sheet size was used (A / B / C / D).</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--text-muted)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Metal Thickness</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">.040</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">Material gauge &mdash; part of the stock item spec.</div>
+        </div>
+        <div class="hcard" style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-1)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span style="width:8px;height:8px;border-radius:2px;flex:none;background:var(--text-muted)"></span><span style="font-size:13.5px;font-weight:600;letter-spacing:-0.01em">Qty of Sheets</span></div>
+          <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary);margin-bottom:5px">30</div>
+          <div style="color:var(--text-secondary);font-size:12.5px;text-wrap:pretty">How many sheets this run covers &mdash; the target the tracker counts toward.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Maps to reports -->
+    <section class="reveal" style="margin-bottom:0">
+      <h2>How this feeds the reports</h2>
+      <p class="secsub">Each label field becomes a report type on the <a href="#" onclick="showView('reports');return false">Reports</a> page.</p>
+      <div class="hcard" style="border:1px solid var(--border);border-radius:12px;background:var(--surface-1);overflow:hidden">
+        <div style="display:flex;gap:16px;padding:11px 18px;background:var(--surface-2);border-bottom:1px solid var(--border)">
+          <span style="flex:none;width:150px;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500">Report type</span>
+          <span style="flex:none;width:180px;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500">Groups by</span>
+          <span style="flex:1;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500">Answers</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:baseline;padding:13px 18px">
+          <span style="flex:none;width:150px;font-size:13.5px;font-weight:600">Press Sheet</span>
+          <span style="flex:none;width:180px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary)">Metal Sheet Size</span>
+          <span style="flex:1;font-size:13.5px;color:var(--text-secondary);text-wrap:pretty">How many of a given size have we cut in this period?</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:baseline;padding:13px 18px;border-top:1px solid var(--border)">
+          <span style="flex:none;width:150px;font-size:13.5px;font-weight:600">Customer</span>
+          <span style="flex:none;width:180px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary)">Customer</span>
+          <span style="flex:1;font-size:13.5px;color:var(--text-secondary);text-wrap:pretty">Every job a customer ran, how long each took, and which machine it ran on.</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:baseline;padding:13px 18px;border-top:1px solid var(--border)">
+          <span style="flex:none;width:150px;font-size:13.5px;font-weight:600">Stock Item</span>
+          <span style="flex:none;width:180px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary)">Material + thickness</span>
+          <span style="flex:1;font-size:13.5px;color:var(--text-secondary);text-wrap:pretty">How much of this material do we run, and what&rsquo;s the average per day?</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:baseline;padding:13px 18px;border-top:1px solid var(--border)">
+          <span style="flex:none;width:150px;font-size:13.5px;font-weight:600">WO #</span>
+          <span style="flex:none;width:180px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary)">Work Order #</span>
+          <span style="flex:1;font-size:13.5px;color:var(--text-secondary);text-wrap:pretty">All router time booked against one work order.</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:baseline;padding:13px 18px;border-top:1px solid var(--border)">
+          <span style="flex:none;width:150px;font-size:13.5px;font-weight:600">Run #</span>
+          <span style="flex:none;width:180px;font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary)">Short Run / Run #</span>
+          <span style="flex:1;font-size:13.5px;color:var(--text-secondary);text-wrap:pretty">What a single numbered run cost in machine time.</span>
+        </div>
+      </div>
+    </section>
+
   </div>
 
 </div>
