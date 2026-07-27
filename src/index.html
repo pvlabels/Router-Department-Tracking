@@ -459,13 +459,36 @@
   .rplaceholder .d { font-size: 13px; color: var(--text-muted); max-width: 440px; margin: 0 auto; }
   .repfoot { color: var(--text-muted); font-size: 12px; text-align: center; padding: 6px 0; }
 
+  /* ---------- how it works ---------- */
+  #howview { max-width: 980px; margin: 0 auto; }
+  .howmap svg { width: 100%; height: auto; display: block; }
+  .howgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 760px) { .howgrid { grid-template-columns: 1fr; } }
+  .howcard { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: var(--surface-1); font-size: 13px; }
+  .howcard.key { border-color: var(--accent); background: var(--accent-wash); }
+  .howcard .t { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .howcard .n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none;
+    border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 600; }
+  .howcard .r { color: var(--text-secondary); margin-bottom: 6px; }
+  .howcard .d { margin: 3px 0; }
+  .howcard .d b { font-weight: 600; }
+  .howcard .mono { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; color: var(--text-secondary); }
+  .howcard .flag { color: var(--job-2); font-weight: 600; }
+  .howcard a, .howrecover a { color: var(--accent); text-decoration: none; }
+  .howcard a:hover, .howrecover a:hover { text-decoration: underline; }
+  .howrecover { margin-top: 16px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-wash); padding: 14px 18px; font-size: 13px; }
+  .howrecover h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .howrecover ul { margin: 0; padding-left: 20px; }
+  .howrecover li { margin: 5px 0; }
+  .howrecover .mono { font-family: var(--font-mono); font-size: 11.5px; }
+
   /* ---------- print: report only, forced light ---------- */
   @media print {
     header, .repside, #dashboardview, .banner, .no-print { display: none !important; }
     .wrap { max-width: none; padding: 0; }
     .repgrid { display: block; }
     #repmain { max-width: none; }
-    .rcard, .rtwo { break-inside: avoid; }
+    .rcard, .rtwo, .howcard, .howrecover { break-inside: avoid; }
     .rcard { box-shadow: none; }
     :root, :root[data-theme="dark"] {
       --page:#fff; --surface-1:#fff; --surface-2:#fafafa;
@@ -495,6 +518,7 @@
     <div class="seg" id="viewseg" style="margin-left:6px">
       <button data-v="dashboard" class="on" onclick="showView('dashboard')">Dashboard</button>
       <button data-v="reports" onclick="showView('reports')">Reports</button>
+      <button data-v="how" onclick="showView('how')">How it works</button>
     </div>
     <span class="spacer"></span>
     <span class="updated"><span class="dot stale" id="livedot"></span><span id="updated">loading&hellip;</span></span>
@@ -639,6 +663,155 @@
       <aside class="repside reveal" id="repside"></aside>
       <main id="repmain" class="reveal"></main>
     </div>
+  </div>
+
+  <!-- ===== How it works ===== -->
+  <div id="howview" style="display:none">
+    <div class="rcard reveal">
+      <div class="rhead"><div style="flex:1">
+        <h1>How it works</h1>
+        <div class="rsub">How cut data flows from the machines to this dashboard — and what to check when something breaks.</div>
+      </div></div>
+    </div>
+
+    <div class="rcard reveal howmap">
+      <svg viewBox="0 0 800 452" role="img" aria-label="System map: two MultiCam routers write runs through the shop PC logger into the Press Sheet Tracking sheet; Apps Script reads that sheet and the Live Production Copy schedule, and serves JSON to the GitHub Pages dashboard that everyone opens; GitHub auto-deploys both on push to main.">
+        <defs>
+          <marker id="howarrow" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="var(--text-muted)"/>
+          </marker>
+          <marker id="howarrowB" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6 Z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+        <g stroke="var(--text-muted)" stroke-width="1.4" fill="none">
+          <path d="M120,64 L165,92" marker-end="url(#howarrow)"/>
+          <path d="M290,64 L245,92" marker-end="url(#howarrow)"/>
+          <path d="M205,138 L205,168" marker-end="url(#howarrow)"/>
+          <path d="M210,228 L350,266" marker-end="url(#howarrow)"/>
+          <path d="M590,228 L470,266" marker-end="url(#howarrow)"/>
+          <path d="M400,320 L400,352" marker-end="url(#howarrow)"/>
+          <path d="M400,404 L400,436" marker-end="url(#howarrow)"/>
+        </g>
+        <g stroke="var(--accent)" stroke-width="1.4" fill="none" stroke-dasharray="4 3">
+          <path d="M628,300 L572,294" marker-end="url(#howarrowB)"/>
+          <path d="M660,340 Q560,392 552,384" marker-end="url(#howarrowB)"/>
+        </g>
+        <g fill="var(--text-muted)" font-size="8.5">
+          <text x="212" y="156">writes run rows</text>
+          <text x="238" y="250">read server-side</text>
+          <text x="486" y="250">read server-side</text>
+          <text x="406" y="340">serves JSON (/exec)</text>
+          <text x="406" y="424">opened by</text>
+        </g>
+        <g fill="var(--accent)" font-size="8">
+          <text x="500" y="286">deploy code (clasp)</text>
+          <text x="470" y="372">deploy page</text>
+        </g>
+        <g>
+          <rect x="40" y="22" width="160" height="42" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
+          <text x="120" y="40" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">MultiCam 3-202-R16</text>
+          <text x="120" y="54" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">router &#183; #37137</text>
+          <rect x="210" y="22" width="160" height="42" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
+          <text x="290" y="40" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">MultiCam 3-205-R16</text>
+          <text x="290" y="54" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">router &#183; #41334</text>
+        </g>
+        <rect x="70" y="92" width="270" height="46" rx="6" fill="var(--surface-2)" stroke="var(--job-2)" stroke-width="1.3"/>
+        <text x="205" y="110" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">Shop PC &#183; MultiCam logger</text>
+        <text x="205" y="124" text-anchor="middle" font-size="8" fill="var(--job-2)">&#9888; upload path not in repo — verify &amp; note</text>
+        <rect x="60" y="168" width="300" height="60" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="210" y="186" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Google Sheet — RAW DATA</text>
+        <text x="210" y="200" text-anchor="middle" font-size="9" fill="var(--accent)">&#8220;Press Sheet Tracking&#8221;</text>
+        <text x="210" y="214" text-anchor="middle" font-size="8" fill="var(--text-secondary)">Job Log &#183; Dashboard Jobs &#183; Production History</text>
+        <rect x="460" y="168" width="300" height="60" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
+        <text x="610" y="186" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Google Sheet — SCHEDULE</text>
+        <text x="610" y="200" text-anchor="middle" font-size="9" fill="var(--text-primary)">&#8220;Live Production Copy&#8221;</text>
+        <text x="610" y="214" text-anchor="middle" font-size="8" fill="var(--text-secondary)">production schedule (read-only)</text>
+        <rect x="230" y="266" width="340" height="54" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="400" y="286" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">Apps Script web app</text>
+        <text x="400" y="300" text-anchor="middle" font-size="8.5" fill="var(--text-secondary)">reads both sheets &#8594; serves JSON + write API</text>
+        <text x="400" y="313" text-anchor="middle" font-size="8" fill="var(--accent)">runs as stickersquicktesting@gmail.com</text>
+        <rect x="608" y="262" width="168" height="92" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
+        <text x="692" y="282" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">GitHub</text>
+        <text x="692" y="296" text-anchor="middle" font-size="8.2" fill="var(--text-secondary)">repo + Actions</text>
+        <text x="692" y="311" text-anchor="middle" font-size="8" fill="var(--text-primary)">source of truth</text>
+        <text x="692" y="324" text-anchor="middle" font-size="8" fill="var(--text-primary)">auto-deploy on</text>
+        <text x="692" y="336" text-anchor="middle" font-size="8" fill="var(--text-primary)">push to main</text>
+        <rect x="250" y="352" width="300" height="52" rx="6" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.6"/>
+        <text x="400" y="372" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">GitHub Pages — the dashboard</text>
+        <text x="400" y="386" text-anchor="middle" font-size="8" fill="var(--accent)">pvlabels.github.io/Router-Department-Tracking</text>
+        <text x="400" y="398" text-anchor="middle" font-size="8" fill="var(--text-secondary)">fetches JSON from Apps Script (no Google login)</text>
+        <rect x="288" y="410" width="224" height="40" rx="6" fill="var(--surface-1)" stroke="var(--text-secondary)" stroke-width="1.3"/>
+        <text x="400" y="428" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-primary)">Shop browsers &amp; phones</text>
+        <text x="400" y="442" text-anchor="middle" font-size="8" fill="var(--text-secondary)">everyone views the live dashboard</text>
+      </svg>
+    </div>
+
+    <div class="howgrid reveal">
+      <div class="howcard">
+        <div class="t"><span class="n">1</span>MultiCam routers (&#215;2)</div>
+        <div class="r">The two cutting machines. Names appear in the Job Log &#8220;Machine&#8221; column.</div>
+        <div class="d mono">MultiCam 3-202-R16 (37137)</div>
+        <div class="d mono">MultiCam 3-205-R16 (41334)</div>
+      </div>
+      <div class="howcard">
+        <div class="t"><span class="n">2</span>Shop PC &#183; logger</div>
+        <div class="r">Software on the router PC appends each finished cut (date, start/end, job, machine, status) as a row in the Job Log.</div>
+        <div class="d"><span class="flag">&#9888; Verify:</span> the exact logger software &amp; upload method aren&#8217;t recorded here — confirm on the shop PC and write it in.</div>
+        <div class="d">Note: its &#8220;Total Time&#8221; column runs +3&#8202;h high; the dashboard ignores it and uses End &#8722; Start.</div>
+      </div>
+      <div class="howcard key">
+        <div class="t"><span class="n">3</span>Raw data sheet — &#8220;Press Sheet Tracking&#8221;</div>
+        <div class="r">Where the machines write. Also holds the dashboard-owned tabs.</div>
+        <div class="d"><b>Access:</b> owned by the production office &#183; shared with stickersquicktesting@gmail.com</div>
+        <div class="d"><b>Tabs:</b> Job Log (machine runs) &#183; Dashboard Jobs &#183; Production History</div>
+        <div class="d mono">1532iOs5fdQxJQyeQUatdDDq5jIEVKLYdYh-tRfXkXIc</div>
+      </div>
+      <div class="howcard">
+        <div class="t"><span class="n">4</span>Schedule sheet — &#8220;Live Production Copy&#8221;</div>
+        <div class="r">Read for the queue, sizes, quantities, work orders, and the full-year history backfill.</div>
+        <div class="d"><b>Access:</b> owned by the production office &#183; read access for stickersquicktesting@gmail.com</div>
+        <div class="d mono">1E0C4hanKBmYCrZw1V8DcknU60UxFtXAqMF48_XpDTik &nbsp;(Sheet1 / gid 0)</div>
+      </div>
+      <div class="howcard key">
+        <div class="t"><span class="n">5</span>Apps Script web app</div>
+        <div class="r">Reads both sheets server-side; serves the dashboard JSON and the write API. Access: Anyone (anonymous).</div>
+        <div class="d"><b>Account (owns/runs):</b> stickersquicktesting@gmail.com — the two sheets must stay shared with it.</div>
+        <div class="d mono"><b>script:</b> 1J7W2WMz5ewvHzaH976p7eHy4nwX91c0ooHKz0Qc8t_XfrreYQT7aF6tO</div>
+        <div class="d mono"><b>deployment:</b> AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g</div>
+      </div>
+      <div class="howcard">
+        <div class="t"><span class="n">6</span>GitHub — source &amp; auto-deploy</div>
+        <div class="r">The real source of truth. Push to <b>main</b> &#8594; Actions pushes code to Apps Script (clasp), redeploys the web app, and publishes Pages.</div>
+        <div class="d mono"><a href="https://github.com/pvlabels/Router-Department-Tracking" target="_blank" rel="noopener">github.com/pvlabels/Router-Department-Tracking</a></div>
+        <div class="d"><b>Files:</b> src/Code.js (backend) &#183; src/index.html (dashboard) &#183; .github/workflows/deploy.yml</div>
+        <div class="d"><b>Secret:</b> CLASPRC_JSON (clasp token) &#183; <b>Var:</b> DEPLOYMENT_ID = the #5 deployment &#183; clasp pinned @2.4.2</div>
+      </div>
+      <div class="howcard key">
+        <div class="t"><span class="n">7</span>GitHub Pages — this dashboard</div>
+        <div class="r">The page everyone opens. Serves src/index.html and fetches JSON from #5 without Google cookies, so Workspace&#8217;s block on script.google.com can&#8217;t interfere.</div>
+        <div class="d mono"><a href="https://pvlabels.github.io/Router-Department-Tracking/">pvlabels.github.io/Router-Department-Tracking</a></div>
+        <div class="d">The &#8220;Router Dashboard&#8221; desktop shortcut points here.</div>
+      </div>
+      <div class="howcard">
+        <div class="t"><span class="n">8</span>Local dev</div>
+        <div class="r">Where the code is edited before publishing.</div>
+        <div class="d">Edit <span class="mono">src/</span> in the local working copy, commit, push to <b>main</b> — Actions does the rest.</div>
+      </div>
+    </div>
+
+    <div class="howrecover reveal">
+      <h2>If something&#8217;s down — start here</h2>
+      <ul>
+        <li><b>Dashboard blank or stale:</b> open the <a href="https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec?format=json" target="_blank" rel="noopener">raw JSON feed</a> (#5). If it errors, confirm sheets #3 and #4 are still shared with <span class="mono">stickersquicktesting@gmail.com</span>.</li>
+        <li><b>New cuts not appearing:</b> the shop logger (#2) isn&#8217;t writing to the Job Log — check the router PC / logging software.</li>
+        <li><b>Queue, sizes, or WOs wrong/empty:</b> the schedule sheet (#4) moved, was renamed, or lost read access for the Apps Script account.</li>
+        <li><b>A code change didn&#8217;t go live:</b> check <a href="https://github.com/pvlabels/Router-Department-Tracking/actions" target="_blank" rel="noopener">GitHub Actions</a> (#6) for a failed run. Pages OIDC hiccup &#8594; re-run with <b>&#8220;Run workflow&#8221;</b>, not &#8220;re-run failed jobs&#8221; (that duplicates the Pages artifact).</li>
+        <li><b>clasp / Apps Script login broke:</b> run <span class="mono">clasp login</span> with <span class="mono">@google/clasp@2.4.2</span>, then update the <span class="mono">CLASPRC_JSON</span> repo secret.</li>
+      </ul>
+    </div>
+
+    <div class="repfoot">Verified against the repo (README, .clasp.json, deploy.yml) and the live dashboard &#183; the one item not documented in code — how the machines physically upload (#2) — is flagged above &#183; updated Jul 2026</div>
   </div>
 
 </div>
@@ -1999,17 +2172,17 @@ function showView(v) {
   currentView = v;
   document.getElementById('dashboardview').style.display = v === 'dashboard' ? '' : 'none';
   document.getElementById('reportsview').style.display = v === 'reports' ? '' : 'none';
+  document.getElementById('howview').style.display = v === 'how' ? '' : 'none';
   Array.prototype.forEach.call(document.querySelectorAll('#viewseg button'), function (b) {
     b.className = b.getAttribute('data-v') === v ? 'on' : '';
   });
-  // Reports have their own filters, so the machine dropdown is irrelevant there;
-  // swap it for the Print / PDF button.
-  var isReports = v === 'reports';
-  document.getElementById('machineSelect').style.display = isReports ? 'none' : '';
-  document.getElementById('headerprint').style.display = isReports ? '' : 'none';
-  if (isReports) renderReport();
+  // The machine dropdown only filters the dashboard; the other views swap it
+  // for the Print / PDF button.
+  document.getElementById('machineSelect').style.display = v === 'dashboard' ? '' : 'none';
+  document.getElementById('headerprint').style.display = v === 'dashboard' ? 'none' : '';
+  if (v === 'reports') renderReport();
   else {
-    document.title = 'Router Department';
+    document.title = v === 'how' ? 'Router Department — How it works' : 'Router Department';
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   }
   window.scrollTo(0, 0);
