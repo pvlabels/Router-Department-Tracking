@@ -664,8 +664,7 @@
     <!-- a <div>, not <header>: the global header{} rules make that tag sticky -->
     <div class="reveal" style="max-width:720px;margin-bottom:36px">
       <div style="color:var(--accent);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Reference</div>
-      <h1 style="font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.2;margin:0 0 12px">How it works</h1>
-      <p style="color:var(--text-secondary);font-size:16px;margin:0;text-wrap:pretty">Every job on the router is one step in cutting a full sheet down to finished parts. The filename tells you which step you're looking at &mdash; and that's what the tracker and reports are built on.</p>
+      <h1 style="font-size:clamp(30px,4vw,40px);font-weight:600;letter-spacing:-0.03em;line-height:1.2;margin:0">How it works</h1>
     </div>
 
     <!-- Three-stage flow -->
@@ -709,9 +708,9 @@
         <div class="hcard" style="border:1px solid var(--violet);border-radius:12px;padding:20px;background:var(--violet-wash)">
           <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
             <span style="width:22px;height:22px;border-radius:6px;background:var(--violet);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">3</span>
-            <span style="font-size:15.5px;font-weight:600;letter-spacing:-0.01em">Final Size</span>
+            <span style="font-size:15.5px;font-weight:600;letter-spacing:-0.01em">Finished Part</span>
           </div>
-          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">Cut by <span style="font-family:var(--font-mono);color:var(--violet);font-weight:500">SR- / TR- / Run #</span></div>
+          <div style="color:var(--text-muted);font-size:12.5px;margin-bottom:14px">Cut by a <span style="font-family:var(--font-mono);color:var(--violet);font-weight:500">Run #</span> after printing</div>
           <div style="border:1.5px solid var(--violet);border-radius:4px;aspect-ratio:31.5 / 23.5;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:3px;padding:3px;margin-bottom:14px">
             <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
             <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
@@ -720,7 +719,7 @@
             <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
             <div style="background:var(--surface-1);border:1px solid var(--violet);border-radius:2px"></div>
           </div>
-          <p style="margin:0;font-size:13.5px;color:var(--text-secondary)">After printing, the sheet is cut to finished parts &mdash; <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">SR-</span> for stock items, <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">TR-</span> when several small orders are ganged on one sheet.</p>
+          <p style="margin:0;font-size:13.5px;color:var(--text-secondary)">Once a sheet has been printed, a numbered run cuts it into finished parts &mdash; <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">SR-</span> runs for stock, <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">TR-</span> runs for custom orders.</p>
         </div>
       </div>
     </section>
@@ -742,36 +741,36 @@
           </div>
         </div>
         <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
+          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--amber);background:var(--amber-wash);border:1px solid var(--amber)">Run #</span></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Run number &mdash; printed sheets only</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">A numbered production run off the schedule that cuts an already-printed sheet into finished parts. Every run is either an <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">SR-</span> or <span style="font-family:var(--font-mono);font-weight:500;color:var(--text-primary)">TR-</span> file.</div>
+          </div>
+          <div style="flex:none;width:190px">
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
+            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">Run 7881</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 14px 44px;border-top:1px solid var(--border)">
           <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">SR-</span></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Short Run &mdash; stock items</div>
-            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">Cuts a printed press sheet to final size. Used for stock items: one item repeated across the sheet.</div>
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Short Run &mdash; stock</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">A Run # cutting stock items: one item repeated across the sheet.</div>
           </div>
           <div style="flex:none;width:190px">
             <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
             <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">SR-07-111-m3.cnc</div>
           </div>
         </div>
-        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
+        <div style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 14px 44px;border-top:1px solid var(--border)">
           <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">TR-</span></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Today&rsquo;s Run &mdash; ganged orders</div>
-            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">Same final-size cut, but for small orders: several different orders are ganged onto one sheet and cut apart.</div>
+            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Today&rsquo;s Run &mdash; custom</div>
+            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">A Run # for custom orders: several different orders ganged onto one sheet and cut apart.</div>
           </div>
           <div style="flex:none;width:190px">
             <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
             <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">TR-7881.cnc</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-top:1px solid var(--border)">
-          <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--amber);background:var(--amber-wash);border:1px solid var(--amber)">Run #</span></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Run number</div>
-            <div style="color:var(--text-secondary);font-size:13.5px;margin-top:2px;text-wrap:pretty">A numbered production run off the schedule. Also a final-size cut of a printed sheet.</div>
-          </div>
-          <div style="flex:none;width:190px">
-            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:3px">Example</div>
-            <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">Run 7881</div>
           </div>
         </div>
       </div>
