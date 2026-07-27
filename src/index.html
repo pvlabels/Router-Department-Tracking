@@ -472,6 +472,12 @@
   #howview .secsub { color: var(--text-secondary); font-size: 14px; margin: 0 0 18px; }
   .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: stretch; }
   @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } .flow .arrow { transform: rotate(90deg); } }
+  /* SR-/TR- branch off Run # with a connector instead of divider lines */
+  .subrun { position: relative; }
+  .subrun::before { content: ''; position: absolute; left: 42px; top: 0; width: 16px; height: 27px;
+    border-left: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border); border-bottom-left-radius: 8px; }
+  .subrun.cont::after { content: ''; position: absolute; left: 42px; top: 0; bottom: 0;
+    border-left: 1.5px solid var(--border); }
 
   /* ---------- print: report only, forced light ---------- */
   @media print {
@@ -751,7 +757,7 @@
             <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">Run 7881</div>
           </div>
         </div>
-        <div style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 14px 44px;border-top:1px solid var(--border)">
+        <div class="subrun cont" style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 14px 58px">
           <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">SR-</span></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Short Run &mdash; stock</div>
@@ -762,7 +768,7 @@
             <div style="font-family:var(--font-mono);font-size:12.5px;color:var(--text-primary)">SR-07-111-m3.cnc</div>
           </div>
         </div>
-        <div style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 14px 44px;border-top:1px solid var(--border)">
+        <div class="subrun" style="display:flex;gap:16px;align-items:flex-start;padding:14px 18px 16px 58px">
           <div style="flex:none;width:104px"><span style="display:inline-block;font-family:var(--font-mono);font-size:13px;font-weight:600;padding:4px 10px;border-radius:6px;color:var(--violet);background:var(--violet-wash);border:1px solid var(--violet)">TR-</span></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:14.5px;font-weight:600;letter-spacing:-0.01em">Today&rsquo;s Run &mdash; custom</div>
