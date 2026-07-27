@@ -3,6 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<title>Router Department</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +20,7 @@
     --page:#f2f3f5; --surface-1:#fff; --surface-2:#f4f5f7;
     /* Summary tiles + the highlights panel stay white (card-colored) in light. */
     --tile-bg:#fff; --hl-bg:#fff;
-    --text-primary:#111; --text-secondary:#666; --text-muted:#999;
+    --text-primary:#111; --text-secondary:#666; --text-muted:#707070;
     --border:#eaeaea; --border-strong:#000; --grid:#efefef; --baseline:#eaeaea;
     --accent:#0070f3; --accent-wash:#f0f7ff; --accent-ink:#fff;
     --delta-good:#0f9d58; --delta-bad:#e00000;
@@ -50,9 +51,9 @@
     color-scheme: dark;
     --page:#000; --surface-1:#0a0a0a; --surface-2:#111;
     --tile-bg:#111; --hl-bg:#0e2740;
-    --text-primary:#ededed; --text-secondary:#a1a1a1; --text-muted:#707070;
+    --text-primary:#ededed; --text-secondary:#a1a1a1; --text-muted:#8f8f8f;
     --border:#2a2a2a; --border-strong:#fff; --grid:#1c1c1c; --baseline:#2a2a2a;
-    --accent:#3291ff; --accent-wash:#0e2740;
+    --accent:#3291ff; --accent-wash:#0e2740; --accent-ink:#000;
     --delta-good:#4ac66a; --delta-bad:#ff5c5c;
     --series-1:#3291ff; --series-2:#4ac66a;
     --logo-fg:#ffffff; --logo-track:#242424;
@@ -286,7 +287,7 @@
   }
   .seg button:first-child { border-left: none; }
   .seg button:hover { background: var(--surface-2); color: var(--text-primary); }
-  .seg button.on { background: var(--accent); color: #fff; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
   .navbar { display: flex; align-items: center; gap: 8px; }
   .navbar button { padding: 6px 10px; display: inline-flex; align-items: center; justify-content: center; }
   .navbar #periodlabel, .navbar #finlabel { font-weight: 500; font-size: 13.5px; min-width: 180px; text-align: center; }
@@ -318,9 +319,17 @@
     padding: 18px; background: var(--surface-1); max-height: calc(100vh - 96px); overflow-y: auto;
   }
   @media (max-width: 900px) { .repside { position: static; max-height: none; } }
-  .repside h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px; }
+  .repsidehead { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; }
+  .repsidehead .h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .resetbtn { font: inherit; font-size: 12px; font-weight: 500; color: var(--text-secondary); background: none;
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+  .resetbtn:hover { color: var(--text-primary); background: var(--surface-2); }
   .repside .seclabel { margin-bottom: 8px; }
   .repside .group { margin-bottom: 20px; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .showmore { font: inherit; font-size: 12.5px; font-weight: 500; color: var(--accent); background: none;
+    border: none; cursor: pointer; padding: 8px 0 0; }
   .typebtn {
     display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
     border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
@@ -331,17 +340,14 @@
   .typebtn .tl { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 13.5px; }
   .typebtn .tl .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   .typebtn .td { color: var(--text-muted); font-size: 12px; margin-top: 3px; margin-left: 18px; }
-  .typebtn.off { opacity: .62; }
-  .typebtn .tag { font-size: 10.5px; font-weight: 600; margin-left: auto; padding: 1px 6px; border-radius: 20px;
-    background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
   .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
   .presets button { font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); cursor: pointer; }
   .presets button:hover { background: var(--surface-2); }
-  .presets button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .presets button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .repdates { display: flex; gap: 8px; margin-bottom: 4px; }
   .repdates > div { flex: 1; }
-  .repdates label { display: block; color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .repdates label { display: block; color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
   .repdates input { font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); width: 100%; }
   .filterhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -405,13 +411,13 @@
   .delta.up { color: var(--delta-good); }
   .delta.down { color: var(--delta-bad); }
   .delta.flat { color: var(--text-muted); }
-  .dvs { color: var(--text-muted); font-size: 11.5px; font-weight: 400; }
+  .dvs { color: var(--text-muted); font-size: 12px; font-weight: 400; }
   .rkpi .kdelta { margin-top: 7px; }
   .hbar .val .prev { color: var(--text-muted); font-weight: 400; }
   .hbar .track.cmp { height: 5px; margin-top: 3px; opacity: .5; }
   /* item-vs-item compare */
   .cmpitems { display: flex; flex-direction: column; gap: 8px; }
-  .cmpitems label { display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .cmpitems label { display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
   .cmpitems label .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
   .cmpitems select { width: 100%; font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
@@ -429,7 +435,7 @@
   /* ---------- time estimator (Size report) ---------- */
   .estrow { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
   .estrow > div { display: flex; flex-direction: column; }
-  .estrow label { color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+  .estrow label { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
   .estrow select, .estrow input {
     font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 6px;
     border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
@@ -445,13 +451,13 @@
   .estfinish .v { font-size: clamp(20px,2.4vw,28px); font-weight: 600; letter-spacing: -0.02em; margin-top: 5px; color: var(--accent); }
   .estfinish .s { color: var(--text-secondary); font-size: 12.5px; margin-top: 3px; }
   .esttiles { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
-  .estnote { color: var(--text-muted); font-size: 11.5px; margin-top: 10px; }
+  .estnote { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
   .rhi ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
   .rhi li { font-size: 13.5px; }
   .rplaceholder { border: 1px dashed var(--border); border-radius: 12px; padding: 48px 24px; text-align: center; }
   .rplaceholder .t { font-size: 15px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
   .rplaceholder .d { font-size: 13px; color: var(--text-muted); max-width: 440px; margin: 0 auto; }
-  .repfoot { color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 6px 0; }
+  .repfoot { color: var(--text-muted); font-size: 12px; text-align: center; padding: 6px 0; }
 
   /* ---------- print: report only, forced light ---------- */
   @media print {
@@ -463,7 +469,7 @@
     .rcard { box-shadow: none; }
     :root, :root[data-theme="dark"] {
       --page:#fff; --surface-1:#fff; --surface-2:#fafafa;
-      --text-primary:#111; --text-secondary:#555; --text-muted:#888;
+      --text-primary:#111; --text-secondary:#555; --text-muted:#707070;
       --border:#d8d8d8; --border-strong:#000; --grid:#e6e6e6; --baseline:#dcdcdc;
       --accent:#0070f3; --accent-wash:#f2f7ff;
       --delta-good:#0f9d58; --delta-bad:#e00000;
@@ -628,6 +634,7 @@
 
   <!-- ===== Reports ===== -->
   <div id="reportsview" style="display:none">
+    <div id="repannounce" class="visually-hidden" aria-live="polite"></div>
     <div class="repgrid">
       <aside class="repside reveal" id="repside"></aside>
       <main id="repmain" class="reveal"></main>
@@ -2001,20 +2008,23 @@ function showView(v) {
   document.getElementById('machineSelect').style.display = isReports ? 'none' : '';
   document.getElementById('headerprint').style.display = isReports ? '' : 'none';
   if (isReports) renderReport();
+  else {
+    document.title = 'Router Department';
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
   window.scrollTo(0, 0);
 }
 
-// Display order mirrors the design; `available:false` types have no source data
-// in the run log yet, so they show a "not captured" state instead of charts.
+// Display order matches usage: the default type (Size) leads the list.
 var REPORT_TYPES = [
-  { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet', dim: 'sheet',    filterLabel: 'Press sheets', available: true },
-  { key: 'customer', label: 'Customer',    desc: 'Machine time by customer',          dim: 'customer', filterLabel: 'Customers',    available: true, sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
-  { key: 'stock',    label: 'Stock Item',  desc: 'Runs grouped by stock item',        dim: 'stock',    filterLabel: 'Stock items',  available: true, sparse: true, bucket: 'No stock item', noun: 'a stock item', hideBucket: true },
-  { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',        dim: 'wo',       filterLabel: 'Work orders',  available: true, sparse: true, bucket: 'No WO', noun: 'a work order', hideBucket: true },
-  { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',        dim: 'size',     filterLabel: 'Sizes',        available: true }
+  { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',           dim: 'size',     filterLabel: 'Sizes' },
+  { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet',    dim: 'sheet',    filterLabel: 'Press sheets' },
+  { key: 'customer', label: 'Customer',    desc: 'Runs, sheets & hours by customer',     dim: 'customer', filterLabel: 'Customers',   sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
+  { key: 'stock',    label: 'Stock Item',  desc: 'Runs grouped by stock item',           dim: 'stock',    filterLabel: 'Stock items', sparse: true, bucket: 'No stock item', noun: 'a stock item', hideBucket: true },
+  { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',           dim: 'wo',       filterLabel: 'Work orders', sparse: true, bucket: 'No WO', noun: 'a work order', hideBucket: true }
 ];
 
-var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', items: [] };
+var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', items: [], tableAll: false };
 var MAX_COMPARE_ITEMS = 6;
 var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
 var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
@@ -2158,6 +2168,9 @@ function setReportCompare(m) {
 function onCompareDate() {
   reportState.cstart = document.getElementById('cmp_start').value || reportState.cstart;
   reportState.cend = document.getElementById('cmp_end').value || reportState.cend;
+  if (reportState.cstart && reportState.cend && reportState.cend < reportState.cstart) {
+    var t = reportState.cstart; reportState.cstart = reportState.cend; reportState.cend = t;
+  }
   renderReport();
 }
 
@@ -2255,6 +2268,7 @@ function setReportType(key) {
   reportState.type = key;
   reportState.sel = {};                        // selection is dimension-specific
   reportState.items = [];                      // so are the item-compare picks
+  reportState.tableAll = false;                // and the expanded breakdown table
   reportFilterQuery = '';
   renderReport();
 }
@@ -2262,6 +2276,10 @@ function setReportPreset(p) { reportPreset(p); renderReport(); }
 function onReportDate() {
   reportState.start = document.getElementById('rep_start').value || reportState.start;
   reportState.end = document.getElementById('rep_end').value || reportState.end;
+  // a reversed range would silently render an empty report — swap instead
+  if (reportState.start && reportState.end && reportState.end < reportState.start) {
+    var t = reportState.start; reportState.start = reportState.end; reportState.end = t;
+  }
   reportState.preset = 'custom';
   renderReport();
 }
@@ -2281,7 +2299,7 @@ var REPORT_OTHER = 'var(--text-muted)';
 
 /* ---- SVG: donut + trend ---- */
 
-function donutSvg(segs) {
+function donutSvg(segs, label) {
   var size = 132, sw = 21, r = (size - sw) / 2, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r, off = 0;
   var ring = segs.map(function (s) {
     var len = Math.max(0, s.frac) * C;
@@ -2290,7 +2308,8 @@ function donutSvg(segs) {
       + '" stroke-dashoffset="' + (-off).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
     off += len; return c;
   }).join('');
-  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">'
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"'
+    + (label ? ' role="img" aria-label="' + escapeHtml(label) + '"' : ' aria-hidden="true"') + '>'
     + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--grid)" stroke-width="' + sw + '"/>'
     + ring + '</svg>';
 }
@@ -2301,7 +2320,7 @@ function donutSvg(segs) {
  * (so unequal periods align start-to-end) and drawn in order, first = bottom.
  * Date ticks come from tickDays.
  */
-function multiTrendSvg(seriesList, tickDays) {
+function multiTrendSvg(seriesList, tickDays, label) {
   var W = 920, H = 150, padB = 22, padT = 10, padX = 4;
   var max = 1;
   seriesList.forEach(function (s) { s.days.forEach(function (d) { if (d.count > max) max = d.count; }); });
@@ -2326,25 +2345,69 @@ function multiTrendSvg(seriesList, tickDays) {
     ticks += '<text x="' + xT(i).toFixed(1) + '" y="' + (H - 6) + '" fill="var(--text-muted)" font-size="10" '
       + 'font-family="var(--font-mono)" text-anchor="middle">' + fmtDateShort(td[i].date) + '</text>';
   }
-  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">'
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block"'
+    + (label ? ' role="img" aria-label="' + escapeHtml(label) + '"' : ' aria-hidden="true"') + '>'
     + '<line x1="' + padX + '" x2="' + (W - padX) + '" y1="' + (H - padB) + '" y2="' + (H - padB) + '" stroke="var(--baseline)" stroke-width="1"/>'
     + areas + lines + ticks + '</svg>';
 }
 
 /** Main series (accent, filled) with an optional second one behind it. */
-function trendSvg(days, cmpDays, cmpStyle) {
+function trendSvg(days, cmpDays, cmpStyle, label) {
   var list = [];
   if (cmpDays && cmpDays.length) {
     var cs = cmpStyle || { stroke: 'var(--text-muted)', dash: '5 4', width: 1.6, opacity: 0.8 };
     list.push({ days: cmpDays, stroke: cs.stroke, dash: cs.dash, width: cs.width, opacity: cs.opacity });
   }
   list.push({ days: days, stroke: 'var(--accent)', width: 2, area: true });
-  return multiTrendSvg(list, days);
+  return multiTrendSvg(list, days, label);
 }
 
 /* ---- render ---- */
 
+/**
+ * Public entry: renders the report, then restores keyboard focus (the sidebar
+ * is rebuilt with innerHTML, which would otherwise drop focus to <body>),
+ * announces the change to assistive tech, names the document (the print/PDF
+ * filename), and serializes the built report into the URL hash for sharing.
+ */
 function renderReport() {
+  var focusId = document.activeElement && document.activeElement.id;
+  renderReportBody();
+  if (focusId) {
+    var el = document.getElementById(focusId);
+    if (el) el.focus();
+  }
+  var cfg = reportCfg();
+  var label = reportState.preset ? reportPresetLabel(reportState.preset) : (reportState.start + ' – ' + reportState.end);
+  document.title = 'Router Report — ' + cfg.label + ' — ' + label;
+  var live = document.getElementById('repannounce');
+  if (live) live.textContent = cfg.label + ' report updated · ' + label;
+  reportHash();
+}
+
+/** The built report is shareable: its state lives in the URL hash. */
+function reportHash() {
+  if (currentView !== 'reports') return;
+  var s = reportState;
+  var payload = { t: s.type, m: s.metric, p: s.preset, a: s.start, b: s.end,
+    c: s.compare, ca: s.cstart, cb: s.cend, i: s.items,
+    f: Object.keys(s.sel).filter(function (k) { return s.sel[k]; }) };
+  try { history.replaceState(null, '', '#report=' + encodeURIComponent(JSON.stringify(payload))); } catch (e) {}
+}
+
+function resetReport() {
+  reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', items: [], tableAll: false };
+  reportFilterQuery = '';
+  reportPreset('month');
+  renderReport();
+}
+
+function toggleTableAll() {
+  reportState.tableAll = !reportState.tableAll;
+  renderReport();
+}
+
+function renderReportBody() {
   var cfg = reportCfg();
   if (!reportState.start) reportPreset(reportState.preset || 'month');
   renderRepSidebar(cfg);
@@ -2360,8 +2423,8 @@ function renderReport() {
     + '    <div class="rsub">Router Department · MultiCam cut operations</div></div>'
     + '    <div class="rper"><div class="seclabel">Period</div>'
     + '      <div style="font-weight:600;font-size:14px;margin-top:2px">' + escapeHtml(reportState.preset ? reportPresetLabel(reportState.preset) : periodLabel) + '</div>'
-    + '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:6px">' + escapeHtml(periodLabel) + '</div>'
-    + (cmpRange ? '      <div style="color:var(--text-muted);font-size:11.5px;margin-top:3px">vs ' + escapeHtml(rangeLabel(cmpRange)) + '</div>' : '')
+    + '      <div style="color:var(--text-muted);font-size:12px;margin-top:6px">' + escapeHtml(periodLabel) + '</div>'
+    + (cmpRange ? '      <div style="color:var(--text-muted);font-size:12px;margin-top:3px">vs ' + escapeHtml(rangeLabel(cmpRange)) + '</div>' : '')
     + '    </div>'
     + '  </div>'
     + '</div>';
@@ -2436,10 +2499,27 @@ function renderReport() {
   }
   var hoursComparable = cmp && !hoursPartial && !cmpHoursPartial;
 
+  // Sparse dimensions: ▲/▼ deltas only mean "production changed" when most
+  // runs carry the attribute in BOTH periods and coverage held steady.
+  // Otherwise (4.7% of runs have a customer this month vs 11.6% last month)
+  // the badges measure data entry, not output — suppress them and say so,
+  // same spirit as the hours guard above.
+  var attrComparable = true, attrShareCur = 1, attrSharePrev = 1;
+  if (cmp && (cfg.sparse || cfg.hideBucket)) {
+    var shareOf = function (a) {
+      if (cfg.hideBucket) { var d = a.totalRuns + a.hiddenCount; return d ? a.totalRuns / d : 0; }
+      return a.totalRuns ? a.attributed / a.totalRuns : 0;
+    };
+    attrShareCur = shareOf(agg); attrSharePrev = shareOf(cmp);
+    var lo = Math.min(attrShareCur, attrSharePrev), hiS = Math.max(attrShareCur, attrSharePrev);
+    attrComparable = lo >= 0.5 && hiS <= lo * 1.25;
+  }
+  var showDeltas = !!cmp && attrComparable;
+
   // KPIs — show every total; the metric toggle only drives the breakdowns below.
   var groupNoun = cfg.filterLabel.toLowerCase();
   var machineTimeKpi = { label: 'Machine time', value: totalSecs ? fmtDur(totalSecs) : '—', sub: hoursPartial ? 'Jun 17 on' : '',
-    delta: hoursComparable ? deltaHtml(totalSecs, cmp.totalSecs) : '',
+    delta: (hoursComparable && attrComparable) ? deltaHtml(totalSecs, cmp.totalSecs) : '',
     prev: (hoursComparable && cmp.totalSecs) ? fmtDur(cmp.totalSecs) : '' };
   var utilKpi = { label: 'Utilization', value: (hoursPartial || !totalSecs) ? '—' : Math.round(util) + '%',
     sub: hoursPartial ? 'needs run times' : 'vs 6 AM–5 PM shift',
@@ -2483,12 +2563,12 @@ function renderReport() {
   } else {
     kpis = [
       { label: 'Total runs', value: totalRuns.toLocaleString(),
-        delta: cmp ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
+        delta: showDeltas ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
       { label: 'Sheets', value: totalSheets.toLocaleString(),
-        delta: cmp ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
+        delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
       machineTimeKpi,
       { label: cfg.label, value: String(arr.length), sub: groupNoun,
-        delta: cmp ? deltaHtml(arr.length, Object.keys(cmp.groups).length) : '', prev: cmp ? String(Object.keys(cmp.groups).length) : '' },
+        delta: showDeltas ? deltaHtml(arr.length, Object.keys(cmp.groups).length) : '', prev: cmp ? String(Object.keys(cmp.groups).length) : '' },
       utilKpi
     ];
   }
@@ -2503,7 +2583,7 @@ function renderReport() {
   var metricSeg = '<div class="rcard" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">'
     + '<span class="seclabel" style="margin:0">Measure by</span>'
     + '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
-        return '<button class="' + (metric === m ? 'on' : '') + '" onclick="setReportMetric(' + jsStr(m) + ')">'
+        return '<button class="' + (metric === m ? 'on' : '') + '" id="mm_' + m + '" aria-pressed="' + (metric === m) + '" onclick="setReportMetric(' + jsStr(m) + ')">'
           + REPORT_METRICS[m].label + '</button>';
       }).join('') + '</div>'
     + (metric === 'hours' && (hoursPartial || cmpHoursPartial)
@@ -2511,6 +2591,11 @@ function renderReport() {
           + (hoursPartial ? 'earlier runs show 0 h. Use Runs or Sheets for the full year.'
             : 'the comparison period predates them, so its hours read low.') + '</span>'
         : '<span class="sub" style="margin:0">Runs &amp; sheets cover the full period; hours cover Jun 17 on.</span>')
+    + (cmp && !attrComparable
+        ? '<span class="sub" style="margin:0;flex-basis:100%;color:var(--delta-bad)">Only ' + Math.round(attrShareCur * 100) + '% of runs have '
+          + escapeHtml(cfg.noun) + ' this period (' + Math.round(attrSharePrev * 100)
+          + '% in the comparison) — period-over-period changes would reflect data entry as much as production, so &#9650;/&#9660; badges are hidden.</span>'
+        : '')
     + '</div>';
 
   // pie: top 6 + Other, by the chosen metric (attributed groups only)
@@ -2528,7 +2613,7 @@ function renderReport() {
   var pieCard = '<div class="rcard"><h2>' + mInfo.share + '</h2>'
     + '<div class="h2sub">by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</div>'
     + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
-    + '<div style="position:relative;flex:none">' + donutSvg(segs)
+    + '<div style="position:relative;flex:none">' + donutSvg(segs, mInfo.share + ' by ' + groupNoun.replace(/s$/, '') + ' — donut chart; percentages listed beside it')
     + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">'
     + '<div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">' + centerNum + '</div>'
     + '<div style="color:var(--text-muted);font-size:11px">total ' + mInfo.noun + '</div></div></div>'
@@ -2544,7 +2629,7 @@ function renderReport() {
     var cv = cmpVal(g.key);
     return '<div class="hbar"><div class="top"><span class="nm">' + escapeHtml(g.key) + '</span>'
       + '<span class="val">' + mInfo.fmt(gVal(g))
-      + (cmp ? ' <span class="prev">vs ' + mInfo.fmt(cv) + '</span> ' + deltaHtml(gVal(g), cv) : '') + '</span></div>'
+      + (cmp ? ' <span class="prev">vs ' + mInfo.fmt(cv) + '</span>' + (showDeltas ? ' ' + deltaHtml(gVal(g), cv) : '') : '') + '</span></div>'
       + '<div class="track"><div class="fill" style="width:' + ((gVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div>'
       + (cmp ? '<div class="track cmp"><div class="fill" style="width:' + ((cv / barMax) * 100).toFixed(1) + '%;background:var(--text-muted)"></div></div>' : '')
       + '</div>';
@@ -2555,6 +2640,7 @@ function renderReport() {
 
   // trend: chosen metric per day across weekdays in range. The Size report
   // trades this card for the time-estimator calculator.
+  var busiest = Object.keys(byDay).sort(function (a, b) { return byDay[b] - byDay[a]; })[0];
   var trendCard = '';
   if (cfg.key === 'size') {
     trendCard = estimatorCard(allRecords);
@@ -2577,11 +2663,12 @@ function renderReport() {
     }
     trendCard = days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
       + '<div class="h2sub">' + mInfo.noun + ' per day over the period'
-      + (cmp ? ' · dashed grey = comparison period' : '') + '</div>' + trendSvg(days, cmpDays) + '</div>' : '';
+      + (cmp ? ' · dashed grey = comparison period, stretched to align' : '') + '</div>'
+      + trendSvg(days, cmpDays, null, 'Daily ' + mInfo.noun + ' trend'
+        + (busiest ? '; busiest day ' + fmtDate(parseLocalDate(busiest)) + ' with ' + mInfo.fmt(byDay[busiest]) : '')) + '</div>' : '';
   }
 
   // highlights (lead with the attributed leaders, not the catch-all bucket)
-  var busiest = Object.keys(byDay).sort(function (a, b) { return byDay[b] - byDay[a]; })[0];
   var hi = [];
   if (shown.length) {
     var top1 = shown[0];
@@ -2592,26 +2679,31 @@ function renderReport() {
   }
   if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving '
     + fmtHours(sched.downtime) + ' of idle time' + (machineCount > 1 ? ' across ' + machineCount + ' routers' : '') + ' during scheduled shifts.');
-  if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> (' + mInfo.fmt(byDay[busiest]) + ').');
+  if (busiest) hi.push('Busiest day was <strong>' + fmtDate(parseLocalDate(busiest)) + '</strong> ('
+    + mInfo.fmt(byDay[busiest]) + (metric === 'hours' ? '' : ' ' + mInfo.noun) + ').');
   if (cmp) {
     var cmpTotalAll = metric === 'sheets' ? cmp.totalSheets : metric === 'hours' ? cmp.totalSecs : cmp.totalRuns;
     hi.unshift('Total ' + mInfo.noun + ': <strong>' + mInfo.fmt(total) + '</strong> vs ' + mInfo.fmt(cmpTotalAll)
-      + ' in ' + escapeHtml(rangeLabel(cmpRange)) + ' ' + deltaHtml(total, cmpTotalAll) + '.');
-    // biggest movers by the chosen metric (catch-all bucket excluded)
-    var uni = {};
-    shown.forEach(function (g) { uni[g.key] = true; });
-    Object.keys(cmp.groups).forEach(function (k) { if (!cfg.bucket || k !== cfg.bucket) uni[k] = true; });
-    var moves = Object.keys(uni).map(function (k) {
-      var cur = groups[k] ? gVal(groups[k]) : 0, prev = cmp.groups[k] ? gVal(cmp.groups[k]) : 0;
-      return { key: k, cur: cur, prev: prev, diff: cur - prev };
-    }).sort(function (a, b) { return b.diff - a.diff; });
-    var up = moves[0], down = moves[moves.length - 1];
-    if (up && up.diff > 0) hi.push('Biggest gain: <strong>' + escapeHtml(up.key) + '</strong> — '
-      + mInfo.fmt(up.prev) + ' &rarr; ' + mInfo.fmt(up.cur) + ' ' + mInfo.noun + '.');
-    if (down && down.diff < 0 && (!up || down.key !== up.key)) hi.push('Biggest drop: <strong>' + escapeHtml(down.key) + '</strong> — '
-      + mInfo.fmt(down.prev) + ' &rarr; ' + mInfo.fmt(down.cur) + ' ' + mInfo.noun + '.');
+      + ' in ' + escapeHtml(rangeLabel(cmpRange))
+      + (showDeltas ? ' ' + deltaHtml(total, cmpTotalAll) : ' (attribution coverage changed — not directly comparable)') + '.');
+    // biggest movers by the chosen metric (catch-all bucket excluded); mover
+    // callouts are only honest when the two periods are actually comparable
+    if (showDeltas) {
+      var uni = {};
+      shown.forEach(function (g) { uni[g.key] = true; });
+      Object.keys(cmp.groups).forEach(function (k) { if (!cfg.bucket || k !== cfg.bucket) uni[k] = true; });
+      var moves = Object.keys(uni).map(function (k) {
+        var cur = groups[k] ? gVal(groups[k]) : 0, prev = cmp.groups[k] ? gVal(cmp.groups[k]) : 0;
+        return { key: k, cur: cur, prev: prev, diff: cur - prev };
+      }).sort(function (a, b) { return b.diff - a.diff; });
+      var up = moves[0], down = moves[moves.length - 1];
+      if (up && up.diff > 0) hi.push('Biggest gain: <strong>' + escapeHtml(up.key) + '</strong> — '
+        + mInfo.fmt(up.prev) + ' &rarr; ' + mInfo.fmt(up.cur) + ' ' + mInfo.noun + '.');
+      if (down && down.diff < 0 && (!up || down.key !== up.key)) hi.push('Biggest drop: <strong>' + escapeHtml(down.key) + '</strong> — '
+        + mInfo.fmt(down.prev) + ' &rarr; ' + mInfo.fmt(down.cur) + ' ' + mInfo.noun + '.');
+    }
   }
-  var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
+  var hiCard = '<div class="rcard rhi"><h2>Highlights</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
   // breakdown table — all three measures, share by the chosen metric. For the
@@ -2623,7 +2715,13 @@ function renderReport() {
     if (perSheet) return sheetsH > 0 ? fmtDur(secs / sheetsH) : '—';
     return secs ? fmtDur(secs) : '—';
   };
-  var rows = arr.map(function (g) {
+  // Long-tail dimensions (a YTD WO report has 300+ groups) list the top rows
+  // and fold the rest into one summary line — on screen and, crucially, in the
+  // printed PDF. "Show all" reveals the tail when someone actually needs it.
+  var TABLE_CAP = 20;
+  var tableCapped = !reportState.tableAll && arr.length > TABLE_CAP + 5;
+  var listed = tableCapped ? arr.slice(0, TABLE_CAP) : arr;
+  var rows = listed.map(function (g) {
     var share = total ? (gVal(g) / total) * 100 : 0;
     var c = cmp && cmp.groups[g.key], cv = c ? gVal(c) : 0;
     return '<tr><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:2px;flex:none;background:'
@@ -2631,9 +2729,19 @@ function renderReport() {
       + '<td class="num">' + g.runs.toLocaleString() + '</td>'
       + '<td class="num">' + g.sheets.toLocaleString() + '</td>'
       + '<td class="num">' + mtCell(g.secs, g.sheetsH) + '</td>'
-      + (cmp ? '<td class="num">' + (c ? mInfo.fmt(cv) : '—') + '</td><td class="num">' + deltaHtml(gVal(g), cv) + '</td>' : '')
+      + (cmp ? '<td class="num">' + (c ? mInfo.fmt(cv) : '—') + '</td><td class="num">' + (showDeltas ? deltaHtml(gVal(g), cv) : '—') + '</td>' : '')
       + '<td class="num">' + share.toFixed(0) + '%</td></tr>';
   }).join('');
+  if (tableCapped) {
+    var tail = arr.slice(TABLE_CAP), tR = 0, tS = 0, tSec = 0, tSH = 0, tV = 0;
+    tail.forEach(function (g) { tR += g.runs; tS += g.sheets; tSec += g.secs; tSH += g.sheetsH; tV += gVal(g); });
+    rows += '<tr><td style="color:var(--text-muted)">&hellip; and ' + tail.length + ' more</td>'
+      + '<td class="num">' + tR.toLocaleString() + '</td>'
+      + '<td class="num">' + tS.toLocaleString() + '</td>'
+      + '<td class="num">' + mtCell(tSec, tSH) + '</td>'
+      + (cmp ? '<td class="num">—</td><td class="num">—</td>' : '')
+      + '<td class="num">' + (total ? ((tV / total) * 100).toFixed(0) : 0) + '%</td></tr>';
+  }
   var cmpTotal = cmp ? (metric === 'sheets' ? cmp.totalSheets : metric === 'hours' ? cmp.totalSecs : cmp.totalRuns) : 0;
   // groups active only in the comparison period have no row of their own
   var goneCount = cmp ? Object.keys(cmp.groups).filter(function (k) {
@@ -2647,8 +2755,12 @@ function renderReport() {
     + '<tbody>' + rows + '</tbody>'
     + '<tfoot><tr><td>All</td><td class="num">' + totalRuns.toLocaleString() + '</td><td class="num">'
     + totalSheets.toLocaleString() + '</td><td class="num">' + mtCell(totalSecs, totalSheetsH)
-    + (cmp ? '</td><td class="num">' + mInfo.fmt(cmpTotal) + '</td><td class="num">' + deltaHtml(total, cmpTotal) : '')
+    + (cmp ? '</td><td class="num">' + mInfo.fmt(cmpTotal) + '</td><td class="num">' + (showDeltas ? deltaHtml(total, cmpTotal) : '—') : '')
     + '</td><td class="num">100%</td></tr></tfoot></table></div>'
+    + (arr.length > TABLE_CAP + 5
+      ? '<button class="showmore no-print" id="tbl_more" onclick="toggleTableAll()">'
+        + (tableCapped ? 'Show all ' + arr.length + ' rows' : 'Show top ' + TABLE_CAP + ' only') + '</button>'
+      : '')
     + (goneCount ? '<div class="rowcount">' + goneCount + ' ' + escapeHtml(goneCount === 1 ? groupNoun.replace(/s$/, '') : groupNoun)
       + ' had activity only in the comparison period.</div>' : '')
     + '</div>';
@@ -2670,7 +2782,7 @@ function renderReport() {
   main.innerHTML = head + sparseNote + kpiHtml + metricSeg
     + '<div class="rtwo">' + pieCard + barCard + '</div>'
     + trendCard + hiCard + tableCard
-    + '<div class="repfoot">Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
+    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
 }
 
 /** Per-day machine seconds for the given runs (for scheduleStats downtime). */
@@ -2735,7 +2847,7 @@ function itemCompareHtml(cfg, records, range) {
       + escapeHtml(it.key) + '</span>';
   }).join('<span class="sub" style="margin:0">vs</span>');
   var seg = '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
-    return '<button class="' + (metric === m ? 'on' : '') + '" onclick="setReportMetric(' + jsStr(m) + ')">'
+    return '<button class="' + (metric === m ? 'on' : '') + '" id="mm_' + m + '" aria-pressed="' + (metric === m) + '" onclick="setReportMetric(' + jsStr(m) + ')">'
       + REPORT_METRICS[m].label + '</button>';
   }).join('') + '</div>';
   var headRow = '<div class="rcard" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">'
@@ -2784,7 +2896,7 @@ function itemCompareHtml(cfg, records, range) {
   }).join(' &nbsp;·&nbsp; ');
   var trendCard = series[0].days.length ? '<div class="rcard"><h2>Daily ' + mInfo.noun + '</h2>'
     + '<div class="h2sub">' + legend + '</div>'
-    + multiTrendSvg(series, series[0].days) + '</div>' : '';
+    + multiTrendSvg(series, series[0].days, 'Daily ' + mInfo.noun + ' trend, one line per compared item') + '</div>' : '';
 
   // share of the whole period, for context
   var allAgg = reportAgg(records, range, dim, null, cfg, metric);
@@ -2810,7 +2922,7 @@ function itemCompareHtml(cfg, records, range) {
   var shareSum = its.reduce(function (t, it) { return t + it.share; }, 0);
   hi.push('Together the ' + its.length + ' account for <strong>' + Math.round(shareSum) + '%</strong> of the period\'s '
     + mInfo.noun + ' (' + its.map(function (it) { return Math.round(it.share) + '%'; }).join(' + ') + ').');
-  var hiCard = '<div class="rcard rhi"><h2>Highlights for management</h2><ul>'
+  var hiCard = '<div class="rcard rhi"><h2>Highlights</h2><ul>'
     + hi.map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ul></div>';
 
   // measures table: one row per measure, one column per item
@@ -2839,7 +2951,7 @@ function itemCompareHtml(cfg, records, range) {
     + '</tbody></table></div></div>';
 
   return headRow + kpiHtml + trendCard + hiCard + tableCard
-    + '<div class="repfoot">Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
+    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
 }
 
 /* ----- time estimator: pick a size + quantity, project a finish date ----- */
@@ -2940,14 +3052,14 @@ function renderRepSidebar(cfg) {
 
   var types = REPORT_TYPES.map(function (t, i) {
     var on = t.key === reportState.type;
-    return '<button class="typebtn' + (on ? ' on' : '') + (t.available ? '' : ' off') + '" onclick="setReportType(' + jsStr(t.key) + ')">'
-      + '<div class="tl"><span class="dot" style="background:' + jobColor(i) + '"></span>' + escapeHtml(t.label)
-      + (t.available ? '' : '<span class="tag">no data</span>') + '</div>'
+    return '<button class="typebtn' + (on ? ' on' : '') + '" id="rt_' + t.key + '" aria-pressed="' + on + '" onclick="setReportType(' + jsStr(t.key) + ')">'
+      + '<div class="tl"><span class="dot" style="background:' + jobColor(i) + '"></span>' + escapeHtml(t.label) + '</div>'
       + '<div class="td">' + escapeHtml(t.desc) + '</div></button>';
   }).join('');
 
   var presets = ['week', 'month', 'quarter', 'ytd', 'last30', 'custom'].map(function (p) {
-    return '<button class="' + (reportState.preset === p ? 'on' : '') + '" onclick="setReportPreset(' + jsStr(p) + ')">'
+    var on = reportState.preset === p;
+    return '<button class="' + (on ? 'on' : '') + '" id="pp_' + p + '" aria-pressed="' + on + '" onclick="setReportPreset(' + jsStr(p) + ')">'
       + escapeHtml(p === 'custom' ? 'Custom' : reportPresetLabel(p)) + '</button>';
   }).join('');
   // the start/end pickers only appear when Custom is the active preset
@@ -2958,7 +3070,8 @@ function renderRepSidebar(cfg) {
 
   var cmpModes = [['', 'None'], ['prev', 'Previous period'], ['custom', 'Custom range'], ['items', 'Items']];
   var cmpBtns = cmpModes.map(function (m) {
-    return '<button class="' + (reportState.compare === m[0] ? 'on' : '') + '" onclick="setReportCompare(' + jsStr(m[0]) + ')">'
+    var on = reportState.compare === m[0];
+    return '<button class="' + (on ? 'on' : '') + '" id="cm_' + (m[0] || 'none') + '" aria-pressed="' + on + '" onclick="setReportCompare(' + jsStr(m[0]) + ')">'
       + m[1] + '</button>';
   }).join('');
   var cmpR = compareRange();
@@ -2992,17 +3105,20 @@ function renderRepSidebar(cfg) {
     + '<div class="presets">' + cmpBtns + '</div>' + cmpExtra + '</div>';
 
   var anyChecked = Object.keys(reportState.sel).some(function (k) { return reportState.sel[k]; });
-  // the include/exclude checkbox filters don't apply in Two-items mode
-  var filterList = (cfg.available && reportState.compare !== 'items') ? '<div class="group"><div class="filterhead">'
+  // the include/exclude checkbox filters don't apply in Items mode
+  var filterList = reportState.compare !== 'items' ? '<div class="group"><div class="filterhead">'
       + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
-      + '<button onclick="reportSelectAll()">' + (anyChecked ? 'Clear' : 'All selected') + '</button></div>'
+      + (anyChecked ? '<button id="fh_clear" onclick="reportSelectAll()">Clear selection</button>'
+        : '<span class="sub" style="margin:0">All included</span>') + '</div>'
       + '<div class="repsearchwrap"><input id="rep_search" class="repsearch" placeholder="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '&hellip;"'
+      + ' aria-label="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '"'
       + ' value="' + escapeHtml(reportFilterQuery) + '" oninput="onReportSearch(this.value)" autocomplete="off">'
-      + '<button class="clearq" id="rep_clearq" onclick="clearReportSearch()" title="Clear search"'
+      + '<button class="clearq" id="rep_clearq" onclick="clearReportSearch()" title="Clear search" aria-label="Clear search"'
       + ' style="display:' + (reportFilterQuery ? '' : 'none') + '">&#10005;</button></div>'
       + '<div class="flist" id="rep_filter_results"></div></div>' : '';
 
-  side.innerHTML = '<h3>Build a report</h3>'
+  side.innerHTML = '<div class="repsidehead"><div class="h3">Build a report</div>'
+    + '<button class="resetbtn" id="rep_reset" onclick="resetReport()" title="Back to the default report">Reset</button></div>'
     + '<div class="group"><div class="seclabel">Type of report</div>' + types + '</div>'
     + '<div class="group"><div class="seclabel">Period</div><div class="presets">' + presets + '</div>' + periodDates + '</div>'
     + compareGroup
@@ -3094,6 +3210,27 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') { e.preventDefault(); confirmReopen(); }
   else if (e.key === 'Escape') { e.preventDefault(); closeReopen(); }
 });
+
+// A shared #report=… link reopens the same built report. Preset periods
+// re-resolve to today's dates (a "This month" link means this month); custom
+// dates restore exactly.
+(function () {
+  var m = location.hash.match(/^#report=(.*)$/);
+  if (!m) return;
+  try {
+    var s = JSON.parse(decodeURIComponent(m[1]));
+    if (REPORT_TYPES.some(function (t) { return t.key === s.t; })) reportState.type = s.t;
+    if (REPORT_METRICS[s.m]) reportState.metric = s.m;
+    if (['', 'prev', 'custom', 'items'].indexOf(s.c) >= 0) reportState.compare = s.c;
+    reportState.cstart = typeof s.ca === 'string' ? s.ca : '';
+    reportState.cend = typeof s.cb === 'string' ? s.cb : '';
+    reportState.items = Array.isArray(s.i) ? s.i.slice(0, MAX_COMPARE_ITEMS) : [];
+    (Array.isArray(s.f) ? s.f : []).forEach(function (k) { reportState.sel[k] = true; });
+    if (s.p === 'custom' && s.a && s.b) { reportState.preset = 'custom'; reportState.start = s.a; reportState.end = s.b; }
+    else reportPreset(s.p || 'month');
+    showView('reports');
+  } catch (e) { /* malformed hash — open normally */ }
+})();
 
 load();
 setInterval(autoRefresh, REFRESH_MS);
