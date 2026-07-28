@@ -87,7 +87,8 @@ function doGet(e) {
 function doPost(e) {
   var payload = null;
   try {
-    payload = JSON.parse(e.postData.contents);
+    // Windows tools sometimes prepend a UTF-8 BOM, which JSON.parse rejects.
+    payload = JSON.parse(String(e.postData.contents || '').replace(/^\uFEFF/, ''));
   } catch (err) {
     payload = null;
   }
