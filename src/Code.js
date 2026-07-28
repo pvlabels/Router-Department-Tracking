@@ -47,7 +47,13 @@ var CONFIG = {
   // from the Job Log; history supplies run counts, sheet counts, and metadata.
   HISTORY_SHEET_NAME: 'Production History',
   HISTORY_SINCE: '2026-01-01',
-  HISTORY_REFRESH_MINUTES: 60
+  HISTORY_REFRESH_MINUTES: 60,
+
+  // Laser run intake tab (pre-built by hand, so it is found by gid, not name).
+  // Headers: Date | Laser Run # | Sheets | Sheet Type | Status | Rush | Time |
+  // Notes | Raw Data. Rows are upserted by the Illustrator "Log Laser Run"
+  // script via the laserLog action.
+  LASER_SHEET_GID: 1513496324
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
@@ -104,6 +110,7 @@ function handleAction(p) {
     if (p.action === 'reorderJobs') return reorderJobs(p.order);
     if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
     if (p.action === 'backfillHistory') return backfillProductionHistory();
+    if (p.action === 'laserLog') return logLaserRun(p.run);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -740,6 +747,116 @@ function findJobRow(sheet, name) {
     if (String(values[r][nameIdx] || '').trim() === name) return r + 1;
   }
   return 0;
+}
+
+/* ---------- laser run intake ---------- */
+
+/** The laser tab was built by hand, so locate it by gid (rename-proof). */
+function laserSheet(ss) {
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === CONFIG.LASER_SHEET_GID) return sheets[i];
+  }
+  throw new Error('Laser tab not found (gid ' + CONFIG.LASER_SHEET_GID + ').');
+}
+
+/**
+ * Finds the laser tab's header row (the one containing "Laser Run #") and maps
+ * header name -> 0-based column. The header may be a vertically merged band,
+ * so the first data row is read from the merge span, not assumed to be +1.
+ */
+function laserLayout(sheet) {
+  var rows = Math.max(1, Math.min(sheet.getLastRow(), 10));
+  var width = Math.max(sheet.getLastColumn(), 9);
+  var values = sheet.getRange(1, 1, rows, width).getValues();
+  for (var r = 0; r < values.length; r++) {
+    var map = {};
+    values[r].forEach(function (h, i) { h = String(h).trim(); if (h) map[h] = i; });
+    if (map['Laser Run #'] !== undefined) {
+      var merges = sheet.getRange(r + 1, map['Laser Run #'] + 1).getMergedRanges();
+      var span = merges.length ? merges[0].getNumRows() : 1;
+      return { col: map, headerRow: r + 1, dataRow: r + 1 + span };
+    }
+  }
+  throw new Error('Laser tab header row ("Laser Run #") not found.');
+}
+
+/** "07-28-2026" / "07/28/2026" -> "2026-07-28"; ISO dates pass through. */
+function laserDate(s) {
+  s = String(s || '').trim();
+  var us = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (us) return us[3] + '-' + pad2(+us[1]) + '-' + pad2(+us[2]);
+  return s;
+}
+
+/**
+ * Upserts one laser run captured by the Illustrator script. Keyed by run
+ * number so re-sending a corrected sheet updates the row instead of
+ * duplicating it. Status / Rush / Time are left for the floor to manage;
+ * everything extracted (part numbers, size, work order, ...) is kept intact
+ * in Raw Data as JSON for the dashboard to consume later.
+ */
+function logLaserRun(run) {
+  run = run || {};
+  var runNo = String(run.runNumber || '').replace(/\D/g, '');
+  if (!runNo) throw new Error('Laser run number is required.');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var sheet = laserSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
+    var lay = laserLayout(sheet);
+    var col = lay.col;
+
+    var last = sheet.getLastRow();
+    var row = 0;
+    if (last >= lay.dataRow && col['Laser Run #'] !== undefined) {
+      var runs = sheet.getRange(lay.dataRow, col['Laser Run #'] + 1, last - lay.dataRow + 1, 1).getValues();
+      for (var i = 0; i < runs.length; i++) {
+        if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
+      }
+    }
+    var updated = row > 0;
+    if (!row) row = Math.max(last + 1, lay.dataRow);
+
+    var raw = {
+      parts: run.parts || [],            // [{pn, qty}] as laid out on the sheet
+      size: String(run.size || ''),
+      workOrder: String(run.workOrder || ''),
+      customer: String(run.customer || ''),
+      file: String(run.file || ''),
+      sentAt: String(run.sentAt || '')
+    };
+    var fields = {
+      'Date': laserDate(run.date),
+      'Laser Run #': runNo,
+      'Sheets': Number(run.sheets) || '',
+      'Sheet Type': String(run.sheetType || '').slice(0, 60),
+      'Raw Data': JSON.stringify(raw).slice(0, 45000)
+    };
+    // Notes doubles as the customer field (same convention as the board);
+    // "Various" is noise, and hand-typed notes are never overwritten.
+    var customer = String(run.customer || '').trim();
+    if (customer && !/^various$/i.test(customer) && col['Notes'] !== undefined &&
+        !String(sheet.getRange(row, col['Notes'] + 1).getValue()).trim()) {
+      fields['Notes'] = customer.slice(0, 200);
+    }
+
+    var width = Math.max(sheet.getLastColumn(), 9);
+    var current;
+    if (row <= last) {
+      current = sheet.getRange(row, 1, 1, width).getValues()[0];
+    } else {
+      current = [];
+      for (var c = 0; c < width; c++) current.push('');
+    }
+    for (var h in fields) { if (col[h] !== undefined) current[col[h]] = fields[h]; }
+    sheet.getRange(row, 1, 1, width).setValues([current]);
+
+    return { ok: true, row: row, updated: updated, runNumber: runNo };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ---------- helpers ---------- */
