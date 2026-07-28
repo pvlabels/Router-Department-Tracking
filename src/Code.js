@@ -823,6 +823,7 @@ function logLaserRun(run) {
     var raw = {
       parts: run.parts || [],            // [{pn, qty}] as laid out on the sheet
       size: String(run.size || ''),
+      machine: String(run.machine || ''), // "T6" = Trotec laser #6, from the file name
       workOrder: String(run.workOrder || ''),
       customer: String(run.customer || ''),
       file: String(run.file || ''),
