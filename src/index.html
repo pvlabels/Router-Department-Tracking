@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta charset="utf-8">
-<title>Router Department</title>
+<title>Production Board</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -232,6 +232,12 @@
   /* which Trotec the run is on — moved to the right cluster so the name slot
      can carry work orders / part numbers like the Metal Queue does */
   .jmach { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); flex: none; }
+  /* queue lookup — find a run by the part number or work order on it */
+  .qsearch { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; width: 210px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+  .qsearch:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  @media (max-width: 560px) { .qsearch { width: 100%; } }
+  .qhit { background: var(--accent-wash); color: var(--accent); border-radius: 2px; padding: 0 1px; }
   /* laser runs carry a part list rather than a piece table */
   .partchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .partchip { font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--border);
@@ -531,8 +537,8 @@
       <circle cx="102" cy="128" r="22" fill="#FF453A"/>
     </svg>
     <div>
-      <h1>Router Department</h1>
-      <div class="tagline">MultiCam cut queue &middot; live tracking</div>
+      <h1>Production Board</h1>
+      <div class="tagline">by DDT</div>
     </div>
     <div class="seg" id="viewseg" style="margin-left:6px">
       <button data-v="dashboard" class="on" onclick="showView('dashboard')">Dashboard</button>
@@ -557,6 +563,9 @@
       <h2>Metal Queue</h2>
       <span class="sub">drag the handle to set cut priority &middot; click a job for details</span>
       <span class="spacer"></span>
+      <input id="q_search" class="qsearch" type="search" placeholder="Search part # or WO&hellip;"
+             aria-label="Search the Metal Queue by part number or work order"
+             oninput="onQueueSearch(this.value)" autocomplete="off">
       <button class="primary" onclick="openForm()">+ Track job</button>
     </div>
 
@@ -625,6 +634,10 @@
     <div class="cardhead">
       <h2>Laser Queue</h2>
       <span class="sub" id="laserqueuesub">click a run for details</span>
+      <span class="spacer"></span>
+      <input id="q_lsearch" class="qsearch" type="search" placeholder="Search part # or WO&hellip;"
+             aria-label="Search the Laser Queue by part number or work order"
+             oninput="onLaserSearch(this.value)" autocomplete="off">
     </div>
     <div id="laserqueue"></div>
   </div>
@@ -1399,19 +1412,53 @@ function piecesTotal(p, baseSheets, target) {
   return (p.cut || 0) + p.qty * Math.max(0, target - (baseSheets || 0));
 }
 
+/* ---- queue lookup: find a job/run by the part number or WO printed on it ---- */
+
+var queueQuery = '';                      // Metal Queue search box
+var laserQuery = '';                      // Laser Queue search box
+
+function normQuery(v) { return String(v || '').trim().toLowerCase(); }
+function onQueueSearch(v) { queueQuery = normQuery(v); renderQueue(); }
+function onLaserSearch(v) { laserQuery = normQuery(v); renderLaserQueue(); }
+
+/** Everything on a tracked job worth searching: name, label, WOs, part #, notes. */
+function jobMatches(job, q) {
+  if (!q) return true;
+  return [job.name, job.label, job.workOrders, job.notes, job.cutFile, job.size]
+    .join(' ').toLowerCase().indexOf(q) >= 0;
+}
+/** Same for a laser run — including every part number on the sheet. */
+function laserMatches(run, q) {
+  if (!q) return true;
+  return [run.run, 'LR-' + run.run, run.workOrder, run.customer, run.partsText,
+          run.size, run.machine, run.notes, laserName(run.machine),
+          (run.parts || []).map(function (p) { return p.pn; }).join(' ')]
+    .join(' ').toLowerCase().indexOf(q) >= 0;
+}
+
 function renderQueue() {
   var host = document.getElementById('jobqueue');
   host.innerHTML = '';
-  var jobs = activeJobs();
+  var all = activeJobs();
+  var jobs = all.filter(function (j) { return jobMatches(j, queueQuery); });
 
-  if (jobs.length === 0) {
+  if (all.length === 0) {
     host.innerHTML = '<div class="sub" style="padding:8px 2px">No jobs being tracked. Click “+ Track job” to add one.</div>';
+    return;
+  }
+  if (!jobs.length) {
+    host.innerHTML = '<div class="sub" style="padding:8px 2px">No job in the queue carries “'
+      + escapeHtml(queueQuery) + '”.</div>';
     return;
   }
 
   jobs.forEach(function (job, idx) {
     host.appendChild(jobRow(job, idx, jobs.length));
   });
+  if (queueQuery) {
+    host.insertAdjacentHTML('beforeend', '<div class="sub" style="padding:10px 2px 0">Showing '
+      + jobs.length + ' of ' + all.length + ' jobs · clear the search to reorder the queue.</div>');
+  }
 }
 
 /* ----- finished log: jobs that were cut, manually or by hitting target ----- */
@@ -1625,7 +1672,8 @@ function laserWhen(run) { return run.date ? parseLocalDate(run.date) : null; }
 function renderLaserQueue() {
   var host = document.getElementById('laserqueue');
   if (!host) return;
-  var runs = laserRuns().filter(laserActive);
+  var onFloor = laserRuns().filter(laserActive);
+  var runs = onFloor.filter(function (r) { return laserMatches(r, laserQuery); });
   // Hand-set priority wins (drag the grip). Runs nobody has placed yet fall
   // in behind them, furthest-along stage first, then newest run.
   runs.sort(function (a, b) {
@@ -1639,19 +1687,30 @@ function renderLaserQueue() {
   var waiting = laserRuns().filter(laserWaiting).length;
   var sub = document.getElementById('laserqueuesub');
   if (sub) {
-    sub.textContent = runs.length + ' on the floor'
-      + (waiting ? ' · ' + waiting + ' logged, not started yet' : '')
-      + ' · drag the handle to set laser priority · click a run for details';
+    sub.textContent = laserQuery
+      ? 'showing ' + runs.length + ' of ' + onFloor.length + ' on the floor'
+      : onFloor.length + ' on the floor'
+        + (waiting ? ' · ' + waiting + ' logged, not started yet' : '')
+        + ' · drag the handle to set laser priority · click a run for details';
   }
 
   host.innerHTML = '';
-  if (!runs.length) {
+  if (!onFloor.length) {
     host.innerHTML = '<div class="sub" style="padding:8px 2px">Nothing on the laser floor right now.'
       + (waiting ? ' ' + waiting + ' run' + (waiting === 1 ? ' is' : 's are') + ' logged and waiting to be marked “On Laser”.' : '')
       + '</div>';
     return;
   }
+  if (!runs.length) {
+    host.innerHTML = '<div class="sub" style="padding:8px 2px">No run on the floor carries “'
+      + escapeHtml(laserQuery) + '”.</div>';
+    return;
+  }
   runs.forEach(function (run) { host.appendChild(laserRow(run)); });
+  if (laserQuery) {
+    host.insertAdjacentHTML('beforeend',
+      '<div class="sub" style="padding:10px 2px 0">Clear the search to reorder the queue.</div>');
+  }
 }
 
 function laserRow(run) {
@@ -1669,7 +1728,9 @@ function laserRow(run) {
   var head = document.createElement('div');
   head.className = 'jobrow-head';
   head.innerHTML =
-      '<div class="grip" data-act="grip" title="Drag to set laser priority">' + ICON.grip(16) + '</div>'
+      (laserQuery
+        ? '<div class="grip" style="opacity:.35;cursor:default" title="Clear the search to reorder">' + ICON.grip(16) + '</div>'
+        : '<div class="grip" data-act="grip" title="Drag to set laser priority">' + ICON.grip(16) + '</div>')
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
     +     (tags ? '<span class="jwo">' + escapeHtml(tags) + '</span>' : '')
@@ -1695,7 +1756,8 @@ function laserRow(run) {
 
   head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleLaserRun(run.run); });
   head.querySelector('[data-act="open"]').addEventListener('click', function () { toggleLaserRun(run.run); });
-  head.querySelector('[data-act="grip"]').addEventListener('pointerdown', function (e) {
+  var lgrip = head.querySelector('[data-act="grip"]');
+  if (lgrip) lgrip.addEventListener('pointerdown', function (e) {
     rowPointerDown(e, row, { containerId: 'laserqueue', commit: commitLaserOrder });
   });
   return row;
@@ -1856,8 +1918,12 @@ function jobRow(job, idx, total) {
 
   var head = document.createElement('div');
   head.className = 'jobrow-head';
+  // Reordering a filtered list would write a partial order, so the handle is
+  // inert while a search is active.
   head.innerHTML =
-      '<div class="grip" data-act="grip" title="Drag to reorder">' + ICON.grip(16) + '</div>'
+      (queueQuery
+        ? '<div class="grip" style="opacity:.35;cursor:default" title="Clear the search to reorder">' + ICON.grip(16) + '</div>'
+        : '<div class="grip" data-act="grip" title="Drag to reorder">' + ICON.grip(16) + '</div>')
     + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">'
     +     escapeHtml(jobTitle(job)) + '</span>'
@@ -1880,7 +1946,8 @@ function jobRow(job, idx, total) {
   // drag from the handle; click the row (or the chevron) for details
   head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleJob(job.name); });
   head.querySelector('[data-act="open"]').addEventListener('click', function () { toggleJob(job.name); });
-  head.querySelector('[data-act="grip"]').addEventListener('pointerdown', function (e) { rowPointerDown(e, row); });
+  var jgrip = head.querySelector('[data-act="grip"]');
+  if (jgrip) jgrip.addEventListener('pointerdown', function (e) { rowPointerDown(e, row); });
 
   return row;
 }
@@ -2666,7 +2733,7 @@ function showView(v) {
   document.getElementById('headerprint').style.display = v === 'dashboard' ? 'none' : '';
   if (v === 'reports') renderReport();
   else {
-    document.title = v === 'how' ? 'Router Department — How it works' : 'Router Department';
+    document.title = v === 'how' ? 'Production Board — How it works' : 'Production Board';
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   }
   window.scrollTo(0, 0);
