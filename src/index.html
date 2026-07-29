@@ -229,6 +229,9 @@
   .jstatus.onlaser { color: var(--violet); }
   .jstatus.onrouter { color: var(--accent); }
   .jstatus.logged { color: var(--text-muted); }
+  /* which Trotec the run is on — moved to the right cluster so the name slot
+     can carry work orders / part numbers like the Metal Queue does */
+  .jmach { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); flex: none; }
   /* laser runs carry a part list rather than a piece table */
   .partchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .partchip { font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--border);
@@ -1576,6 +1579,33 @@ function laserColor(machine) {
 function laserPartCount(run) {
   return (run.parts || []).reduce(function (t, p) { return t + (Number(p.qty) || 0); }, 0);
 }
+
+// Ganged sheets carry placeholders in these fields rather than being blank.
+function laserPlaceholder(v) { return /^(x+|various|mixed|multiple|n\/?a|none|-+)$/i.test(String(v || '').trim()); }
+
+/**
+ * What identifies this run in the queue, in the slot the Metal Queue gives
+ * work orders: the board's WO when it carries a real one, otherwise the part
+ * numbers on the sheet.
+ */
+function laserIdTags(run) {
+  var wo = String(run.workOrder || '').trim();
+  if (wo && !laserPlaceholder(wo)) return { kind: 'wo', list: splitWorkOrders(wo) };
+  var pns = unique((run.parts || []).map(function (p) { return String(p.pn || '').trim(); }).filter(Boolean));
+  return { kind: 'part', list: pns };
+}
+/** Tag list trimmed to something a single row can hold. */
+function laserTagText(run, max) {
+  var tags = laserIdTags(run).list;
+  if (!tags.length) return '';
+  var show = tags.slice(0, max || 3).join(' · ');
+  return tags.length > (max || 3) ? show + ' +' + (tags.length - (max || 3)) + ' more' : show;
+}
+/** The customer, only when the sheet is for a single one ("Various" is not). */
+function laserCustomer(run) {
+  var c = String(run.customer || '').trim();
+  return (!c || laserPlaceholder(c)) ? '' : c;
+}
 function laserTitle(run) { return 'LR-' + run.run; }
 function laserWhen(run) { return run.date ? parseLocalDate(run.date) : null; }
 
@@ -1613,6 +1643,8 @@ function laserRow(run) {
   var color = laserColor(run.machine);
   var open = !!expandedLaser[run.run];
   var parts = laserPartCount(run);
+  var tags = laserTagText(run, 3);
+  var customer = laserCustomer(run);
 
   var row = document.createElement('div');
   row.className = 'jobrow';
@@ -1622,10 +1654,11 @@ function laserRow(run) {
   head.innerHTML =
       '<div class="jobrow-main" data-act="open" title="Click for details" style="margin-left:2px">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
-    +     (run.size ? '<span class="jwo">' + escapeHtml(run.size) + '</span>' : '')
-    +     (run.machine ? '<span class="jco">Laser ' + escapeHtml(run.machine) + '</span>' : '')
+    +     (tags ? '<span class="jwo">' + escapeHtml(tags) + '</span>' : '')
+    +     (customer ? '<span class="jco">' + escapeHtml(customer) + '</span>' : '')
     +   '</span>'
     +     '<span class="jright">'
+    +       (run.machine ? '<span class="jmach">' + escapeHtml(run.machine) + '</span>' : '')
     +       (run.rush ? '<span class="jstatus" style="color:var(--delta-bad)">Rush</span>' : '')
     +       '<span class="jstatus ' + stage.cls + '">' + stage.label + '</span>'
     +       '<span class="jpct">' + (parts ? parts + ' part' + (parts === 1 ? '' : 's') : '&mdash;') + '</span>'
@@ -1746,7 +1779,8 @@ function renderLaserLog() {
     var when = laserWhen(run);
     html += '<tr class="finrow' + (open ? ' open' : '') + '" onclick="toggleLaserRun(' + jsStr(run.run) + ')" title="Click for details">'
       + '<td><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
-      +   (run.size ? '<span class="jwo">' + escapeHtml(run.size) + '</span>' : '') + '</td>'
+      +   (laserTagText(run, 2) ? '<span class="jwo">' + escapeHtml(laserTagText(run, 2)) + '</span>' : '')
+      +   (laserCustomer(run) ? '<span class="jco">' + escapeHtml(laserCustomer(run)) + '</span>' : '') + '</td>'
       + '<td>' + (when ? escapeHtml(fmtDate(when)) : '&mdash;') + '</td>'
       + '<td>' + (run.sheetType ? escapeHtml(run.sheetType) : '&mdash;') + '</td>'
       + '<td class="num">' + (run.sheets || 0) + '</td>'
