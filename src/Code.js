@@ -49,11 +49,12 @@ var CONFIG = {
   HISTORY_SINCE: '2026-01-01',
   HISTORY_REFRESH_MINUTES: 60,
 
-  // Laser run intake tab (pre-built by hand, so it is found by gid, not name).
-  // Headers: Date | Laser Run # | Sheets | Sheet Type | Status | Rush | Time |
-  // Notes | Raw Data. Rows are upserted by the Illustrator "Log Laser Run"
-  // script via the laserLog action.
-  LASER_SHEET_GID: 1513496324
+  // Laser run board (its own spreadsheet, hand-built). Two-row merged header:
+  // Date | Laser Run # | Sheets | Sheet Type | Status | Rush | Time | Notes |
+  // Part Numbers | DATA | RAW DATA (the last three titled on the lower band
+  // row). The tab is found by scanning for the "Laser Run #" header. Rows are
+  // upserted by the Illustrator "Log Laser Run" script via the laserLog action.
+  LASER_SHEET_ID: '1E-ID5GrIyq9jZHDsCgAFt-8XkT2YohRjYdCI6b68GPU'
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
@@ -752,34 +753,45 @@ function findJobRow(sheet, name) {
 
 /* ---------- laser run intake ---------- */
 
-/** The laser tab was built by hand, so locate it by gid (rename-proof). */
-function laserSheet(ss) {
+/** Finds the laser board tab bearing a "Laser Run #" header. */
+function laserTarget() {
+  var ss = SpreadsheetApp.openById(CONFIG.LASER_SHEET_ID);
   var sheets = ss.getSheets();
   for (var i = 0; i < sheets.length; i++) {
-    if (sheets[i].getSheetId() === CONFIG.LASER_SHEET_GID) return sheets[i];
+    var lay = laserLayout(sheets[i]);
+    if (lay) return { sheet: sheets[i], lay: lay };
   }
-  throw new Error('Laser tab not found (gid ' + CONFIG.LASER_SHEET_GID + ').');
+  throw new Error('No tab with a "Laser Run #" header found on the laser board.');
 }
 
 /**
- * Finds the laser tab's header row (the one containing "Laser Run #") and maps
- * header name -> 0-based column. The header may be a vertically merged band,
- * so the first data row is read from the merge span, not assumed to be +1.
+ * Finds a sheet's header row (the one containing "Laser Run #") and maps
+ * lowercased header name -> 0-based column. The header is a vertically merged
+ * band and some titles (Part Numbers / DATA / RAW DATA) sit on its lower row,
+ * so every row of the band contributes to the map and the first data row
+ * comes from the merge span. Returns null if this isn't the laser tab.
  */
 function laserLayout(sheet) {
   var rows = Math.max(1, Math.min(sheet.getLastRow(), 10));
-  var width = Math.max(sheet.getLastColumn(), 9);
+  var width = Math.max(sheet.getLastColumn(), 11);
   var values = sheet.getRange(1, 1, rows, width).getValues();
-  for (var r = 0; r < values.length; r++) {
-    var map = {};
-    values[r].forEach(function (h, i) { h = String(h).trim(); if (h) map[h] = i; });
-    if (map['Laser Run #'] !== undefined) {
-      var merges = sheet.getRange(r + 1, map['Laser Run #'] + 1).getMergedRanges();
-      var span = merges.length ? merges[0].getNumRows() : 1;
-      return { col: map, headerRow: r + 1, dataRow: r + 1 + span };
-    }
+  function rowMap(row, map) {
+    row.forEach(function (h, i) {
+      h = String(h).trim().toLowerCase();
+      if (h && map[h] === undefined) map[h] = i;
+    });
+    return map;
   }
-  throw new Error('Laser tab header row ("Laser Run #") not found.');
+  for (var r = 0; r < values.length; r++) {
+    var probe = rowMap(values[r], {});
+    if (probe['laser run #'] === undefined) continue;
+    var merges = sheet.getRange(r + 1, probe['laser run #'] + 1).getMergedRanges();
+    var span = merges.length ? merges[0].getNumRows() : 1;
+    var map = {};
+    for (var b = r; b < Math.min(r + span, values.length); b++) rowMap(values[b], map);
+    return { col: map, headerRow: r + 1, dataRow: r + 1 + span };
+  }
+  return null;
 }
 
 /** "07-28-2026" / "07/28/2026" -> "2026-07-28"; ISO dates pass through. */
@@ -805,14 +817,15 @@ function logLaserRun(run) {
   var lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
-    var sheet = laserSheet(SpreadsheetApp.openById(CONFIG.SHEET_ID));
-    var lay = laserLayout(sheet);
+    var target = laserTarget();
+    var sheet = target.sheet;
+    var lay = target.lay;
     var col = lay.col;
 
     var last = sheet.getLastRow();
     var row = 0;
-    if (last >= lay.dataRow && col['Laser Run #'] !== undefined) {
-      var runs = sheet.getRange(lay.dataRow, col['Laser Run #'] + 1, last - lay.dataRow + 1, 1).getValues();
+    if (last >= lay.dataRow && col['laser run #'] !== undefined) {
+      var runs = sheet.getRange(lay.dataRow, col['laser run #'] + 1, last - lay.dataRow + 1, 1).getValues();
       for (var i = 0; i < runs.length; i++) {
         if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
       }
@@ -820,31 +833,46 @@ function logLaserRun(run) {
     var updated = row > 0;
     if (!row) row = Math.max(last + 1, lay.dataRow);
 
+    var parts = run.parts || [];           // [{pn, qty}] as laid out on the sheet
+    var partList = [];
+    for (var p = 0; p < parts.length; p++) {
+      partList.push(String(parts[p].pn || '') +
+                    (Number(parts[p].qty) > 1 ? ' x' + Number(parts[p].qty) : ''));
+    }
+    var machine = String(run.machine || ''); // "T6" = Trotec laser #6, from the file name
+    var summary = [];
+    if (machine) summary.push('laser=' + machine);
+    if (run.size) summary.push('size=' + run.size);
+    if (run.workOrder) summary.push('wo=' + run.workOrder);
+    if (run.customer) summary.push('customer=' + run.customer);
+    if (run.file) summary.push('file=' + run.file);
     var raw = {
-      parts: run.parts || [],            // [{pn, qty}] as laid out on the sheet
+      parts: parts,
       size: String(run.size || ''),
-      machine: String(run.machine || ''), // "T6" = Trotec laser #6, from the file name
+      machine: machine,
       workOrder: String(run.workOrder || ''),
       customer: String(run.customer || ''),
       file: String(run.file || ''),
       sentAt: String(run.sentAt || '')
     };
     var fields = {
-      'Date': laserDate(run.date),
-      'Laser Run #': runNo,
-      'Sheets': Number(run.sheets) || '',
-      'Sheet Type': String(run.sheetType || '').slice(0, 60),
-      'Raw Data': JSON.stringify(raw).slice(0, 45000)
+      'date': laserDate(run.date),
+      'laser run #': runNo,
+      'sheets': Number(run.sheets) || '',
+      'sheet type': String(run.sheetType || '').slice(0, 60),
+      'part numbers': partList.join(', ').slice(0, 5000),
+      'data': summary.join(' | ').slice(0, 1000),
+      'raw data': JSON.stringify(raw).slice(0, 45000)
     };
     // Notes doubles as the customer field (same convention as the board);
     // "Various" is noise, and hand-typed notes are never overwritten.
     var customer = String(run.customer || '').trim();
-    if (customer && !/^various$/i.test(customer) && col['Notes'] !== undefined &&
-        !String(sheet.getRange(row, col['Notes'] + 1).getValue()).trim()) {
-      fields['Notes'] = customer.slice(0, 200);
+    if (customer && !/^various$/i.test(customer) && col['notes'] !== undefined &&
+        !String(sheet.getRange(row, col['notes'] + 1).getValue()).trim()) {
+      fields['notes'] = customer.slice(0, 200);
     }
 
-    var width = Math.max(sheet.getLastColumn(), 9);
+    var width = Math.max(sheet.getLastColumn(), 11);
     var current;
     if (row <= last) {
       current = sheet.getRange(row, 1, 1, width).getValues()[0];
