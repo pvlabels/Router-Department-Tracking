@@ -842,8 +842,7 @@ function logLaserRun(run) {
     var parts = run.parts || [];           // [{pn, qty}] as laid out on the sheet
     var partList = [];
     for (var p = 0; p < parts.length; p++) {
-      partList.push(String(parts[p].pn || '') +
-                    (Number(parts[p].qty) > 1 ? ' x' + Number(parts[p].qty) : ''));
+      partList.push(String(parts[p].pn || '') + ' x' + (Number(parts[p].qty) || 1));
     }
     var machine = String(run.machine || ''); // "T6" = Trotec laser #6, from the file name
     var summary = [];
