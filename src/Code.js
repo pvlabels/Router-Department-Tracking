@@ -971,6 +971,18 @@ function readLaserBoard() {
     var when = cell(row, 'date');
     var sheetsVal = Number(cell(row, 'sheets'));
 
+    // Machine codes name the laser: T# = Trotec, E# = Epilog. Older logger
+    // builds only recognized T#, so an Epilog's code was left on the tail of
+    // the size ("7.5x24-E3"). Split it back out so those runs still show a
+    // laser and a clean sheet size.
+    var size = String(raw.size || '').trim();
+    var machine = String(raw.machine || '').trim().toUpperCase();
+    var tail = /^(.*?)[-\s]*([TE]\s*\d+)$/i.exec(size);
+    if (!machine && tail) {
+      size = tail[1].replace(/[-\s]+$/, '');
+      machine = tail[2].replace(/\s+/g, '').toUpperCase();
+    }
+
     out.push({
       run: runNo,
       date: when instanceof Date ? Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM-dd')
@@ -983,8 +995,8 @@ function readLaserBoard() {
       notes: String(cell(row, 'notes') || '').trim(),
       partsText: String(cell(row, 'part numbers') || '').trim(),
       parts: Array.isArray(raw.parts) ? raw.parts : [],
-      size: String(raw.size || '').trim(),
-      machine: String(raw.machine || '').trim(),   // "T6" = Trotec laser #6
+      size: size,
+      machine: machine,                            // "T6" = Trotec 6, "E3" = Epilog 3
       customer: String(raw.customer || '').trim(),
       workOrder: String(raw.workOrder || '').trim(),
       loggedAt: String(raw.sentAt || '').trim()

@@ -1568,6 +1568,19 @@ function laserActive(run) { var st = laserStage(run); return !!st && st.pct < 10
 /** Logged by the laser script but not yet marked as started. */
 function laserWaiting(run) { return !laserStage(run) && !String(run.status || '').trim(); }
 
+/** The machine code names the laser's make: T# = Trotec, E# = Epilog. */
+function laserBrand(machine) {
+  var c = String(machine || '').trim().charAt(0).toUpperCase();
+  return c === 'T' ? 'Trotec' : c === 'E' ? 'Epilog' : '';
+}
+/** "Trotec T6" / "Epilog E3", or just the raw code if the make is unknown. */
+function laserName(machine) {
+  var m = String(machine || '').trim();
+  if (!m) return '';
+  var brand = laserBrand(m);
+  return brand ? brand + ' ' + m.toUpperCase() : m;
+}
+
 /** One palette color per laser, so a machine reads the same everywhere. */
 function laserMachines() {
   return unique(laserRuns().map(function (r) { return r.machine; }).filter(Boolean)).sort();
@@ -1693,7 +1706,7 @@ function laserDetailHtml(run) {
   var meta = [];
   if (run.sheetType) meta.push({ label: 'Sheet type', value: run.sheetType });
   if (run.size) meta.push({ label: 'Sheet size', value: run.size });
-  if (run.machine) meta.push({ label: 'Laser', value: 'Trotec ' + run.machine });
+  if (run.machine) meta.push({ label: 'Laser', value: laserName(run.machine) });
   if (run.customer) meta.push({ label: 'Customer', value: run.customer });
   if (run.workOrder) meta.push({ label: 'Work order', value: run.workOrder });
   if (run.notes) meta.push({ label: 'Notes', value: run.notes });
@@ -1785,7 +1798,7 @@ function renderLaserLog() {
       + '<td>' + (run.sheetType ? escapeHtml(run.sheetType) : '&mdash;') + '</td>'
       + '<td class="num">' + (run.sheets || 0) + '</td>'
       + '<td class="num">' + (laserPartCount(run) || '&mdash;') + '</td>'
-      + '<td>' + (run.machine ? escapeHtml('Trotec ' + run.machine) : '&mdash;') + '</td>'
+      + '<td>' + (run.machine ? escapeHtml(laserName(run.machine)) : '&mdash;') + '</td>'
       + '<td><span class="done">Complete ✓</span></td>'
       + '<td class="num"><span class="fincaret">' + (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</span></td>'
       + '</tr>';
