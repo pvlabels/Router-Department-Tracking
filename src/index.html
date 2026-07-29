@@ -154,11 +154,14 @@
   /* Dates are data: mono, matching the Summary's Date column. The Job column
      already gets it from the generic tbody td:first-child rule. Scoped to the
      log's own rows — an expanded ticket nests its own tables in here. */
-  #fintable > tbody > tr > td:nth-child(2) { font-family: var(--font-mono); font-size: 12.5px; }
+  #fintable > tbody > tr > td:nth-child(2),
+  #lastable > tbody > tr > td:nth-child(2) { font-family: var(--font-mono); font-size: 12.5px; }
   /* Status sits right after a right-aligned number column — give it room. */
   #fintable > thead > tr > th:nth-child(6),
-  #fintable > tbody > tr > td:nth-child(6) { padding-left: 26px; }
-  #fintable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
+  #fintable > tbody > tr > td:nth-child(6),
+  #lastable > thead > tr > th:nth-child(7),
+  #lastable > tbody > tr > td:nth-child(7) { padding-left: 26px; }
+  #fintable .done, #lastable .done { color: var(--delta-good); font-weight: 500; white-space: nowrap; }
   /* ---------- modal ---------- */
   .modal {
     position: fixed; inset: 0; z-index: 60; display: flex;
@@ -176,22 +179,27 @@
   .modalnote { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
   .modalbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
-  /* Each finished job is a bordered card, like the Job queue. */
-  #fintable { border-collapse: separate; border-spacing: 0 9px; }
-  #fintable tr.finrow { cursor: pointer; }
-  #fintable > tbody > tr.finrow > td { background: var(--surface-1);
+  /* Each finished job is a bordered card, like the Metal Queue. */
+  #fintable, #lastable { border-collapse: separate; border-spacing: 0 9px; }
+  #fintable tr.finrow, #lastable tr.finrow { cursor: pointer; }
+  #fintable > tbody > tr.finrow > td,
+  #lastable > tbody > tr.finrow > td { background: var(--surface-1);
     border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  #fintable > tbody > tr.finrow > td:first-child { border-left: 1px solid var(--border); border-radius: 10px 0 0 10px; }
-  #fintable > tbody > tr.finrow > td:last-child { border-right: 1px solid var(--border); border-radius: 0 10px 10px 0; }
-  #fintable > tbody > tr.finrow:hover > td { background: var(--surface-2); }
-  #fintable .fincaret { display: inline-flex; color: var(--text-muted); vertical-align: middle; }
+  #fintable > tbody > tr.finrow > td:first-child,
+  #lastable > tbody > tr.finrow > td:first-child { border-left: 1px solid var(--border); border-radius: 10px 0 0 10px; }
+  #fintable > tbody > tr.finrow > td:last-child,
+  #lastable > tbody > tr.finrow > td:last-child { border-right: 1px solid var(--border); border-radius: 0 10px 10px 0; }
+  #fintable > tbody > tr.finrow:hover > td,
+  #lastable > tbody > tr.finrow:hover > td { background: var(--surface-2); }
+  #fintable .fincaret, #lastable .fincaret { display: inline-flex; color: var(--text-muted); vertical-align: middle; }
   /* Expanded ticket: its own bordered card just below the row. Reset the mono
      the first-child td would otherwise inherit, or the ticket renders in Menlo. */
-  #fintable > tbody > tr.findetail > td {
+  #fintable > tbody > tr.findetail > td,
+  #lastable > tbody > tr.findetail > td {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
     padding: 6px 16px 16px; font-family: var(--font-body); font-size: 13px;
   }
-  #fintable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
+  #fintable td .jname, #lastable td .jname { font-family: var(--font-mono); font-size: 12.5px; }
 
   /* ---------- summary filters + sortable columns ---------- */
   .filterbar {
@@ -217,6 +225,15 @@
   .jstatus.printing { color: var(--job-2); }
   .jstatus.cutting { color: var(--accent); }
   .jstatus.complete { color: var(--delta-good); }
+  /* laser board stages: On Laser -> On Router -> Post Production */
+  .jstatus.onlaser { color: var(--violet); }
+  .jstatus.onrouter { color: var(--accent); }
+  .jstatus.logged { color: var(--text-muted); }
+  /* laser runs carry a part list rather than a piece table */
+  .partchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .partchip { font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 9px; background: var(--surface-2); white-space: nowrap; }
+  .partchip .qty { color: var(--text-muted); margin-left: 5px; }
   .jpct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; flex: none; color: var(--text-secondary); }
   .jpct .done { color: var(--delta-good); }
   .jbar { height: 10px; border-radius: 999px; background: var(--grid); overflow: hidden; }
@@ -531,10 +548,10 @@
 
   <div id="dashboardview">
 
-  <!-- ===== Job queue ===== -->
+  <!-- ===== Metal Queue ===== -->
   <div class="card reveal">
     <div class="cardhead">
-      <h2>Job queue</h2>
+      <h2>Metal Queue</h2>
       <span class="sub">drag the handle to set cut priority &middot; click a job for details</span>
       <span class="spacer"></span>
       <button class="primary" onclick="openForm()">+ Track job</button>
@@ -575,10 +592,10 @@
     <div id="jobqueue"></div>
   </div>
 
-  <!-- ===== Finished log ===== -->
+  <!-- ===== Metal Log ===== -->
   <div class="card reveal" id="finishedcard">
     <div class="cardhead" style="margin-bottom:14px">
-      <h2>Finished log</h2>
+      <h2>Metal Log</h2>
       <span class="sub" id="finishedsub"></span>
       <span class="spacer"></span>
       <div class="seg" id="finseg">
@@ -598,6 +615,40 @@
     </div>
     <div class="tablewrap"><table id="fintable"></table></div>
     <div class="rowcount" id="finnote"></div>
+  </div>
+
+  <!-- ===== Laser Queue ===== -->
+  <div class="card reveal" id="laserqueuecard">
+    <div class="cardhead">
+      <h2>Laser Queue</h2>
+      <span class="sub" id="laserqueuesub">click a run for details</span>
+    </div>
+    <div id="laserqueue"></div>
+  </div>
+
+  <!-- ===== Laser Log ===== -->
+  <div class="card reveal" id="laserlogcard">
+    <div class="cardhead" style="margin-bottom:14px">
+      <h2>Laser Log</h2>
+      <span class="sub" id="lasersub"></span>
+      <span class="spacer"></span>
+      <div class="seg" id="lasseg">
+        <button data-p="day" class="on" onclick="setLasPeriod('day')">Daily</button>
+        <button data-p="week" onclick="setLasPeriod('week')">Weekly</button>
+        <button data-p="month" onclick="setLasPeriod('month')">Monthly</button>
+        <button data-p="year" onclick="setLasPeriod('year')">Yearly</button>
+      </div>
+    </div>
+    <div class="sumbar">
+      <div class="navbar">
+        <button onclick="lasStep(-1)" title="Previous" id="lasprev"></button>
+        <span id="laslabel"></span>
+        <button id="lasnext" onclick="lasStep(1)" title="Next"></button>
+        <button onclick="lasToday()">Today</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table id="lastable"></table></div>
+    <div class="rowcount" id="lasnote"></div>
   </div>
 
   <!-- ===== Reopen dialog ===== -->
@@ -963,7 +1014,7 @@ var PACE_DAYS = 5;
 var API_BASE = 'https://script.google.com/macros/s/AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g/exec';
 var API_URL = API_BASE + '?format=json';
 
-var state = { runs: [], jobs: [], daily: {}, machines: [] };
+var state = { runs: [], jobs: [], daily: {}, machines: [], laser: [] };
 var selectedMachine = 'all';    // machine filter for Summary + Recent runs
 try { selectedMachine = localStorage.getItem('machine') || 'all'; } catch (e) {}
 var expandedJobs = {};          // job name -> true when its ticket is open
@@ -1069,6 +1120,7 @@ function attachRunSizes() {
 
 function onData(data) {
   state = data;
+  state.laser = state.laser || [];        // absent on the local mock
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
   attachRunSizes();
   // Fallback: build machine-nested daily aggregates + machine list if the
@@ -1222,6 +1274,8 @@ function simulateFinish(remaining, perHour, includeSat, includeSun) {
 function render() {
   renderQueue();
   renderFinished();
+  renderLaserQueue();
+  renderLaserLog();
   renderSummary();
   if (currentView === 'reports') renderReport();
 }
@@ -1481,6 +1535,233 @@ function finToday() { finAnchor = startOfDay(new Date()); renderFinished(); }
  * Finished Printing → Cutting, Finished Cutting → Complete. Manual jobs carry
  * no schedule status, so they get no pill.
  */
+/* ==================== laser board: queue + log ====================
+ * The laser department logs each run from Illustrator; the floor then drives
+ * the board's Status column by hand:
+ *   (blank) → logged, not started    On Laser → cutting    On Router → routing
+ *   Post Production → done, so the run leaves the queue for the Laser Log.
+ * A laser run is one sheet, so there is no sheets-cut target to fill; the
+ * progress bar tracks how far through those stages the run has moved.
+ */
+
+var LASER_STAGES = [
+  { key: 'on laser',        label: 'On Laser',  cls: 'onlaser',  pct: 45 },
+  { key: 'on router',       label: 'On Router', cls: 'onrouter', pct: 80 },
+  { key: 'post production', label: 'Complete',  cls: 'complete', pct: 100 }
+];
+var expandedLaser = {};                   // run # -> true when its ticket is open
+
+function laserRuns() { return state.laser || []; }
+function laserStage(run) {
+  var s = String(run.status || '').trim().toLowerCase();
+  for (var i = 0; i < LASER_STAGES.length; i++) {
+    if (LASER_STAGES[i].key === s) return LASER_STAGES[i];
+  }
+  return null;                            // blank or an unrecognized status
+}
+function laserDone(run) { var st = laserStage(run); return !!st && st.pct === 100; }
+/** On the board from the moment the floor marks it On Laser until Post Production. */
+function laserActive(run) { var st = laserStage(run); return !!st && st.pct < 100; }
+/** Logged by the laser script but not yet marked as started. */
+function laserWaiting(run) { return !laserStage(run) && !String(run.status || '').trim(); }
+
+/** One palette color per laser, so a machine reads the same everywhere. */
+function laserMachines() {
+  return unique(laserRuns().map(function (r) { return r.machine; }).filter(Boolean)).sort();
+}
+function laserColor(machine) {
+  var i = laserMachines().indexOf(machine);
+  return jobColor(i < 0 ? 0 : i);
+}
+function laserPartCount(run) {
+  return (run.parts || []).reduce(function (t, p) { return t + (Number(p.qty) || 0); }, 0);
+}
+function laserTitle(run) { return 'LR-' + run.run; }
+function laserWhen(run) { return run.date ? parseLocalDate(run.date) : null; }
+
+function renderLaserQueue() {
+  var host = document.getElementById('laserqueue');
+  if (!host) return;
+  var runs = laserRuns().filter(laserActive);
+  // Stage order first (On Router ahead of On Laser — it's closer to done),
+  // then newest run first within a stage.
+  runs.sort(function (a, b) {
+    var d = (laserStage(b).pct - laserStage(a).pct);
+    return d || (Number(b.run) - Number(a.run));
+  });
+
+  var waiting = laserRuns().filter(laserWaiting).length;
+  var sub = document.getElementById('laserqueuesub');
+  if (sub) {
+    sub.textContent = runs.length + ' on the floor'
+      + (waiting ? ' · ' + waiting + ' logged, not started yet' : '')
+      + ' · click a run for details';
+  }
+
+  host.innerHTML = '';
+  if (!runs.length) {
+    host.innerHTML = '<div class="sub" style="padding:8px 2px">Nothing on the laser floor right now.'
+      + (waiting ? ' ' + waiting + ' run' + (waiting === 1 ? ' is' : 's are') + ' logged and waiting to be marked “On Laser”.' : '')
+      + '</div>';
+    return;
+  }
+  runs.forEach(function (run) { host.appendChild(laserRow(run)); });
+}
+
+function laserRow(run) {
+  var stage = laserStage(run);
+  var color = laserColor(run.machine);
+  var open = !!expandedLaser[run.run];
+  var parts = laserPartCount(run);
+
+  var row = document.createElement('div');
+  row.className = 'jobrow';
+
+  var head = document.createElement('div');
+  head.className = 'jobrow-head';
+  head.innerHTML =
+      '<div class="jobrow-main" data-act="open" title="Click for details" style="margin-left:2px">'
+    +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
+    +     (run.size ? '<span class="jwo">' + escapeHtml(run.size) + '</span>' : '')
+    +     (run.machine ? '<span class="jco">Laser ' + escapeHtml(run.machine) + '</span>' : '')
+    +   '</span>'
+    +     '<span class="jright">'
+    +       (run.rush ? '<span class="jstatus" style="color:var(--delta-bad)">Rush</span>' : '')
+    +       '<span class="jstatus ' + stage.cls + '">' + stage.label + '</span>'
+    +       '<span class="jpct">' + (parts ? parts + ' part' + (parts === 1 ? '' : 's') : '&mdash;') + '</span>'
+    +     '</span></div>'
+    +   '<div class="jbar"><div class="jfill" style="width:' + stage.pct + '%;background:' + color + '"></div></div>'
+    + '</div>'
+    + '<button class="caret-btn" data-act="toggle" title="' + (open ? 'Hide details' : 'Show details') + '">'
+    +   (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</button>';
+  row.appendChild(head);
+
+  var detail = document.createElement('div');
+  detail.className = 'jobrow-detail' + (open ? '' : ' hidden');
+  detail.style.paddingLeft = '16px';
+  detail.innerHTML = laserDetailHtml(run);
+  row.appendChild(detail);
+
+  head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleLaserRun(run.run); });
+  head.querySelector('[data-act="open"]').addEventListener('click', function () { toggleLaserRun(run.run); });
+  return row;
+}
+
+/** The ticket: what the run is, where it is, and every part on the sheet. */
+function laserDetailHtml(run) {
+  var when = laserWhen(run);
+  var stats = [
+    { label: 'Run date', value: when ? fmtDate(when) : '—' },
+    { label: 'Sheets', value: String(run.sheets || 0) },
+    { label: 'Parts', value: String(laserPartCount(run) || 0) }
+  ];
+  if (run.seconds) stats.push({ label: 'Time', value: fmtDur(run.seconds) });
+
+  var meta = [];
+  if (run.sheetType) meta.push({ label: 'Sheet type', value: run.sheetType });
+  if (run.size) meta.push({ label: 'Sheet size', value: run.size });
+  if (run.machine) meta.push({ label: 'Laser', value: 'Trotec ' + run.machine });
+  if (run.customer) meta.push({ label: 'Customer', value: run.customer });
+  if (run.workOrder) meta.push({ label: 'Work order', value: run.workOrder });
+  if (run.notes) meta.push({ label: 'Notes', value: run.notes });
+
+  var html = '<div class="stats">' + stats.map(function (s) {
+    return '<div class="stat"><div class="seclabel">' + escapeHtml(s.label) + '</div>'
+      + '<div class="value">' + escapeHtml(s.value) + '</div></div>';
+  }).join('') + '</div>';
+
+  if (meta.length) {
+    html += '<div class="metagrid">' + meta.map(function (m) {
+      return '<div><div class="seclabel">' + escapeHtml(m.label) + '</div>'
+        + '<div class="notesval">' + escapeHtml(m.value) + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  var parts = run.parts || [];
+  if (parts.length) {
+    html += '<div style="margin-top:18px"><div class="seclabel">Part numbers on this sheet</div>'
+      + '<div class="partchips">' + parts.map(function (p) {
+          return '<span class="partchip">' + escapeHtml(String(p.pn))
+            + '<span class="qty">&times;' + (Number(p.qty) || 1) + '</span></span>';
+        }).join('') + '</div></div>';
+  } else if (run.partsText) {
+    html += '<div style="margin-top:18px"><div class="seclabel">Part numbers on this sheet</div>'
+      + '<div class="notesval">' + escapeHtml(run.partsText) + '</div></div>';
+  }
+
+  html += '<div class="prodline">Status is set on the laser board'
+    + (run.loggedAt ? ' &middot; logged <span class="mono">' + escapeHtml(run.loggedAt) + '</span>' : '') + '</div>';
+  return html;
+}
+
+function toggleLaserRun(runNo) {
+  expandedLaser[runNo] = !expandedLaser[runNo];
+  renderLaserQueue();
+  renderLaserLog();
+}
+
+/* ----- laser log: runs the floor marked Post Production ----- */
+
+var lasPeriod = 'day';                    // same control as the Metal Log
+var lasAnchor = startOfDay(new Date());
+
+function setLasPeriod(p) {
+  lasPeriod = p;
+  Array.prototype.forEach.call(document.querySelectorAll('#lasseg button'), function (b) {
+    b.className = b.getAttribute('data-p') === p ? 'on' : '';
+  });
+  renderLaserLog();
+}
+function lasStep(delta) { lasAnchor = stepAnchor(lasAnchor, lasPeriod, delta); renderLaserLog(); }
+function lasToday() { lasAnchor = startOfDay(new Date()); renderLaserLog(); }
+
+function renderLaserLog() {
+  var table = document.getElementById('lastable');
+  var note = document.getElementById('lasnote');
+  if (!table) return;
+
+  var range = rangeFor(lasPeriod, lasAnchor);
+  var rows = laserRuns().filter(laserDone).filter(function (r) {
+    var w = laserWhen(r);
+    return w && w >= range.start && w < range.end;
+  });
+  rows.sort(function (a, b) { return (laserWhen(b) - laserWhen(a)) || (Number(b.run) - Number(a.run)); });
+
+  document.getElementById('laslabel').textContent = range.label;
+  document.getElementById('lasnext').disabled = range.end > new Date();
+  document.getElementById('lasersub').textContent =
+    rows.length + ' run' + (rows.length === 1 ? '' : 's') + ' completed';
+
+  if (!rows.length) {
+    table.innerHTML = '';
+    note.innerHTML = '<div class="empty">No laser runs completed in this period.</div>';
+    return;
+  }
+  note.innerHTML = '';
+
+  var html = '<thead><tr><th>Run</th><th>Date</th><th>Sheet type</th>'
+    + '<th class="num">Sheets</th><th class="num">Parts</th><th>Laser</th><th>Status</th><th></th></tr></thead><tbody>';
+  rows.forEach(function (run) {
+    var open = !!expandedLaser[run.run];
+    var when = laserWhen(run);
+    html += '<tr class="finrow' + (open ? ' open' : '') + '" onclick="toggleLaserRun(' + jsStr(run.run) + ')" title="Click for details">'
+      + '<td><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
+      +   (run.size ? '<span class="jwo">' + escapeHtml(run.size) + '</span>' : '') + '</td>'
+      + '<td>' + (when ? escapeHtml(fmtDate(when)) : '&mdash;') + '</td>'
+      + '<td>' + (run.sheetType ? escapeHtml(run.sheetType) : '&mdash;') + '</td>'
+      + '<td class="num">' + (run.sheets || 0) + '</td>'
+      + '<td class="num">' + (laserPartCount(run) || '&mdash;') + '</td>'
+      + '<td>' + (run.machine ? escapeHtml('Trotec ' + run.machine) : '&mdash;') + '</td>'
+      + '<td><span class="done">Complete ✓</span></td>'
+      + '<td class="num"><span class="fincaret">' + (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</span></td>'
+      + '</tr>';
+    if (open) {
+      html += '<tr class="findetail"><td colspan="8">' + laserDetailHtml(run) + '</td></tr>';
+    }
+  });
+  table.innerHTML = html + '</tbody>';
+}
+
 function jobStatusBadge(job) {
   var s = (job.schedStatus || '').toLowerCase();
   var map = { 'on-press': ['Printing', 'printing'], 'finished printing': ['Cutting', 'cutting'],
@@ -3506,6 +3787,8 @@ document.getElementById('periodprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('periodnext').innerHTML = ICON.chevronRight(16);
 document.getElementById('finprev').innerHTML = ICON.chevronLeft(16);
 document.getElementById('finnext').innerHTML = ICON.chevronRight(16);
+document.getElementById('lasprev').innerHTML = ICON.chevronLeft(16);
+document.getElementById('lasnext').innerHTML = ICON.chevronRight(16);
 
 // Enter confirms the reopen dialog, Escape backs out of it.
 document.addEventListener('keydown', function (e) {
