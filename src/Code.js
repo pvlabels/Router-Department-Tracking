@@ -113,6 +113,7 @@ function handleAction(p) {
     if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
     if (p.action === 'backfillHistory') return backfillProductionHistory();
     if (p.action === 'laserLog') return logLaserRun(p.run);
+    if (p.action === 'laserDelete') return deleteLaserRun(p.runNumber);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -895,6 +896,37 @@ function logLaserRun(run) {
     var out = { ok: true, row: row, updated: updated, runNumber: runNo };
     if (warnings.length) out.warnings = warnings;
     return out;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Clears a mislogged laser run's row (formula cells are left alone). */
+function deleteLaserRun(runNumber) {
+  var runNo = String(runNumber || '').replace(/\D/g, '');
+  if (!runNo) throw new Error('Laser run number is required.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var target = laserTarget();
+    var sheet = target.sheet;
+    var lay = target.lay;
+    var col = lay.col;
+    if (col['laser run #'] === undefined) throw new Error('No run # column.');
+
+    var last = Math.max(sheet.getLastRow(), lay.dataRow);
+    var runs = sheet.getRange(lay.dataRow, col['laser run #'] + 1, last - lay.dataRow + 1, 1).getValues();
+    var row = 0;
+    for (var i = 0; i < runs.length; i++) {
+      if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
+    }
+    if (!row) return { ok: true, found: false, runNumber: runNo };
+
+    for (var h in col) {
+      var cell = sheet.getRange(row, col[h] + 1);
+      if (!cell.getFormula()) cell.setValue('');
+    }
+    return { ok: true, found: true, row: row, runNumber: runNo };
   } finally {
     lock.releaseLock();
   }
