@@ -54,7 +54,10 @@ var CONFIG = {
   // Part Numbers | DATA | RAW DATA (the last three titled on the lower band
   // row). The tab is found by scanning for the "Laser Run #" header. Rows are
   // upserted by the Illustrator "Log Laser Run" script via the laserLog action.
-  LASER_SHEET_ID: '1E-ID5GrIyq9jZHDsCgAFt-8XkT2YohRjYdCI6b68GPU'
+  LASER_SHEET_ID: '1E-ID5GrIyq9jZHDsCgAFt-8XkT2YohRjYdCI6b68GPU',
+  // Status the floor sets when a run leaves the laser queue for the log.
+  LASER_DONE_STATUS: 'Post Production',
+  LASER_DEFAULT_STATUS: 'On Laser'
 };
 
 var JOBS_HEADER = ['Job Name', 'Sheets to Cut', 'Start Date', 'Active', 'Pieces (JSON)',
@@ -115,6 +118,7 @@ function handleAction(p) {
     if (p.action === 'laserLog') return logLaserRun(p.run);
     if (p.action === 'laserDelete') return deleteLaserRun(p.runNumber);
     if (p.action === 'reorderLaser') return reorderLaser(p.order);
+    if (p.action === 'laserComplete') return setLaserComplete(p.runNumber, p.on);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -964,6 +968,95 @@ function reorderLaser(order) {
     lock.releaseLock();
   }
   return { ok: true };
+}
+
+/* ---------- laser complete / reopen ----------
+ * The board's Status column is the floor's source of truth, so completing a
+ * run from the dashboard writes it there ("Post Production"), which is what
+ * moves the run out of the Laser Queue and into the Laser Log. Reopening
+ * restores whatever the status was before, remembered per run.
+ */
+
+function getLaserPrev() {
+  var raw = PropertiesService.getScriptProperties().getProperty('LASER_PREV_STATUS');
+  if (!raw) return {};
+  try { return JSON.parse(raw) || {}; } catch (err) { return {}; }
+}
+function setLaserPrev(map) {
+  PropertiesService.getScriptProperties().setProperty('LASER_PREV_STATUS', JSON.stringify(map));
+}
+
+/**
+ * The value to write into a Status cell. If the column carries a dropdown,
+ * return the option that matches `want` (ignoring case/spacing) so a strict
+ * validation rule accepts the write instead of rejecting it.
+ */
+function laserStatusValue(cell, want) {
+  var rule;
+  try { rule = cell.getDataValidation(); } catch (err) { return want; }
+  if (!rule) return want;
+
+  var list = null;
+  try {
+    var vals = rule.getCriteriaValues();
+    if (vals && vals.length) {
+      if (Object.prototype.toString.call(vals[0]) === '[object Array]') list = vals[0];
+      else if (vals[0] && typeof vals[0].getValues === 'function') {
+        list = vals[0].getValues().map(function (r) { return r[0]; });
+      }
+    }
+  } catch (err) { return want; }
+  if (!list || !list.length) return want;
+
+  var key = function (s) { return String(s).replace(/[^a-z0-9]/gi, '').toLowerCase(); };
+  var wanted = key(want);
+  for (var i = 0; i < list.length; i++) {
+    if (key(list[i]) === wanted) return list[i];
+  }
+  return want;   // not offered by the dropdown — let the write fail loudly
+}
+
+function setLaserComplete(runNumber, on) {
+  var runNo = String(runNumber || '').replace(/\D/g, '');
+  if (!runNo) throw new Error('Laser run number is required.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var target = laserTarget();
+    var sheet = target.sheet, lay = target.lay, col = lay.col;
+    if (col['status'] === undefined) throw new Error('The laser board has no Status column.');
+
+    var last = Math.max(sheet.getLastRow(), lay.dataRow);
+    var runs = sheet.getRange(lay.dataRow, col['laser run #'] + 1, last - lay.dataRow + 1, 1).getValues();
+    var row = 0;
+    for (var i = 0; i < runs.length; i++) {
+      if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
+    }
+    if (!row) throw new Error('Laser run ' + runNo + ' is not on the board.');
+
+    var cell = sheet.getRange(row, col['status'] + 1);
+    if (cell.getFormula()) throw new Error('Run ' + runNo + '’s status is a formula — edit it on the board.');
+
+    var prev = getLaserPrev(), want;
+    if (on) {
+      prev[runNo] = String(cell.getValue() || '').trim();
+      want = laserStatusValue(cell, CONFIG.LASER_DONE_STATUS);
+    } else {
+      want = laserStatusValue(cell, prev[runNo] || CONFIG.LASER_DEFAULT_STATUS);
+      delete prev[runNo];
+    }
+
+    try {
+      cell.setValue(want);
+    } catch (err) {
+      throw new Error('The board rejected "' + want + '" in Status (row ' + row + '): '
+        + String((err && err.message) || err));
+    }
+    setLaserPrev(prev);
+    return { ok: true, runNumber: runNo, row: row, status: want };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ---------- laser board read (feeds the dashboard's laser cards) ---------- */

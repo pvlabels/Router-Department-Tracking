@@ -1807,8 +1807,43 @@ function laserDetailHtml(run) {
 
   html += '<div class="prodline">Status is set on the laser board'
     + (run.loggedAt ? ' &middot; logged <span class="mono">' + escapeHtml(run.loggedAt) + '</span>' : '') + '</div>';
+
+  // Completing writes "Post Production" to the board, which is what moves the
+  // run into the Laser Log; reopening puts its previous status back.
+  html += '<div class="detailbtns">'
+    + (laserDone(run)
+        ? '<button class="small" onclick="event.stopPropagation();reopenLaserRun(' + jsStr(run.run) + ')">Reopen</button>'
+        : '<button class="small done-btn" onclick="event.stopPropagation();completeLaserRun(' + jsStr(run.run) + ')">✓ Mark complete</button>')
+    + '</div>';
   return html;
 }
+
+/* ----- complete / reopen a laser run (writes the board's Status column) ----- */
+
+function completeLaserRun(runNo) { setLaserCompleteState(runNo, true); }
+function reopenLaserRun(runNo) { setLaserCompleteState(runNo, false); }
+
+function setLaserCompleteState(runNo, on) {
+  var run = (state.laser || []).filter(function (r) { return String(r.run) === String(runNo); })[0];
+  if (!run) return;
+  var previous = run.status;
+  // Show the move immediately; the board write follows.
+  run.status = on ? 'Post Production' : (laserPrevStatus[runNo] || 'On Laser');
+  if (on) laserPrevStatus[runNo] = previous;
+  else delete laserPrevStatus[runNo];
+  delete expandedLaser[runNo];
+  renderLaserQueue();
+  renderLaserLog();
+  suppressReloadUntil = Date.now() + 6000;
+  api({ action: 'laserComplete', runNumber: runNo, on: on }, function (res) {
+    if (!res || !res.ok) {
+      run.status = previous;                       // put it back if the board refused
+      renderLaserQueue(); renderLaserLog();
+      onError(new Error((res && res.error) || (on ? 'Could not mark the run complete.' : 'Could not reopen the run.')));
+    }
+  });
+}
+var laserPrevStatus = {};                 // run # -> status before completing
 
 /** Persist the dragged laser priority, applying it locally first. */
 function commitLaserOrder(runNos) {
@@ -1868,7 +1903,7 @@ function renderLaserLog() {
   note.innerHTML = '';
 
   var html = '<thead><tr><th>Run</th><th>Date</th><th>Sheet type</th>'
-    + '<th class="num">Sheets</th><th class="num">Parts</th><th>Laser</th><th>Status</th><th></th></tr></thead><tbody>';
+    + '<th class="num">Sheets</th><th class="num">Parts</th><th>Laser</th><th>Status</th><th></th><th></th></tr></thead><tbody>';
   rows.forEach(function (run) {
     var open = !!expandedLaser[run.run];
     var when = laserWhen(run);
@@ -1882,10 +1917,11 @@ function renderLaserLog() {
       + '<td class="num">' + (laserPartCount(run) || '&mdash;') + '</td>'
       + '<td>' + (run.machine ? escapeHtml(laserName(run.machine)) : '&mdash;') + '</td>'
       + '<td><span class="done">Complete ✓</span></td>'
+      + '<td class="num"><button class="small" onclick="event.stopPropagation();reopenLaserRun(' + jsStr(run.run) + ')">Reopen</button></td>'
       + '<td class="num"><span class="fincaret">' + (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</span></td>'
       + '</tr>';
     if (open) {
-      html += '<tr class="findetail"><td colspan="8">' + laserDetailHtml(run) + '</td></tr>';
+      html += '<tr class="findetail"><td colspan="9">' + laserDetailHtml(run) + '</td></tr>';
     }
   });
   table.innerHTML = html + '</tbody>';
