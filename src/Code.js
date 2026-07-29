@@ -822,16 +822,21 @@ function logLaserRun(run) {
     var lay = target.lay;
     var col = lay.col;
 
-    var last = sheet.getLastRow();
-    var row = 0;
-    if (last >= lay.dataRow && col['laser run #'] !== undefined) {
+    // Match an existing row by run #, else take the first row with an empty
+    // run # cell. (getLastRow() is useless here: the board's pre-formatted
+    // dropdowns/formulas make it read ~131 on an empty tab.)
+    var last = Math.max(sheet.getLastRow(), lay.dataRow);
+    var row = 0, firstEmpty = 0;
+    if (col['laser run #'] !== undefined) {
       var runs = sheet.getRange(lay.dataRow, col['laser run #'] + 1, last - lay.dataRow + 1, 1).getValues();
       for (var i = 0; i < runs.length; i++) {
-        if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
+        var cellRun = String(runs[i][0]).replace(/\D/g, '');
+        if (cellRun === runNo) { row = lay.dataRow + i; break; }
+        if (!firstEmpty && !String(runs[i][0]).trim()) firstEmpty = lay.dataRow + i;
       }
     }
     var updated = row > 0;
-    if (!row) row = Math.max(last + 1, lay.dataRow);
+    if (!row) row = firstEmpty || (last + 1);
 
     var parts = run.parts || [];           // [{pn, qty}] as laid out on the sheet
     var partList = [];
@@ -872,18 +877,24 @@ function logLaserRun(run) {
       fields['notes'] = customer.slice(0, 200);
     }
 
-    var width = Math.max(sheet.getLastColumn(), 11);
-    var current;
-    if (row <= last) {
-      current = sheet.getRange(row, 1, 1, width).getValues()[0];
-    } else {
-      current = [];
-      for (var c = 0; c < width; c++) current.push('');
+    // Write cell by cell: a data-validation rejection (e.g. an off-list Sheet
+    // Type) must not sink the rest of the row, and cells the board computes
+    // with formulas are never overwritten.
+    var warnings = [];
+    for (var h in fields) {
+      if (col[h] === undefined) continue;
+      var cell = sheet.getRange(row, col[h] + 1);
+      if (cell.getFormula()) continue;
+      try {
+        cell.setValue(fields[h]);
+      } catch (cellErr) {
+        warnings.push(h + ': ' + String((cellErr && cellErr.message) || cellErr));
+      }
     }
-    for (var h in fields) { if (col[h] !== undefined) current[col[h]] = fields[h]; }
-    sheet.getRange(row, 1, 1, width).setValues([current]);
 
-    return { ok: true, row: row, updated: updated, runNumber: runNo };
+    var out = { ok: true, row: row, updated: updated, runNumber: runNo };
+    if (warnings.length) out.warnings = warnings;
+    return out;
   } finally {
     lock.releaseLock();
   }
