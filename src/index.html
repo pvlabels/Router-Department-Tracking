@@ -1658,15 +1658,32 @@ function laserWorkOrders(run) {
   };
   var stated = String(run.workOrder || '').trim();
   if (stated && !laserPlaceholder(stated)) {
-    // "WO-282480-282468" -> 282480, 282468 (bare, to match the derived ones)
-    splitWorkOrders(stated).forEach(function (w) { add(String(w).replace(/^WO[-\s]*/i, '')); });
+    splitWorkOrders(stated).forEach(function (w) { add(w); });   // already WO-prefixed
   }
-  (run.parts || []).forEach(function (p) { add(woFromPart(p.pn)); });
+  // Prefixed to read like the Metal Queue's work orders.
+  (run.parts || []).forEach(function (p) {
+    var wo = woFromPart(p.pn);
+    if (wo) add('WO-' + wo);
+  });
   return out;
 }
 
 // Ganged sheets carry placeholders in these fields rather than being blank.
 function laserPlaceholder(v) { return /^(x+|various|mixed|multiple|n\/?a|none|-+)$/i.test(String(v || '').trim()); }
+
+/**
+ * The board's Rush column is free text — the floor writes a marker or a short
+ * reason in it — so anything that isn't an explicit "no" flags the run.
+ */
+function laserRush(run) {
+  var v = String(run.rush || '').trim();
+  return !!v && !/^(no|n|false|0|none|-+)$/i.test(v);
+}
+/** Whatever the floor typed, when it isn't just a yes-marker — shown on hover. */
+function laserRushNote(run) {
+  var v = String(run.rush || '').trim();
+  return /^(rush|yes|y|true|1|x|✓)$/i.test(v) ? '' : v;
+}
 
 /**
  * What identifies this run in the queue, in the slot the Metal Queue gives
@@ -1700,9 +1717,12 @@ function renderLaserQueue() {
   if (!host) return;
   var onFloor = laserRuns().filter(laserActive);
   var runs = onFloor.filter(function (r) { return laserMatches(r, laserQuery); });
-  // Hand-set priority wins (drag the grip). Runs nobody has placed yet fall
-  // in behind them, furthest-along stage first, then newest run.
+  // Rush jumps the queue outright — it's the floor's own urgency flag on the
+  // board. Within rush and within the rest, hand-set priority wins (drag the
+  // grip); runs nobody has placed fall in behind by stage, then newest run.
   runs.sort(function (a, b) {
+    var ar = laserRush(a) ? 0 : 1, br = laserRush(b) ? 0 : 1;
+    if (ar !== br) return ar - br;
     var ao = a.order, bo = b.order;
     if (ao != null && bo != null) return ao - bo;
     if (ao != null) return -1;
@@ -1764,7 +1784,11 @@ function laserRow(run) {
     +   '</span>'
     +     '<span class="jright">'
     +       (run.machine ? '<span class="jmach">' + escapeHtml(laserName(run.machine)) + '</span>' : '')
-    +       (run.rush ? '<span class="jstatus" style="color:var(--delta-bad)">Rush</span>' : '')
+    +       (laserRush(run)
+              ? '<span class="jstatus" style="color:var(--delta-bad)"'
+                + (laserRushNote(run) ? ' title="Rush: ' + escapeHtml(laserRushNote(run)) + '"' : '')
+                + '>Rush</span>'
+              : '')
     +       '<span class="jstatus ' + stage.cls + '">' + stage.label + '</span>'
     +       '<span class="jpct">' + (parts ? parts + ' placard' + (parts === 1 ? '' : 's') : '&mdash;') + '</span>'
     +     '</span></div>'
@@ -1804,6 +1828,7 @@ function laserDetailHtml(run) {
   if (run.size) meta.push({ label: 'Sheet size', value: run.size });
   if (run.machine) meta.push({ label: 'Laser', value: laserName(run.machine) });
   if (run.customer) meta.push({ label: 'Customer', value: run.customer });
+  if (laserRush(run)) meta.push({ label: 'Rush', value: laserRushNote(run) || 'Yes' });
   if (run.notes) meta.push({ label: 'Notes', value: run.notes });
 
   var html = '<div class="stats">' + stats.map(function (s) {
