@@ -114,6 +114,7 @@ function handleAction(p) {
     if (p.action === 'backfillHistory') return backfillProductionHistory();
     if (p.action === 'laserLog') return logLaserRun(p.run);
     if (p.action === 'laserDelete') return deleteLaserRun(p.runNumber);
+    if (p.action === 'reorderLaser') return reorderLaser(p.order);
     throw new Error('Unknown action: ' + p.action);
   } catch (err) {
     return { error: String((err && err.message) || err) };
@@ -936,6 +937,35 @@ function deleteLaserRun(runNumber) {
   }
 }
 
+/* ---------- laser queue order ----------
+ * Cut priority the laser floor sets by dragging rows on the dashboard. It
+ * belongs to the shop, not to one browser, so it lives in a Script Property
+ * ({ "<run #>": position }) exactly like the router queue's JOB_META order.
+ */
+
+function getLaserOrder() {
+  var raw = PropertiesService.getScriptProperties().getProperty('LASER_ORDER');
+  if (!raw) return {};
+  try { return JSON.parse(raw) || {}; } catch (err) { return {}; }
+}
+
+function reorderLaser(order) {
+  if (!Array.isArray(order)) throw new Error('order must be an array of laser run numbers.');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    var map = {};
+    order.forEach(function (run, i) {
+      run = String(run || '').trim();
+      if (run) map[run] = i;
+    });
+    PropertiesService.getScriptProperties().setProperty('LASER_ORDER', JSON.stringify(map));
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
 /* ---------- laser board read (feeds the dashboard's laser cards) ---------- */
 
 /**
@@ -953,6 +983,7 @@ function readLaserBoard() {
 
   var width = Math.max(sheet.getLastColumn(), 11);
   var values = sheet.getRange(lay.dataRow, 1, last - lay.dataRow + 1, width).getValues();
+  var order = getLaserOrder();
   var cell = function (row, name) {
     var i = col[name];
     return i === undefined ? '' : row[i];
@@ -999,7 +1030,8 @@ function readLaserBoard() {
       machine: machine,                            // "T6" = Trotec 6, "E3" = Epilog 3
       customer: String(raw.customer || '').trim(),
       workOrder: String(raw.workOrder || '').trim(),
-      loggedAt: String(raw.sentAt || '').trim()
+      loggedAt: String(raw.sentAt || '').trim(),
+      order: order[runNo] === undefined ? null : order[runNo]
     });
   }
   return out;

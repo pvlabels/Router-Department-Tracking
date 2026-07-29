@@ -1626,11 +1626,14 @@ function renderLaserQueue() {
   var host = document.getElementById('laserqueue');
   if (!host) return;
   var runs = laserRuns().filter(laserActive);
-  // Stage order first (On Router ahead of On Laser — it's closer to done),
-  // then newest run first within a stage.
+  // Hand-set priority wins (drag the grip). Runs nobody has placed yet fall
+  // in behind them, furthest-along stage first, then newest run.
   runs.sort(function (a, b) {
-    var d = (laserStage(b).pct - laserStage(a).pct);
-    return d || (Number(b.run) - Number(a.run));
+    var ao = a.order, bo = b.order;
+    if (ao != null && bo != null) return ao - bo;
+    if (ao != null) return -1;
+    if (bo != null) return 1;
+    return (laserStage(b).pct - laserStage(a).pct) || (Number(b.run) - Number(a.run));
   });
 
   var waiting = laserRuns().filter(laserWaiting).length;
@@ -1638,7 +1641,7 @@ function renderLaserQueue() {
   if (sub) {
     sub.textContent = runs.length + ' on the floor'
       + (waiting ? ' · ' + waiting + ' logged, not started yet' : '')
-      + ' · click a run for details';
+      + ' · drag the handle to set laser priority · click a run for details';
   }
 
   host.innerHTML = '';
@@ -1661,11 +1664,13 @@ function laserRow(run) {
 
   var row = document.createElement('div');
   row.className = 'jobrow';
+  row.setAttribute('data-name', run.run);
 
   var head = document.createElement('div');
   head.className = 'jobrow-head';
   head.innerHTML =
-      '<div class="jobrow-main" data-act="open" title="Click for details" style="margin-left:2px">'
+      '<div class="grip" data-act="grip" title="Drag to set laser priority">' + ICON.grip(16) + '</div>'
+    + '<div class="jobrow-main" data-act="open" title="Click for details">'
     +   '<div class="jobrow-top"><span class="jtitle"><span class="jname">' + escapeHtml(laserTitle(run)) + '</span>'
     +     (tags ? '<span class="jwo">' + escapeHtml(tags) + '</span>' : '')
     +     (customer ? '<span class="jco">' + escapeHtml(customer) + '</span>' : '')
@@ -1690,6 +1695,9 @@ function laserRow(run) {
 
   head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleLaserRun(run.run); });
   head.querySelector('[data-act="open"]').addEventListener('click', function () { toggleLaserRun(run.run); });
+  head.querySelector('[data-act="grip"]').addEventListener('pointerdown', function (e) {
+    rowPointerDown(e, row, { containerId: 'laserqueue', commit: commitLaserOrder });
+  });
   return row;
 }
 
@@ -1738,6 +1746,18 @@ function laserDetailHtml(run) {
   html += '<div class="prodline">Status is set on the laser board'
     + (run.loggedAt ? ' &middot; logged <span class="mono">' + escapeHtml(run.loggedAt) + '</span>' : '') + '</div>';
   return html;
+}
+
+/** Persist the dragged laser priority, applying it locally first. */
+function commitLaserOrder(runNos) {
+  var byRun = {};
+  (state.laser || []).forEach(function (r) { byRun[r.run] = r; });
+  runNos.forEach(function (n, i) { if (byRun[n]) byRun[n].order = i; });
+  renderLaserQueue();
+  suppressReloadUntil = Date.now() + 6000;
+  api({ action: 'reorderLaser', order: runNos }, function (res) {
+    if (!res || !res.ok) onError(new Error((res && res.error) || 'Laser reorder failed.'));
+  });
 }
 
 function toggleLaserRun(runNo) {
@@ -1870,12 +1890,18 @@ function jobRow(job, idx, total) {
 var MOVE_START = 3;
 var pressState = null;
 
-/** Drag starts from the grip handle — a small movement picks the row up. */
-function rowPointerDown(e, row) {
+/**
+ * Drag starts from the grip handle — a small movement picks the row up.
+ * `opts` lets a second queue (the laser board) reuse the whole interaction:
+ * { containerId, commit } default to the Metal Queue's.
+ */
+function rowPointerDown(e, row, opts) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   endPress();
   e.preventDefault();
-  pressState = { row: row, container: document.getElementById('jobqueue'),
+  opts = opts || {};
+  pressState = { row: row, container: document.getElementById(opts.containerId || 'jobqueue'),
+                 commit: opts.commit || commitOrder,
                  startY: e.clientY, startX: e.clientX, lastY: e.clientY, lastX: e.clientX,
                  pointerId: e.pointerId, dragging: false };
   window.addEventListener('pointermove', rowPointerMove);
@@ -1934,7 +1960,7 @@ function rowPointerUp() {
   window.removeEventListener('pointercancel', rowPointerUp);
   document.body.style.userSelect = '';
   var wasDragging = st.dragging;
-  var container = st.container, row = st.row;
+  var container = st.container, row = st.row, commit = st.commit;
   pressState = null;
   dragName = null;
   if (wasDragging) {
@@ -1943,7 +1969,7 @@ function rowPointerUp() {
     row.style.touchAction = '';
     var names = Array.prototype.slice.call(container.querySelectorAll('.jobrow'))
       .map(function (r) { return r.getAttribute('data-name'); });
-    commitOrder(names);
+    commit(names);
   }
 }
 
