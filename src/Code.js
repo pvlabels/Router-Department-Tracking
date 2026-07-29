@@ -141,6 +141,11 @@ function getData() {
     machines: log.machines,
     jobs: readJobs(ss),
     history: readHistory(ss),
+    // The laser board is a separate spreadsheet the floor edits by hand; if it
+    // is unreachable the router dashboard must still load.
+    laser: (function () {
+      try { return readLaserBoard(); } catch (err) { return []; }
+    })(),
     updatedAt: new Date().toISOString()
   };
 }
@@ -929,6 +934,63 @@ function deleteLaserRun(runNumber) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- laser board read (feeds the dashboard's laser cards) ---------- */
+
+/**
+ * Every logged laser run, newest data first as the board holds it. The floor
+ * manages Status by hand ("On Laser" → "On Router" → "Post Production"), so
+ * the dashboard reads it verbatim and decides queue-vs-log on the frontend.
+ * RAW DATA carries the Illustrator capture (parts, size, machine, WO), which
+ * is where the per-laser and part-number detail comes from.
+ */
+function readLaserBoard() {
+  var target = laserTarget();
+  var sheet = target.sheet, lay = target.lay, col = lay.col;
+  var last = sheet.getLastRow();
+  if (last < lay.dataRow) return [];
+
+  var width = Math.max(sheet.getLastColumn(), 11);
+  var values = sheet.getRange(lay.dataRow, 1, last - lay.dataRow + 1, width).getValues();
+  var cell = function (row, name) {
+    var i = col[name];
+    return i === undefined ? '' : row[i];
+  };
+
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    var runNo = String(cell(row, 'laser run #') || '').trim();
+    if (!runNo) continue;                       // pre-formatted empty row
+
+    // RAW DATA is the JSON the logger wrote; DATA is its human summary.
+    var raw = {};
+    try { raw = JSON.parse(String(cell(row, 'raw data') || '{}')) || {}; } catch (err) { raw = {}; }
+
+    var when = cell(row, 'date');
+    var sheetsVal = Number(cell(row, 'sheets'));
+
+    out.push({
+      run: runNo,
+      date: when instanceof Date ? Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+                                 : String(when || '').trim(),
+      sheets: isNaN(sheetsVal) ? 0 : sheetsVal,
+      sheetType: String(cell(row, 'sheet type') || '').trim(),
+      status: String(cell(row, 'status') || '').trim(),
+      rush: String(cell(row, 'rush') || '').trim(),
+      seconds: toSeconds(cell(row, 'time')),
+      notes: String(cell(row, 'notes') || '').trim(),
+      partsText: String(cell(row, 'part numbers') || '').trim(),
+      parts: Array.isArray(raw.parts) ? raw.parts : [],
+      size: String(raw.size || '').trim(),
+      machine: String(raw.machine || '').trim(),   // "T6" = Trotec laser #6
+      customer: String(raw.customer || '').trim(),
+      workOrder: String(raw.workOrder || '').trim(),
+      loggedAt: String(raw.sentAt || '').trim()
+    });
+  }
+  return out;
 }
 
 /* ---------- helpers ---------- */
