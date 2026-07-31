@@ -1672,17 +1672,24 @@ function laserWorkOrders(run) {
 function laserPlaceholder(v) { return /^(x+|various|mixed|multiple|n\/?a|none|-+)$/i.test(String(v || '').trim()); }
 
 /**
- * The board's Rush column is free text — the floor writes a marker or a short
+ * The board's Rush column is free text — the floor writes a marker or the
  * reason in it — so anything that isn't an explicit "no" flags the run.
  */
 function laserRush(run) {
   var v = String(run.rush || '').trim();
   return !!v && !/^(no|n|false|0|none|-+)$/i.test(v);
 }
-/** Whatever the floor typed, when it isn't just a yes-marker — shown on hover. */
-function laserRushNote(run) {
+/** Shorthand the floor uses in that column, spelled out on hover. */
+var LASER_RUSH_TERMS = { nda: 'Next day air', '2da': 'Two day air', sda: 'Same day air' };
+/** A plain yes-marker just means "rush"; anything else names itself on the pill. */
+function laserRushBadge(run) {
+  if (!laserRush(run)) return null;
   var v = String(run.rush || '').trim();
-  return /^(rush|yes|y|true|1|x|✓)$/i.test(v) ? '' : v;
+  if (/^(rush|yes|y|true|1|x|✓)$/i.test(v)) return { label: 'Rush', title: '' };
+  var spelled = LASER_RUSH_TERMS[v.toLowerCase().replace(/[^a-z0-9]/g, '')];
+  if (spelled) return { label: v.toUpperCase(), title: spelled };
+  // Long free text stays readable as a tooltip behind the generic pill.
+  return v.length <= 12 ? { label: v, title: '' } : { label: 'Rush', title: v };
 }
 
 /**
@@ -1766,6 +1773,7 @@ function laserRow(run) {
   var parts = laserPartCount(run);
   var tags = laserTagText(run, 8);
   var customer = laserCustomer(run);
+  var rushBadge = laserRushBadge(run);
 
   var row = document.createElement('div');
   row.className = 'jobrow';
@@ -1784,10 +1792,10 @@ function laserRow(run) {
     +   '</span>'
     +     '<span class="jright">'
     +       (run.machine ? '<span class="jmach">' + escapeHtml(laserName(run.machine)) + '</span>' : '')
-    +       (laserRush(run)
+    +       (rushBadge
               ? '<span class="jstatus" style="color:var(--delta-bad)"'
-                + (laserRushNote(run) ? ' title="Rush: ' + escapeHtml(laserRushNote(run)) + '"' : '')
-                + '>Rush</span>'
+                + (rushBadge.title ? ' title="' + escapeHtml(rushBadge.title) + '"' : '')
+                + '>' + escapeHtml(rushBadge.label) + '</span>'
               : '')
     +       '<span class="jstatus ' + stage.cls + '">' + stage.label + '</span>'
     +       '<span class="jpct">' + (parts ? parts + ' placard' + (parts === 1 ? '' : 's') : '&mdash;') + '</span>'
@@ -1828,7 +1836,8 @@ function laserDetailHtml(run) {
   if (run.size) meta.push({ label: 'Sheet size', value: run.size });
   if (run.machine) meta.push({ label: 'Laser', value: laserName(run.machine) });
   if (run.customer) meta.push({ label: 'Customer', value: run.customer });
-  if (laserRush(run)) meta.push({ label: 'Rush', value: laserRushNote(run) || 'Yes' });
+  var rb = laserRushBadge(run);
+  if (rb) meta.push({ label: 'Priority', value: rb.label + (rb.title ? ' — ' + rb.title : '') });
   if (run.notes) meta.push({ label: 'Notes', value: run.notes });
 
   var html = '<div class="stats">' + stats.map(function (s) {
