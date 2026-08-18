@@ -22,8 +22,15 @@ var CONFIG = {
     { name: 'PS-24x18-18x12.cnc', target: 96, startDate: '2026-07-10', pieces: [], active: true }
   ],
 
-  // Cap on deduped runs returned to the browser (most recent win).
+  // Ceiling on individual runs returned to the browser (most recent win).
+  //
+  // This is a size limit, not a source of truth. Sheet counts come from
+  // jobStats, which is worked out over the entire Job Log, so a job cannot
+  // under-report just because its runs fell outside this list — which is
+  // exactly what would have happened once the log passed 2000 rows.
   MAX_RUNS: 2000,
+  // Runs older than this don't travel unless a job still being cut needs them.
+  RUNS_WINDOW_DAYS: 120,
 
   // The payload is expensive to build (three spreadsheets, six tabs), so one
   // build is shared by every open tab. FRESH_SECONDS is how long a build is
@@ -381,12 +388,17 @@ function buildData() {
     throw new Error('Tab "' + CONFIG.LOG_SHEET_NAME + '" not found in the spreadsheet.');
   }
 
-  var log = readLog(logSheet);
+  // Jobs first: the log needs their start dates to count sheets per job and to
+  // work out how far back the runs list has to reach.
+  var jobs = readJobs(ss);
+  var log = readLog(logSheet, jobs);
   return {
     runs: log.runs,
+    runsFrom: log.runsFrom,     // oldest run in the list above, so the page can say what it knows
+    jobStats: log.jobStats,     // exact per-job sheet counts and machine time, over the whole log
     daily: log.daily,
     machines: log.machines,
-    jobs: readJobs(ss),
+    jobs: jobs,
     history: readHistory(ss),
     // The laser board is a separate spreadsheet the floor edits by hand; if it
     // is unreachable the router dashboard must still load.
@@ -407,9 +419,13 @@ function buildData() {
  *           page stays accurate for month/year periods without shipping every
  *           row. Shape: { "YYYY-MM-DD": { "<job>": { r: runs, s: seconds } } }
  */
-function readLog(sheet) {
+function readLog(sheet, jobs) {
   var values = sheet.getDataRange().getValues();
-  if (values.length < 2) return { runs: [], daily: {} };
+  // An empty log still has to answer with every key, or the page reads
+  // undefined for machines and job stats it always expects to find.
+  if (values.length < 2) {
+    return { runs: [], runsFrom: '', jobStats: statsPerJob([], jobs), daily: {}, machines: [] };
+  }
   var head = values[0].map(function (v) { return String(v).trim(); });
   var col = {
     start: head.indexOf('Start Time'),
@@ -472,11 +488,96 @@ function readLog(sheet) {
     agg.s += run.seconds;
   });
 
-  // Capped runs list for the cards/table.
-  var runs = all.slice(all.length > CONFIG.MAX_RUNS ? all.length - CONFIG.MAX_RUNS : 0);
-  runs.forEach(function (r) { delete r._t; delete r._d; });
+  // Sheet counts and machine time per job, over the WHOLE log. These are what
+  // the dashboard reads, so windowing the runs list below can never make a job
+  // report fewer sheets than it cut.
+  var jobStats = statsPerJob(all, jobs);
 
-  return { runs: runs, daily: daily, machines: Object.keys(machineSet).sort() };
+  // Which individual runs travel. This used to be "the newest MAX_RUNS", which
+  // would have started silently dropping the oldest runs — and shrinking the
+  // counts drawn from them — as soon as the log passed 2000 rows. Now the list
+  // only has to carry what still reads runs one at a time: the tickets of jobs
+  // being cut, and recent history. Anything still being cut is covered however
+  // old it is.
+  var cutoff = runsCutoff(jobs);
+  var runs = [];
+  for (var k = 0; k < all.length; k++) {
+    var run = all[k];
+    if (run._t < cutoff) continue;
+    // Built fresh rather than deleting the private fields off the working
+    // objects, which would deoptimise every one of them.
+    runs.push({ start: run.start, job: run.job, seconds: run.seconds,
+                machine: run.machine, status: run.status });
+  }
+  if (runs.length > CONFIG.MAX_RUNS) runs = runs.slice(runs.length - CONFIG.MAX_RUNS);
+
+  return {
+    runs: runs,
+    runsFrom: runs.length ? String(runs[0].start).slice(0, 10) : '',
+    jobStats: jobStats,
+    daily: daily,
+    machines: Object.keys(machineSet).sort()
+  };
+}
+
+/** Drops a cut file's extension. Mirrors stripExt in index.html. */
+function stripExtName(n) { return String(n).replace(/\.[A-Za-z0-9]+$/, ''); }
+
+/**
+ * A run belongs to a tracked job if it is that exact file, or a numeric version
+ * of it — "PS-24x18-18x12-02.cnc" counts toward "PS-24x18-18x12.cnc", but
+ * "…-EHOL-FIX" stays separate. Mirrors runMatchesJob in index.html.
+ */
+function runBelongsToJob(runName, jobKey) {
+  var rb = stripExtName(runName).toLowerCase(), jb = stripExtName(jobKey).toLowerCase();
+  if (rb === jb) return true;
+  if (rb.indexOf(jb + '-') === 0) return /^\d+$/.test(rb.slice(jb.length + 1));
+  return false;
+}
+
+/** A job's start date as a local-midnight timestamp. Mirrors parseLocalDate. */
+function startDateMs(s) {
+  var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+  var d = new Date(String(s || ''));
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+/**
+ * Sheets cut and machine time for each tracked job, counted over every run in
+ * the log rather than the windowed list the browser gets.
+ */
+function statsPerJob(all, jobs) {
+  var out = {};
+  (jobs || []).forEach(function (j) {
+    var key = j.cutFile || j.name;
+    var since = startDateMs(j.startDate || '2000-01-01');
+    var n = 0, s = 0;
+    for (var i = 0; i < all.length; i++) {
+      var r = all[i];
+      if (r._t < since) continue;
+      if (!runBelongsToJob(r.job, key)) continue;
+      n++;
+      s += r.seconds || 0;
+    }
+    out[j.name] = { n: n, s: s };
+  });
+  return out;
+}
+
+/**
+ * How far back the runs list has to reach: far enough for every job still being
+ * cut to show its full ticket, and at least RUNS_WINDOW_DAYS of recent history
+ * for the log and the reports.
+ */
+function runsCutoff(jobs) {
+  var cutoff = Date.now() - CONFIG.RUNS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  (jobs || []).forEach(function (j) {
+    if (j.finishedAt || j.active === false) return;   // finished jobs read their totals from jobStats
+    var t = startDateMs(j.startDate);
+    if (t && t < cutoff) cutoff = t;
+  });
+  return cutoff;
 }
 
 /** Local-time YYYY-MM-DD for a Date (the spreadsheet's timezone). */

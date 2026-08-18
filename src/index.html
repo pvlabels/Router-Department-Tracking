@@ -1419,9 +1419,27 @@ function matchKeyFor(nameOrJob) {
 
 /** Sheets completed for a job (deduped runs on/after its start date, all versions). */
 function completedFor(name, startDate) {
+  // The backend counts these over the entire Job Log, so a job reports what it
+  // actually cut even when its runs are older than the runs list we hold. Only
+  // trust that figure when the caller is asking about the job's own start date,
+  // since that is what it was counted from — the job form asks about others
+  // while you are still typing.
+  var stat = jobStatFor(name, startDate);
+  if (stat) return stat.n;
+
   var since = parseLocalDate(startDate || '2000-01-01');
   var key = matchKeyFor(name);
   return state.runs.filter(function (r) { return runMatchesJob(r.job, key) && r.when >= since; }).length;
+}
+
+/** The backend's figures for a job, when they answer the question being asked. */
+function jobStatFor(name, startDate) {
+  var stat = state.jobStats && state.jobStats[name];
+  if (!stat) return null;
+  var job = (state.jobs || []).filter(function (x) { return x.name === name; })[0];
+  if (!job) return null;
+  if (startDate !== undefined && String(job.startDate || '') !== String(startDate || '')) return null;
+  return stat;
 }
 
 /** Pieces of a size cut so far: frozen baseline + new rate × sheets since. */
@@ -1521,13 +1539,18 @@ function renderFinished() {
 
   var all = finishedJobs();
   var rows = all.map(function (job) {
-    var runs = runsForJob(job);
-    var secs = runs.reduce(function (t, r) { return t + r.seconds; }, 0);
+    // Prefer the backend's totals: a job finished months ago still shows the
+    // sheets it cut, even though its runs are long out of the runs list.
+    var stat = jobStatFor(job.name, job.startDate);
+    if (!stat) {
+      var runs = runsForJob(job);
+      stat = { n: runs.length, s: runs.reduce(function (t, r) { return t + r.seconds; }, 0) };
+    }
     return {
       job: job,
       when: finishedWhen(job),
-      sheets: runs.length,
-      avg: runs.length ? secs / runs.length : 0
+      sheets: stat.n,
+      avg: stat.n ? stat.s / stat.n : 0
     };
   });
 
@@ -2939,7 +2962,18 @@ var REPORT_TYPES = [
 
 var reportState = { type: 'size', metric: 'runs', preset: 'month', start: '', end: '', sel: {}, compare: '', cstart: '', cend: '', items: [], tableAll: false };
 var MAX_COMPARE_ITEMS = 6;
-var HOURS_SINCE = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
+var HOURS_LOG_START = new Date(2026, 5, 17);   // Job Log durations begin here (Jun 17)
+
+/**
+ * The earliest date hours can be defended from. Hours are summed out of the
+ * runs list, so they are only ever as complete as that list — once the log
+ * outgrows the window the backend sends, the oldest run we hold becomes the
+ * real start, and reports say "partial" instead of quietly reading low.
+ */
+function hoursSince() {
+  var from = state.runsFrom ? parseLocalDate(state.runsFrom) : null;
+  return (from && from > HOURS_LOG_START) ? from : HOURS_LOG_START;
+}
 var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
 var reportFilterQuery = '';                // live search text for the filter list
 
@@ -3388,7 +3422,7 @@ function renderReportBody() {
   if (cfg.key === 'size' && recs.length) {
     var mn = recs[0].when, mx = recs[0].when;
     recs.forEach(function (rec) { if (rec.when < mn) mn = rec.when; if (rec.when > mx) mx = rec.when; });
-    utilStart = mn < HOURS_SINCE ? HOURS_SINCE : startOfDay(mn);
+    utilStart = mn < hoursSince() ? hoursSince() : startOfDay(mn);
     utilEnd = new Date(startOfDay(mx).getTime() + 86400000);
     if (utilEnd < utilStart) utilEnd = utilStart;
   }
@@ -3397,12 +3431,12 @@ function renderReportBody() {
   var machineCount = Math.max(1, Object.keys(allMach).length);
   var sched = scheduleStats(utilStart, utilEnd, dayKeySecs(allInRange), machineCount);
   var util = sched.scheduled > 0 ? Math.min(100, (sched.weekdayMachine / sched.scheduled) * 100) : 0;
-  var hoursPartial = cfg.key === 'size' ? (utilEnd <= HOURS_SINCE) : (range.start < HOURS_SINCE);
+  var hoursPartial = cfg.key === 'size' ? (utilEnd <= hoursSince()) : (range.start < hoursSince());
 
   // Comparison-period hours coverage + whole-router utilization (plain range —
   // the Size report's first/last-sheet windowing isn't replayed for the
   // comparison, so its utilization tile compares periods, not windows).
-  var cmpHoursPartial = cmp ? cmpRange.start < HOURS_SINCE : false;
+  var cmpHoursPartial = cmp ? cmpRange.start < hoursSince() : false;
   var cmpUtil = null;
   if (cmp && !cmpHoursPartial && cmp.totalSecs) {
     var cAll = state.runs.filter(function (r) { return r.when >= cmpRange.start && r.when < cmpRange.end; });
@@ -3743,7 +3777,7 @@ function itemCompareHtml(cfg, records, range) {
       + ' with activity — widen the date range or pick another report type.</div></div>';
   }
   var two = items.length === 2;
-  var hoursPartial = range.start < HOURS_SINCE;
+  var hoursPartial = range.start < hoursSince();
   var short = function (s) { return s.length > 22 ? s.slice(0, 21) + '…' : s; };
   // one aggregate per item, plus its color and time-to-cut-one-sheet
   var its = items.map(function (key, i) {
