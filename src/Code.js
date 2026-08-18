@@ -268,10 +268,21 @@ function rebuildPayloadCache() {
   return { json: json, hash: hash, builtAt: builtAt };
 }
 
-/** Seconds since a cached build was made. */
-function payloadAge(hit) {
-  var t = Date.parse(hit.builtAt);
+/** Seconds since a build was made. */
+function payloadAge(builtAt) {
+  var t = Date.parse(builtAt);
   return isNaN(t) ? Infinity : (Date.now() - t) / 1000;
+}
+
+/** The few dozen bytes a caller gets back when it already holds this build. */
+function unchangedBody(hash, builtAt) {
+  return '{"unchanged":true,"hash":' + JSON.stringify(hash)
+       + ',"builtAt":' + JSON.stringify(builtAt) + '}';
+}
+
+/** Either the short answer or the whole board, depending on what the caller has. */
+function answerFor(have, hit) {
+  return (have && have === hit.hash) ? unchangedBody(hit.hash, hit.builtAt) : hit.json;
 }
 
 /**
@@ -279,30 +290,34 @@ function payloadAge(hit) {
  * the way through, which is most of the point of caching the serialised form.
  */
 function servePayload(have) {
-  var hit = cacheReadPayload();
+  var meta = cacheReadMeta();
 
-  if (!hit) {
-    hit = rebuildPayloadColdStart();
-  } else if (payloadAge(hit) > CONFIG.PAYLOAD_FRESH_SECONDS) {
-    // Stale. One caller refreshes it; everyone else carries on with this copy
-    // rather than queueing behind a seven-second rebuild.
+  if (meta && payloadAge(meta.builtAt) <= CONFIG.PAYLOAD_FRESH_SECONDS) {
+    // By far the common case: a poll that already holds the current build. The
+    // manifest alone answers it, so don't reassemble three-quarters of a
+    // megabyte of chunks just to throw the result away.
+    if (have && have === meta.hash) return unchangedBody(meta.hash, meta.builtAt);
+    var hit = cacheReadPayload();
+    if (hit) return answerFor(have, hit);
+
+  } else if (meta) {
+    // Stale. One caller refreshes it; everyone else carries on with the copy
+    // already cached rather than queueing behind a seven-second rebuild.
     var lock = LockService.getScriptLock();
     if (lock.tryLock(0)) {
       try {
-        hit = rebuildPayloadCache();
+        return answerFor(have, rebuildPayloadCache());
       } catch (err) {
-        /* keep serving the copy we already have */
+        /* fall through to whatever is still cached */
       } finally {
         lock.releaseLock();
       }
     }
+    var stale = cacheReadPayload();
+    if (stale) return answerFor(have, stale);
   }
 
-  if (have && have === hit.hash) {
-    return '{"unchanged":true,"hash":' + JSON.stringify(hit.hash)
-         + ',"builtAt":' + JSON.stringify(hit.builtAt) + '}';
-  }
-  return hit.json;
+  return answerFor(have, rebuildPayloadColdStart());
 }
 
 /**
