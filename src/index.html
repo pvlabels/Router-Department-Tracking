@@ -1036,6 +1036,8 @@ try { selectedMachine = localStorage.getItem('machine') || 'all'; } catch (e) {}
 var expandedJobs = {};          // job name -> true when its ticket is open
 var dragName = null;            // job being dragged
 var suppressReloadUntil = 0;    // pause auto-refresh briefly after a reorder
+var dataHash = null;            // hash of the build we hold, so polls can ask "still this?"
+var refreshOnShow = false;      // a refresh came due while the tab was hidden
 
 /* ---------- icons ---------- */
 
@@ -1084,7 +1086,10 @@ function load() {
   if (typeof google !== 'undefined' && google.script) {
     google.script.run.withSuccessHandler(onData).withFailureHandler(onError).getData();
   } else if (location.protocol.indexOf('http') === 0) {
-    fetch(API_URL)
+    // Tell the backend which build we already hold. If nothing has changed
+    // since, it answers with a few dozen bytes instead of the whole board.
+    var url = API_URL + (dataHash ? '&have=' + encodeURIComponent(dataHash) : '');
+    fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) { if (data && data.error) throw new Error(data.error); onData(data); })
       .catch(onError);
@@ -1095,6 +1100,9 @@ function load() {
 
 function autoRefresh() {
   if (dragName || Date.now() < suppressReloadUntil) return;  // don't fight an active reorder
+  // A tab left open on the shop floor overnight used to poll several hundred
+  // times for nothing. Catch up when someone actually looks at it again.
+  if (document.hidden) { refreshOnShow = true; return; }
   load();
 }
 
@@ -1135,6 +1143,13 @@ function attachRunSizes() {
 }
 
 function onData(data) {
+  // Nothing has changed since our last poll: no parse of the board, no
+  // re-derivation, no repaint. Just show that we checked.
+  if (data && data.unchanged) {
+    markFresh();
+    return;
+  }
+  dataHash = (data && data.hash) || null;
   state = data;
   state.laser = state.laser || [];        // absent on the local mock
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
@@ -1155,10 +1170,15 @@ function onData(data) {
     state.machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean)).sort();
   }
   populateMachineSelect();
+  markFresh();
+  render();
+}
+
+/** Clears the offline banner and stamps the header with the time we last checked. */
+function markFresh() {
   document.getElementById('banner').className = 'banner';
   document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   document.getElementById('livedot').className = 'dot';
-  render();
 }
 
 function populateMachineSelect() {
@@ -4064,7 +4084,14 @@ document.addEventListener('keydown', function (e) {
 })();
 
 load();
-setInterval(autoRefresh, REFRESH_MS);
+// Jittered, so a room full of tabs opened at the same time doesn't line up and
+// hit the backend on the same second every minute.
+setInterval(autoRefresh, REFRESH_MS + Math.floor(Math.random() * 10000) - 5000);
+
+// Catch up on whatever was missed while the tab sat in the background.
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden && refreshOnShow) { refreshOnShow = false; load(); }
+});
 </script>
 </body>
 </html>

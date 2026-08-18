@@ -25,6 +25,14 @@ var CONFIG = {
   // Cap on deduped runs returned to the browser (most recent win).
   MAX_RUNS: 2000,
 
+  // The payload is expensive to build (three spreadsheets, six tabs), so one
+  // build is shared by every open tab. FRESH_SECONDS is how long a build is
+  // handed out without question; past that, the next request rebuilds it while
+  // everyone else keeps getting the last good copy. CACHE_TTL is how long a
+  // build stays usable as that fallback.
+  PAYLOAD_FRESH_SECONDS: 90,
+  PAYLOAD_CACHE_TTL: 900,
+
   // "Live Production Copy" — schedule sheet that feeds the queue automatically.
   // B = Run #, C = Sheets, E = Status, G = Notes, I = Cutting Shapes.
   PROD_SHEET_ID: '1E0C4hanKBmYCrZw1V8DcknU60UxFtXAqMF48_XpDTik',
@@ -74,11 +82,14 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.format === 'json') {
     var out;
     try {
-      out = getData();
+      // Served from the shared cache. "have" is the hash the caller already
+      // holds, so a poll with nothing new to learn gets a few bytes back.
+      out = servePayload(e.parameter.have);
     } catch (err) {
-      out = { error: String((err && err.message) || err) };
+      // Errors are never cached — the next request gets a real attempt.
+      out = JSON.stringify({ error: String((err && err.message) || err) });
     }
-    return ContentService.createTextOutput(JSON.stringify(out))
+    return ContentService.createTextOutput(out)
       .setMimeType(ContentService.MimeType.JSON);
   }
   return HtmlService.createTemplateFromFile('index')
@@ -107,27 +118,230 @@ function apiCall(payload) {
 
 /* ---------- API routing ---------- */
 
+// Everything that changes what the board shows, so the cached payload has to
+// go. Listed here rather than busted inside each branch, so a new action can't
+// quietly forget to.
+var MUTATING_ACTIONS = {
+  saveJob: 1, stopJob: 1, reorderJobs: 1, setComplete: 1, backfillHistory: 1,
+  laserLog: 1, laserDelete: 1, reorderLaser: 1, laserComplete: 1
+};
+
 function handleAction(p) {
   try {
     if (!p || !p.action) throw new Error('Missing action.');
-    if (p.action === 'saveJob') return saveJob(p.job);
-    if (p.action === 'stopJob') return stopJob(p.name);
-    if (p.action === 'reorderJobs') return reorderJobs(p.order);
-    if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
-    if (p.action === 'backfillHistory') return backfillProductionHistory();
-    if (p.action === 'laserLog') return logLaserRun(p.run);
-    if (p.action === 'laserDelete') return deleteLaserRun(p.runNumber);
-    if (p.action === 'reorderLaser') return reorderLaser(p.order);
-    if (p.action === 'laserComplete') return setLaserComplete(p.runNumber, p.on);
-    throw new Error('Unknown action: ' + p.action);
+    try {
+      return dispatchAction(p);
+    } finally {
+      // Bust even when the action threw. A write that failed partway through
+      // may still have changed the board, and a needless rebuild costs far
+      // less than showing the floor a queue that has moved on without it.
+      if (MUTATING_ACTIONS[p.action]) bustPayloadCache();
+    }
   } catch (err) {
     return { error: String((err && err.message) || err) };
   }
 }
 
+function dispatchAction(p) {
+  if (p.action === 'saveJob') return saveJob(p.job);
+  if (p.action === 'stopJob') return stopJob(p.name);
+  if (p.action === 'reorderJobs') return reorderJobs(p.order);
+  if (p.action === 'setComplete') return setComplete(p.name, p.on, p.sheets);
+  if (p.action === 'backfillHistory') return backfillProductionHistory();
+  if (p.action === 'laserLog') return logLaserRun(p.run);
+  if (p.action === 'laserDelete') return deleteLaserRun(p.runNumber);
+  if (p.action === 'reorderLaser') return reorderLaser(p.order);
+  if (p.action === 'laserComplete') return setLaserComplete(p.runNumber, p.on);
+  throw new Error('Unknown action: ' + p.action);
+}
+
+/* ---------- payload cache ---------- */
+
+/*
+ * Building the payload means reading three spreadsheets and six tabs — around
+ * seven seconds of script runtime. Paying that on every 60-second poll of every
+ * open tab made the board's cost scale with how many people had it open, which
+ * is what pushed it up against the daily Apps Script runtime quota.
+ *
+ * So one build is shared. It is handed out as-is while it is fresh; once it
+ * ages past PAYLOAD_FRESH_SECONDS the next request through the door rebuilds it
+ * while everyone else keeps getting the last good copy, so nobody waits behind
+ * a rebuild. Writes drop the cache outright, so anything the floor does on the
+ * board shows up on the very next poll.
+ */
+
+var CACHE_META_KEY = 'payload_meta';
+var CACHE_CHUNK_PREFIX = 'payload_';
+// CacheService caps one value at 100 KB. That limit is bytes and this is
+// characters, so leave room for the multi-byte ones in customer and note text.
+var CACHE_CHUNK_CHARS = 80000;
+
+/** The cached build, or null if it is missing, expired or torn. */
+function cacheReadPayload() {
+  var meta = cacheReadMeta();
+  if (!meta) return null;
+
+  var keys = [];
+  for (var i = 0; i < meta.chunks; i++) keys.push(CACHE_CHUNK_PREFIX + meta.hash + '_' + i);
+  var got = CacheService.getScriptCache().getAll(keys);
+
+  var parts = [];
+  for (var j = 0; j < keys.length; j++) {
+    var piece = got[keys[j]];
+    if (piece === null || piece === undefined) return null;   // a chunk expired out from under us
+    parts.push(piece);
+  }
+  var json = parts.join('');
+  if (json.length !== meta.len) return null;                  // torn read — rebuild rather than serve half a board
+  return { json: json, hash: meta.hash, builtAt: meta.builtAt };
+}
+
+function cacheReadMeta() {
+  var raw;
+  try { raw = CacheService.getScriptCache().get(CACHE_META_KEY); } catch (err) { return null; }
+  var meta;
+  try { meta = JSON.parse(raw || 'null'); } catch (err) { return null; }
+  return (meta && meta.hash && meta.chunks) ? meta : null;
+}
+
+/**
+ * Stores a build. Chunks are keyed by content hash, so a reader can never pair
+ * the manifest of one build with the chunks of another.
+ */
+function cacheWritePayload(json, hash, builtAt, laserRows) {
+  var cache = CacheService.getScriptCache();
+  var chunks = {}, n = 0;
+  for (var pos = 0; pos < json.length; pos += CACHE_CHUNK_CHARS) {
+    chunks[CACHE_CHUNK_PREFIX + hash + '_' + n] = json.slice(pos, pos + CACHE_CHUNK_CHARS);
+    n++;
+  }
+  // Chunks first — the manifest is what makes them findable, so it lands last.
+  cache.putAll(chunks, CONFIG.PAYLOAD_CACHE_TTL);
+  cache.put(CACHE_META_KEY,
+    JSON.stringify({ hash: hash, chunks: n, len: json.length, builtAt: builtAt, laserRows: laserRows || 0 }),
+    CONFIG.PAYLOAD_CACHE_TTL);
+}
+
+/**
+ * Drops the manifest, which orphans the chunks — they expire on their own.
+ * Cheaper than removing each one, and it cannot leave a half-removed build
+ * behind for the next reader to trip over.
+ */
+function bustPayloadCache() {
+  try { CacheService.getScriptCache().remove(CACHE_META_KEY); } catch (err) { /* non-fatal */ }
+}
+
+/** Hex MD5 of the payload body — the "is this still what you have?" token. */
+function payloadHash(body) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, body, Utilities.Charset.UTF_8);
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = (bytes[i] + 256) % 256;
+    hex += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return hex;
+}
+
+/**
+ * Builds, hashes and caches the payload.
+ *
+ * The hash covers the board's contents only. builtAt deliberately sits outside
+ * it: it changes on every single build, so hashing it would mean the hash never
+ * matched and every poll would ship the whole payload regardless.
+ */
+function rebuildPayloadCache() {
+  var data = buildData();
+  var builtAt = new Date().toISOString();
+  var body = JSON.stringify(data);
+  var hash = payloadHash(body);
+  var envelope = '{"hash":' + JSON.stringify(hash) + ',"builtAt":' + JSON.stringify(builtAt);
+  var json = body.length > 2 ? envelope + ',' + body.slice(1) : envelope + '}';
+
+  // A laser board that failed to read comes back empty — buildData swallows the
+  // error so the router side still loads. Caching that would blank both laser
+  // views until the entry aged out, so leave the last good build standing and
+  // let the next rebuild try again.
+  var rows = (data.laser || []).length;
+  var meta = cacheReadMeta();
+  if (rows > 0 || !meta || !meta.laserRows) cacheWritePayload(json, hash, builtAt, rows);
+
+  return { json: json, hash: hash, builtAt: builtAt };
+}
+
+/** Seconds since a cached build was made. */
+function payloadAge(hit) {
+  var t = Date.parse(hit.builtAt);
+  return isNaN(t) ? Infinity : (Date.now() - t) / 1000;
+}
+
+/**
+ * The JSON endpoint's body, as a string — never parsed and re-stringified on
+ * the way through, which is most of the point of caching the serialised form.
+ */
+function servePayload(have) {
+  var hit = cacheReadPayload();
+
+  if (!hit) {
+    hit = rebuildPayloadColdStart();
+  } else if (payloadAge(hit) > CONFIG.PAYLOAD_FRESH_SECONDS) {
+    // Stale. One caller refreshes it; everyone else carries on with this copy
+    // rather than queueing behind a seven-second rebuild.
+    var lock = LockService.getScriptLock();
+    if (lock.tryLock(0)) {
+      try {
+        hit = rebuildPayloadCache();
+      } catch (err) {
+        /* keep serving the copy we already have */
+      } finally {
+        lock.releaseLock();
+      }
+    }
+  }
+
+  if (have && have === hit.hash) {
+    return '{"unchanged":true,"hash":' + JSON.stringify(hit.hash)
+         + ',"builtAt":' + JSON.stringify(hit.builtAt) + '}';
+  }
+  return hit.json;
+}
+
+/**
+ * Nothing cached at all — someone has to build it. The lock stops a cold start,
+ * or a cache just busted by a write, from turning into every open tab building
+ * the same payload at once.
+ */
+function rebuildPayloadColdStart() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(45000)) {
+    var late = cacheReadPayload();
+    if (late) return late;
+    throw new Error('The board is rebuilding — try again in a moment.');
+  }
+  try {
+    var already = cacheReadPayload();   // whoever held the lock has probably just built it
+    if (already) return already;
+    return rebuildPayloadCache();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Object form of the payload, for the Apps Script-served page
+ * (google.script.run). The GitHub Pages front end goes through doGet instead.
+ */
+function getData() {
+  return JSON.parse(servePayload(null));
+}
+
 /* ---------- read ---------- */
 
-function getData() {
+/**
+ * Builds the whole payload from scratch. Only ever reached through the cache,
+ * so the throttled side work below now runs for one caller at a time instead of
+ * once per open tab.
+ */
+function buildData() {
   // Keep the queue and the full-year history in step with the board (both
   // throttled, best-effort: a schedule hiccup must never take the dashboard down).
   try { syncProductionThrottled(); } catch (err) { /* non-fatal */ }
@@ -150,8 +364,11 @@ function getData() {
     // is unreachable the router dashboard must still load.
     laser: (function () {
       try { return readLaserBoard(); } catch (err) { return []; }
-    })(),
-    updatedAt: new Date().toISOString()
+    })()
+    // No timestamp here on purpose. Anything that changes on every build would
+    // change the content hash with it, so "is this still what you have?" would
+    // always answer no and every poll would ship the whole board. The cache
+    // stamps builtAt outside the hashed body instead.
   };
 }
 
@@ -540,6 +757,19 @@ function historySheet(ss) {
  * idempotent. Returns how many rows were written.
  */
 function backfillProductionHistory() {
+  // Take the lock before the expensive read, not after it: whoever loses the
+  // race should walk away now rather than read the whole board and then queue
+  // behind the winner for fifteen seconds.
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(0)) return { skipped: 'busy' };
+  try {
+    return rewriteProductionHistory();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function rewriteProductionHistory() {
   var prod = SpreadsheetApp.openById(CONFIG.PROD_SHEET_ID);
   var psheet = prod.getSheets().filter(function (s) { return s.getSheetId() === CONFIG.PROD_SHEET_GID; })[0]
             || prod.getSheets()[0];
@@ -568,17 +798,11 @@ function backfillProductionHistory() {
   var out = Object.keys(byRun).map(function (k) { return byRun[k]; });
   out.sort(function (x, y) { return String(x[1]).localeCompare(String(y[1])); });
 
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return { skipped: 'busy' };
-  try {
-    var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    var sheet = historySheet(ss);
-    if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, HISTORY_HEADER.length).clearContent();
-    if (out.length) sheet.getRange(2, 1, out.length, HISTORY_HEADER.length).setValues(out);
-    PropertiesService.getScriptProperties().setProperty('HISTORY_AT', String(Date.now()));
-  } finally {
-    lock.releaseLock();
-  }
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sheet = historySheet(ss);
+  if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, HISTORY_HEADER.length).clearContent();
+  if (out.length) sheet.getRange(2, 1, out.length, HISTORY_HEADER.length).setValues(out);
+  PropertiesService.getScriptProperties().setProperty('HISTORY_AT', String(Date.now()));
   return { rows: out.length };
 }
 
@@ -586,7 +810,13 @@ function backfillProductionHistory() {
 function backfillHistoryThrottled() {
   var props = PropertiesService.getScriptProperties();
   var lastRun = Number(props.getProperty('HISTORY_AT') || 0);
-  if (Date.now() - lastRun < CONFIG.HISTORY_REFRESH_MINUTES * 60 * 1000) return null;
+  var now = Date.now();
+  if (now - lastRun < CONFIG.HISTORY_REFRESH_MINUTES * 60 * 1000) return null;
+  // Stamp before the work, the way the schedule sync does, so a throw can't
+  // leave every following request retrying the whole rebuild. The stamp is
+  // backdated so a genuine failure retries in a couple of minutes instead of
+  // waiting out the full hour; success overwrites it with the real time.
+  props.setProperty('HISTORY_AT', String(now - (CONFIG.HISTORY_REFRESH_MINUTES - 2) * 60 * 1000));
   return backfillProductionHistory();
 }
 
