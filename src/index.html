@@ -1152,6 +1152,7 @@ function onData(data) {
   dataHash = (data && data.hash) || null;
   state = data;
   state.laser = state.laser || [];        // absent on the local mock
+  state.laser.forEach(applyLaserDetail);  // keep placards we already fetched
   state.runs.forEach(function (r) { r.when = new Date(r.start); });
   attachRunSizes();
   // Fallback: build machine-nested daily aggregates + machine list if the
@@ -1656,8 +1657,15 @@ function laserColor(machine) {
   var i = laserMachines().indexOf(machine);
   return jobColor(i < 0 ? 0 : i);
 }
-/** Placards on the sheet — each part number, times its quantity. */
+/**
+ * Placards on the sheet — each part number, times its quantity.
+ *
+ * Completed runs arrive with this already counted (np) and no placard list, so
+ * the log can show the number without the board shipping thousands of part
+ * numbers nobody has opened. Runs on the floor still carry their list.
+ */
 function laserPartCount(run) {
+  if (typeof run.np === 'number') return run.np;
   return (run.parts || []).reduce(function (t, p) { return t + (Number(p.qty) || 0); }, 0);
 }
 
@@ -1718,6 +1726,9 @@ function laserRushBadge(run) {
  * numbers don't carry one fall back to the part numbers themselves.
  */
 function laserIdTags(run) {
+  // Completed runs arrive with these already worked out, since deriving them
+  // is the only reason their placard list would have had to travel.
+  if (run.tags && run.tags.list) return run.tags;
   var wos = laserWorkOrders(run);
   if (wos.length) return { kind: 'wo', list: wos };
   var pns = unique((run.parts || []).map(function (p) { return String(p.pn || '').trim(); }).filter(Boolean));
@@ -1883,7 +1894,14 @@ function laserDetailHtml(run) {
   }
 
   var parts = run.parts || [];
-  if (parts.length) {
+  if (run.slim) {
+    // A completed run whose placard list is still on its way.
+    html += '<div style="margin-top:18px"><div class="seclabel">Placards on this sheet</div>'
+      + '<div class="notesval">' + (run.detailError
+          ? 'Could not load the placards &mdash; ' + escapeHtml(run.detailError)
+          : 'Loading the ' + (laserPartCount(run) || 0) + ' placards on this sheet&hellip;')
+      + '</div></div>';
+  } else if (parts.length) {
     html += '<div style="margin-top:18px"><div class="seclabel">Placards on this sheet</div>'
       + '<div class="partchips">' + parts.map(function (p) {
           return '<span class="partchip">' + escapeHtml(String(p.pn))
@@ -1948,8 +1966,54 @@ function commitLaserOrder(runNos) {
 
 function toggleLaserRun(runNo) {
   expandedLaser[runNo] = !expandedLaser[runNo];
+  if (expandedLaser[runNo]) loadLaserDetail(runNo);
   renderLaserQueue();
   renderLaserLog();
+}
+
+/**
+ * Completed runs travel without their placard list. Opening one goes and gets
+ * it, once — after that the run carries its own detail for the rest of the
+ * session, and a refresh that re-slims it will just fetch again on the next
+ * open.
+ */
+var laserDetailCache = {};      // run # -> its placards, kept across refreshes
+var laserDetailPending = {};
+
+/** Fills in a run's placard list from anything already fetched this session. */
+function applyLaserDetail(run) {
+  var d = laserDetailCache[run.run];
+  if (!d || !run.slim) return;
+  run.parts = d.parts || [];
+  run.partsText = d.partsText || '';
+  run.notes = d.notes || '';
+  run.loggedAt = d.loggedAt || '';
+  run.slim = 0;
+}
+
+function loadLaserDetail(runNo) {
+  var run = (state.laser || []).filter(function (r) { return String(r.run) === String(runNo); })[0];
+  if (!run || !run.slim || laserDetailPending[runNo]) return;   // already full, or already asking
+  laserDetailPending[runNo] = true;
+
+  if (location.protocol.indexOf('http') !== 0) { laserDetailPending[runNo] = false; return; }
+  fetch(API_BASE + '?detail=' + encodeURIComponent(runNo))
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      if (d && d.error) throw new Error(d.error);
+      // Cached by run number, not on the run object: the next refresh replaces
+      // every run object wholesale, and an open ticket must not fall back to
+      // "loading" and sit there.
+      laserDetailCache[runNo] = d;
+      applyLaserDetail(run);
+    })
+    .catch(function (err) {
+      run.detailError = String((err && err.message) || err);
+    })
+    .then(function () {
+      laserDetailPending[runNo] = false;
+      if (expandedLaser[runNo]) { renderLaserQueue(); renderLaserLog(); }
+    });
 }
 
 /* ----- laser log: runs the floor marked Post Production ----- */

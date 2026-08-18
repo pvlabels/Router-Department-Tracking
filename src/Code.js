@@ -79,6 +79,19 @@ var DURATION_EPOCH = new Date(1899, 11, 30).getTime();
 
 /** Serves the dashboard, or bare JSON for the GitHub Pages front-end (?format=json). */
 function doGet(e) {
+  // One completed run's placard list, asked for when someone opens its row in
+  // the log. Not cached: it is a deliberate click, and it should show what the
+  // board says right now.
+  if (e && e.parameter && e.parameter.detail) {
+    var one;
+    try {
+      one = JSON.stringify(laserDetail(e.parameter.detail));
+    } catch (err) {
+      one = JSON.stringify({ error: String((err && err.message) || err) });
+    }
+    return ContentService.createTextOutput(one)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   if (e && e.parameter && e.parameter.format === 'json') {
     var out;
     try {
@@ -1313,6 +1326,84 @@ function setLaserComplete(runNumber, on) {
  * RAW DATA carries the Illustrator capture (parts, size, machine, WO), which
  * is where the per-laser and part-number detail comes from.
  */
+/*
+ * The placard list is by far the heaviest thing on the board — around three
+ * quarters of the laser payload, and it grows every day the lasers run. Almost
+ * all of it belongs to completed runs nobody has open.
+ *
+ * So a completed run ships what its row actually shows — how many placards, and
+ * which work orders they belong to — and leaves the list itself behind. The
+ * list comes back from the laserDetail action when someone opens that row.
+ * Runs still on the floor ship in full, because those are the ones the floor
+ * opens and searches while working.
+ *
+ * The three helpers below mirror woFromPart / laserPlaceholder /
+ * splitWorkOrders in index.html; the page still needs its own copies for the
+ * queue rows and the local mock. Change one, change the other.
+ */
+
+/** The work order a placard belongs to: 4-75-282480-B is work order 282480. */
+function woFromPart(pn) {
+  var m = /^\s*\d{1,3}-\d{1,4}-(\d{4,7})\b/.exec(String(pn || ''));
+  return m ? m[1] : '';
+}
+
+/** Ganged sheets carry placeholders in these fields rather than being blank. */
+function laserPlaceholder(v) {
+  return /^(x+|various|mixed|multiple|n\/?a|none|-+)$/i.test(String(v || '').trim());
+}
+
+/** "WO-281819-281831" -> ["WO-281819","WO-281831"]; cells with no WO pass through. */
+function splitLaserWorkOrders(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return [];
+  var m = s.match(/WO[-\s]*\d+(?:\s*-\s*\d+)*/i);
+  if (!m) return [s];
+  var out = m[0].replace(/^WO[-\s]*/i, '').split(/\s*-\s*/).filter(Boolean)
+    .map(function (n) { return 'WO-' + n; });
+  var prefix = s.slice(0, m.index).trim();
+  if (prefix) out.unshift(prefix);
+  var suffix = s.slice(m.index + m[0].length).trim();
+  if (suffix) out.push(suffix);
+  return out;
+}
+
+/**
+ * What names this run in a list: the work orders its placards belong to, or the
+ * part numbers themselves when they carry no work order. Deduped, so a sheet of
+ * ninety placards from one order reads as one tag.
+ */
+function laserIdTagsFor(parts, statedWorkOrder) {
+  var wos = [], seen = {};
+  var add = function (wo) {
+    wo = String(wo || '').trim();
+    if (wo && !seen[wo]) { seen[wo] = true; wos.push(wo); }
+  };
+  var stated = String(statedWorkOrder || '').trim();
+  if (stated && !laserPlaceholder(stated)) {
+    splitLaserWorkOrders(stated).forEach(add);        // already WO-prefixed
+  }
+  parts.forEach(function (p) {
+    var wo = woFromPart(p && p.pn);
+    if (wo) add('WO-' + wo);
+  });
+  if (wos.length) return { kind: 'wo', list: wos };
+
+  var pns = [], seenPn = {};
+  parts.forEach(function (p) {
+    var pn = String((p && p.pn) || '').trim();
+    if (pn && !seenPn[pn]) { seenPn[pn] = true; pns.push(pn); }
+  });
+  return { kind: 'part', list: pns };
+}
+
+/** Placards on the sheet — each part number, times its quantity. */
+function laserPlacardCount(parts) {
+  var n = 0;
+  for (var i = 0; i < parts.length; i++) n += Number(parts[i] && parts[i].qty) || 0;
+  return n;
+}
+
 function readLaserBoard() {
   var target = laserTarget();
   var sheet = target.sheet, lay = target.lay, col = lay.col;
@@ -1322,6 +1413,7 @@ function readLaserBoard() {
   var width = Math.max(sheet.getLastColumn(), 11);
   var values = sheet.getRange(lay.dataRow, 1, last - lay.dataRow + 1, width).getValues();
   var order = getLaserOrder();
+  var tz = Session.getScriptTimeZone();   // hoisted: this is a service call, and it was in the row loop
   var cell = function (row, name) {
     var i = col[name];
     return i === undefined ? '' : row[i];
@@ -1352,27 +1444,85 @@ function readLaserBoard() {
       machine = tail[2].replace(/\s+/g, '').toUpperCase();
     }
 
-    out.push({
+    var parts = Array.isArray(raw.parts) ? raw.parts : [];
+    var status = String(cell(row, 'status') || '').trim();
+    var workOrder = String(raw.workOrder || '').trim();
+
+    var item = {
       run: runNo,
-      date: when instanceof Date ? Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+      date: when instanceof Date ? Utilities.formatDate(when, tz, 'yyyy-MM-dd')
                                  : String(when || '').trim(),
       sheets: isNaN(sheetsVal) ? 0 : sheetsVal,
       sheetType: String(cell(row, 'sheet type') || '').trim(),
-      status: String(cell(row, 'status') || '').trim(),
+      status: status,
       rush: String(cell(row, 'rush') || '').trim(),
       seconds: toSeconds(cell(row, 'time')),
-      notes: String(cell(row, 'notes') || '').trim(),
-      partsText: String(cell(row, 'part numbers') || '').trim(),
-      parts: Array.isArray(raw.parts) ? raw.parts : [],
       size: size,
       machine: machine,                            // "T6" = Trotec 6, "E3" = Epilog 3
       customer: String(raw.customer || '').trim(),
-      workOrder: String(raw.workOrder || '').trim(),
-      loggedAt: String(raw.sentAt || '').trim(),
-      order: order[runNo] === undefined ? null : order[runNo]
-    });
+      workOrder: workOrder,
+      order: order[runNo] === undefined ? null : order[runNo],
+      // Worked out here so a completed run never has to ship its placards.
+      np: laserPlacardCount(parts),
+      tags: laserIdTagsFor(parts, workOrder)
+    };
+
+    if (laserRunIsDone(status)) {
+      // Everything below is only ever read from an opened ticket, so it waits
+      // for the laserDetail call that opening one makes.
+      item.slim = 1;
+    } else {
+      item.notes = String(cell(row, 'notes') || '').trim();
+      item.partsText = String(cell(row, 'part numbers') || '').trim();
+      item.parts = parts;
+      item.loggedAt = String(raw.sentAt || '').trim();
+    }
+    out.push(item);
   }
   return out;
+}
+
+/** A run the floor has pushed past the laser queue into the log. */
+function laserRunIsDone(status) {
+  return String(status || '').trim().toLowerCase() === CONFIG.LASER_DONE_STATUS.toLowerCase();
+}
+
+/**
+ * The placard list and notes for one completed run, fetched when someone opens
+ * its row in the log. Reads that one row rather than the whole board.
+ */
+function laserDetail(runNumber) {
+  var runNo = String(runNumber || '').replace(/\D/g, '');
+  if (!runNo) throw new Error('Laser run number is required.');
+
+  var target = laserTarget();
+  var sheet = target.sheet, lay = target.lay, col = lay.col;
+  if (col['laser run #'] === undefined) throw new Error('The laser board has no "Laser Run #" column.');
+
+  var last = Math.max(sheet.getLastRow(), lay.dataRow);
+  var runs = sheet.getRange(lay.dataRow, col['laser run #'] + 1, last - lay.dataRow + 1, 1).getValues();
+  var row = 0;
+  for (var i = 0; i < runs.length; i++) {
+    if (String(runs[i][0]).replace(/\D/g, '') === runNo) { row = lay.dataRow + i; break; }
+  }
+  if (!row) throw new Error('Laser run ' + runNo + ' is not on the board.');
+
+  var width = Math.max(sheet.getLastColumn(), 11);
+  var vals = sheet.getRange(row, 1, 1, width).getValues()[0];
+  var at = function (name) {
+    var i = col[name];
+    return i === undefined ? '' : vals[i];
+  };
+  var raw = {};
+  try { raw = JSON.parse(String(at('raw data') || '{}')) || {}; } catch (err) { raw = {}; }
+
+  return {
+    run: runNo,
+    parts: Array.isArray(raw.parts) ? raw.parts : [],
+    partsText: String(at('part numbers') || '').trim(),
+    notes: String(at('notes') || '').trim(),
+    loggedAt: String(raw.sentAt || '').trim()
+  };
 }
 
 /* ---------- helpers ---------- */
