@@ -402,6 +402,30 @@
   .frow-check .fcount { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
   .fquick { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
     font-weight: 500; padding: 8px 6px 3px; }
+  /* size picker: chips with a proportional glyph, since sizes are shapes */
+  .szsort { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11.5px; margin: 0 0 8px; }
+  .szsort button { font: inherit; font-size: 11.5px; color: var(--text-muted); background: none; border: none;
+    padding: 0; cursor: pointer; }
+  .szsort button:hover { color: var(--text-primary); }
+  .szsort button.on { color: var(--text-primary); font-weight: 600; }
+  .szgrid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .szchip { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-family: var(--font-mono);
+    font-size: 12px; line-height: 1; padding: 6px 8px 6px 6px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); cursor: pointer; transition: border-color .15s, background .15s; }
+  .szchip:hover { background: var(--surface-2); }
+  .szchip.on { border-color: var(--accent); background: var(--accent-wash); }
+  .szchip.all { font-family: inherit; font-weight: 500; padding: 6px 10px; }
+  .szchip.all.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .szchip .szglyph { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .szchip .szglyph i { display: block; border-radius: 1.5px; }
+  .szchip .szn { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .szchip.on .szn { color: inherit; opacity: .7; }
+  .szchip .x { color: var(--text-muted); font-size: 10px; margin-left: 2px; }
+  .szchip:hover .x { color: var(--text-primary); }
+  .selrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 16px; }
+  .selrow .sellabel { color: var(--text-muted); font-size: 12.5px; margin-right: 4px; }
+  .selrow .sellink { font: inherit; font-size: 12px; font-weight: 500; color: var(--accent); background: none;
+    border: none; cursor: pointer; padding: 0 4px; }
 
   .rcard { border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; background: var(--surface-1); margin-bottom: 16px; }
   .rhead { display: flex; align-items: flex-start; gap: 14px; }
@@ -1124,6 +1148,21 @@ function normalizeSize(s) {
 }
 
 /**
+ * The size a run is grouped and filtered under. Only a real width × height
+ * counts — "Various", stray letters and blanks come back empty, so they never
+ * show up as a size. A piece cut sideways is still the same piece, so the
+ * larger dimension always leads: 10 x 14 and 14 x 10 are one size.
+ */
+function sizeKey(s) {
+  var m = /^([\d.]+) x ([\d.]+)(.*)$/.exec(normalizeSize(s));
+  if (!m) return '';
+  var a = parseFloat(m[1]), b = parseFloat(m[2]);
+  if (!(a > 0) || !(b > 0)) return '';
+  var w = Math.max(a, b), h = Math.min(a, b);
+  return String(w) + ' x ' + String(h) + (m[3] || '');
+}
+
+/**
  * Tag each run with the size of its production run (schedule col N), matched by
  * run number. History covers the full year; current tracked jobs win when both
  * have it. Non-production runs (PS-…, jigs) have no size.
@@ -1138,7 +1177,7 @@ function attachRunSizes() {
   });
   state.runs.forEach(function (r) {
     var m = stripExt(r.job).match(/^TR-0*(\d+)/i);
-    r.size = (m && byRun[m[1]]) ? normalizeSize(byRun[m[1]]) : '';
+    r.size = (m && byRun[m[1]]) ? sizeKey(byRun[m[1]]) : '';
   });
 }
 
@@ -3053,7 +3092,7 @@ function buildReportRecords(cache) {
 /** The group a record falls under for the current report dimension. */
 function recordGroup(rec, dim) {
   if (dim === 'runNo') return rec.base;
-  if (dim === 'size') return normalizeSize(rec.size) || null;   // only runs with a schedule size
+  if (dim === 'size') return sizeKey(rec.size) || null;   // only runs with a real schedule size
   if (dim === 'sheet') return /^PS-/i.test(rec.base) ? rec.base : null;
   if (dim === 'customer') return companyFromNotes(rec.notes) || (rec.tracked && rec.tracked.customer) || 'Unattributed';
   if (dim === 'wo') {
@@ -3414,6 +3453,8 @@ function renderReportBody() {
   var options = reportGroupsInRange(cache, allRecords);
   var sel = reportSelectedSet(options);
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  // What the report is narrowed to, said where the numbers are, not just in the sidebar.
+  if (reportState.compare !== 'items') head += reportSelectionRow(cfg, options, sel);
 
   // "Items" mode swaps the whole report body for a head-to-head layout.
   if (reportState.compare === 'items') {
@@ -3440,7 +3481,12 @@ function renderReportBody() {
   var total = metric === 'sheets' ? totalSheets : metric === 'hours' ? totalSecs : totalRuns;
   var arr = Object.keys(groups).map(function (k) { return groups[k]; })
     .sort(function (a, b) { return gVal(b) - gVal(a); });
-  arr.forEach(function (g, i) { g.color = i < 8 ? reportColor(i) : REPORT_OTHER; });
+  if (cfg.key === 'size') {
+    var szColors = sizeColorsFor(arr.map(function (g) { return g.key; }), allRecords);
+    arr.forEach(function (g) { g.color = szColors[g.key]; });
+  } else {
+    arr.forEach(function (g, i) { g.color = i < 8 ? reportColor(i) : REPORT_OTHER; });
+  }
   // Charts show the attributed groups only — the catch-all ("Unattributed" /
   // "No WO" / "No part #") would otherwise swamp them. It stays in the table.
   var shown = cfg.bucket ? arr.filter(function (g) { return g.key !== cfg.bucket; }) : arr;
@@ -3955,7 +4001,7 @@ function estimatorCard(allRecords) {
   // estimate should lean on every sheet ever timed at that size.
   var stats = {}, allSecs = 0, allSheetsH = 0;
   allRecords.forEach(function (rec) {
-    var s = normalizeSize(rec.size);
+    var s = sizeKey(rec.size);
     if (!s) return;
     var o = stats[s] || (stats[s] = { sheets: 0, secs: 0, sheetsH: 0 });
     o.sheets += (rec.sheets || 0);
@@ -4084,25 +4130,33 @@ function renderRepSidebar(cfg) {
   var compareGroup = '<div class="group"><div class="seclabel">Compare with</div>'
     + '<div class="presets">' + cmpBtns + '</div>' + cmpExtra + '</div>';
 
-  var anyChecked = Object.keys(reportState.sel).some(function (k) { return reportState.sel[k]; });
-  // the include/exclude checkbox filters don't apply in Items mode
-  var filterList = reportState.compare !== 'items' ? '<div class="group"><div class="filterhead">'
-      + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
-      + (anyChecked ? '<button id="fh_clear" onclick="reportSelectAll()">Clear selection</button>'
-        : '<span class="sub" style="margin:0">All included</span>') + '</div>'
-      + '<div class="repsearchwrap"><input id="rep_search" class="repsearch" placeholder="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '&hellip;"'
+  var selCount = Object.keys(reportState.sel).filter(function (k) { return reportState.sel[k]; }).length;
+  // Sizes fit on chips, so their search box only appears once the period holds
+  // more than a screenful of them (the year view); other filters always search.
+  var needSearch = cfg.key !== 'size' || reportGroupsInRange(cache, buildReportRecords(cache)).length > 20 || reportFilterQuery;
+  var searchBox = needSearch
+    ? '<div class="repsearchwrap"><input id="rep_search" class="repsearch" placeholder="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '&hellip;"'
       + ' aria-label="Search ' + escapeHtml(cfg.filterLabel.toLowerCase()) + '"'
       + ' value="' + escapeHtml(reportFilterQuery) + '" oninput="onReportSearch(this.value)" autocomplete="off">'
       + '<button class="clearq" id="rep_clearq" onclick="clearReportSearch()" title="Clear search" aria-label="Clear search"'
       + ' style="display:' + (reportFilterQuery ? '' : 'none') + '">&#10005;</button></div>'
+    : '';
+  // the include/exclude filters don't apply in Items mode
+  var filterList = reportState.compare !== 'items' ? '<div class="group"><div class="filterhead">'
+      + '<span class="seclabel" style="margin:0">' + escapeHtml(cfg.filterLabel) + '</span>'
+      + (selCount ? '<button id="fh_clear" onclick="reportSelectAll()">Clear' + (cfg.key === 'size' ? ' (' + selCount + ')' : ' selection') + '</button>'
+        : '<span class="sub" style="margin:0">All included</span>') + '</div>'
+      + searchBox
       + '<div class="flist" id="rep_filter_results"></div></div>' : '';
 
+  // The filter sits right under the period: it is the control people reach
+  // for most, and Compare is the one they reach for least.
   side.innerHTML = '<div class="repsidehead"><div class="h3">Build a report</div>'
     + '<button class="resetbtn" id="rep_reset" onclick="resetReport()" title="Back to the default report">Reset</button></div>'
     + '<div class="group"><div class="seclabel">Type of report</div>' + types + '</div>'
     + '<div class="group"><div class="seclabel">Period</div><div class="presets">' + presets + '</div>' + periodDates + '</div>'
-    + compareGroup
-    + filterList;
+    + filterList
+    + compareGroup;
   renderReportFilterResults();
 }
 
@@ -4124,7 +4178,9 @@ function renderReportFilterResults() {
   var host = document.getElementById('rep_filter_results');
   if (!host) return;
   var cfg = reportCfg(), cache = jobsForReport();
-  var counts = reportGroupCounts(cache, buildReportRecords(cache));
+  var records = buildReportRecords(cache);
+  if (cfg.key === 'size') { renderSizeChips(host, records); return; }
+  var counts = reportGroupCounts(cache, records);
   var options = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
   if (cfg.hideBucket) options = options.filter(function (k) { return k !== cfg.bucket; });
   var idx = {}; options.forEach(function (k, i) { idx[k] = i; });
@@ -4159,6 +4215,136 @@ function renderReportFilterResults() {
       + ' this period · unchecked = all included</div>';
   }
   host.innerHTML = rows + hint;
+}
+
+/* ---- size picker ----
+ * Sizes are shapes, not names, so they get a chip grid instead of a checkbox
+ * list: every size in the period at once, a proportional glyph on each so
+ * 24 x 18 and 4 x 1 read at a glance, sorted by size unless asked otherwise.
+ */
+var sizeChipSort = 'size';                 // 'size' (largest first) or 'activity' (by the metric)
+function setSizeChipSort(s) { sizeChipSort = s; renderReportFilterResults(); }
+
+function sizeDims(key) {
+  var m = /^([\d.]+) x ([\d.]+)/.exec(key);
+  return m ? [parseFloat(m[1]), parseFloat(m[2])] : null;
+}
+function sizeArea(key) { var d = sizeDims(key); return d ? d[0] * d[1] : 0; }
+
+/** A little rectangle in the size's proportions, in its chart color. */
+function sizeGlyph(key, color) {
+  var d = sizeDims(key), box = 14, w = box, h = box;
+  if (d) {
+    var k = box / Math.max(d[0], d[1]);
+    w = Math.max(3, Math.round(d[0] * k));
+    h = Math.max(3, Math.round(d[1] * k));
+  }
+  return '<span class="szglyph" aria-hidden="true"><i style="width:' + w + 'px;height:' + h + 'px;background:' + color + '"></i></span>';
+}
+
+/** Per-group total of the active metric inside the period, for chip badges. */
+function reportGroupTotals(records, metric) {
+  var r = reportRange(), dim = reportCfg().dim, out = {};
+  records.forEach(function (rec) {
+    if (rec.when < r.start || rec.when >= r.end) return;
+    var g = recordGroup(rec, dim);
+    if (g === null) return;
+    out[g] = (out[g] || 0) + metricValue(rec, metric);
+  });
+  return out;
+}
+
+/** "14x10", "14 X 10", 10x14 or 14" x 10" all find 14 x 10; "14x1" finds it while typing. */
+function sizeQueryMatches(key, q) {
+  var qn = String(q || '').replace(/["'”“′″\s]/g, '').toLowerCase();
+  if (!qn) return true;
+  var canon = sizeKey(q);
+  if (canon) return key === canon || key.indexOf(canon) === 0;
+  return key.replace(/\s/g, '').toLowerCase().indexOf(qn) >= 0;
+}
+
+/** The shop's all-time top eight sizes, ranked — the sizes that deserve a fixed color. */
+function sizeStableRank(allRecords) {
+  var n = {};
+  allRecords.forEach(function (rec) { var s = sizeKey(rec.size); if (s) n[s] = (n[s] || 0) + 1; });
+  var map = {};
+  Object.keys(n).sort(function (a, b) { return n[b] - n[a]; }).slice(0, 8).forEach(function (k, i) { map[k] = i; });
+  return map;
+}
+
+/**
+ * Colors for the size report, given the period's sizes busiest-first. The
+ * eight palette slots go to the period's top eight, but a size in the shop's
+ * all-time top eight keeps the slot its all-time rank gives it, so 14 x 10 is
+ * the same color in every period; the leftover slots go to whoever else made
+ * this period's top eight. Everything past eight is grey, as in every report.
+ */
+function sizeColorsFor(keysByValue, allRecords) {
+  var stable = sizeStableRank(allRecords), used = {}, colors = {};
+  var top = keysByValue.slice(0, 8);
+  top.forEach(function (k) {
+    var r = stable[k];
+    if (r !== undefined && !used[r]) { used[r] = true; colors[k] = reportColor(r); }
+  });
+  var free = [0, 1, 2, 3, 4, 5, 6, 7].filter(function (i) { return !used[i]; });
+  top.forEach(function (k) { if (!colors[k]) colors[k] = reportColor(free.shift()); });
+  keysByValue.slice(8).forEach(function (k) { colors[k] = REPORT_OTHER; });
+  return colors;
+}
+
+function renderSizeChips(host, records) {
+  var metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  var totals = reportGroupTotals(records, metric);
+  var options = Object.keys(totals);
+  var sel = reportSelectedSet(options);
+  var byValue = options.slice().sort(function (a, b) { return totals[b] - totals[a]; });
+  // colors follow the chart, which only plots the selection once there is one
+  var colors = sizeColorsFor(sel ? byValue.filter(function (k) { return sel[k]; }) : byValue, records);
+  var fmt = function (v) { return metric === 'hours' ? fmtHoursNum(v) + ' h' : v.toLocaleString(); };
+
+  var list = sizeChipSort === 'activity' ? byValue
+    : options.slice().sort(function (a, b) { return (sizeArea(b) - sizeArea(a)) || a.localeCompare(b); });
+  var q = (reportFilterQuery || '').trim();
+  if (q) list = list.filter(function (k) { return sizeQueryMatches(k, q); });
+
+  if (!options.length) {
+    host.innerHTML = '<div class="sub" style="padding:6px 0">No sized runs in this period.</div>';
+    return;
+  }
+
+  var sortRow = '<div class="szsort"><span>Sort by</span>'
+    + '<button type="button" class="' + (sizeChipSort === 'size' ? 'on' : '') + '" aria-pressed="' + (sizeChipSort === 'size') + '" onclick="setSizeChipSort(\'size\')">size</button>'
+    + '<span aria-hidden="true">·</span>'
+    + '<button type="button" class="' + (sizeChipSort === 'activity' ? 'on' : '') + '" aria-pressed="' + (sizeChipSort === 'activity') + '" onclick="setSizeChipSort(\'activity\')">' + escapeHtml(mInfo.noun) + '</button></div>';
+
+  var allChip = q ? '' : '<button type="button" class="szchip all' + (sel ? '' : ' on') + '" aria-pressed="' + !sel + '"'
+    + ' onclick="reportSelectAll()" title="Include every size">All sizes</button>';
+  var chips = list.map(function (k) {
+    var on = !!(sel && sel[k]);
+    return '<button type="button" class="szchip' + (on ? ' on' : '') + '" aria-pressed="' + on + '"'
+      + ' onclick="toggleReportFilter(' + jsStr(k) + ')" title="' + escapeHtml(k) + ' · ' + fmt(totals[k]) + ' ' + escapeHtml(mInfo.noun) + '">'
+      + sizeGlyph(k, colors[k] || REPORT_OTHER)
+      + '<span class="szl">' + escapeHtml(k) + '</span>'
+      + '<span class="szn">' + fmt(totals[k]) + '</span></button>';
+  }).join('');
+
+  var hint;
+  if (q && !list.length) hint = 'No sizes match &ldquo;' + escapeHtml(q) + '&rdquo;.';
+  else if (sel) hint = 'Showing ' + Object.keys(sel).length + ' of ' + options.length + ' sizes';
+  else hint = options.length + ' sizes this period · tap to narrow';
+  host.innerHTML = sortRow + '<div class="szgrid">' + allChip + chips + '</div>'
+    + '<div class="sub" style="padding:8px 0 0">' + hint + '</div>';
+}
+
+/** Chips above the report saying which sizes it is narrowed to, each removable. */
+function reportSelectionRow(cfg, options, sel) {
+  if (!sel || cfg.key !== 'size') return '';
+  var keys = options.filter(function (k) { return sel[k]; });
+  if (!keys.length) return '';
+  return '<div class="selrow"><span class="sellabel">Sizes</span>' + keys.map(function (k) {
+    return '<button type="button" class="szchip on" onclick="toggleReportFilter(' + jsStr(k) + ')" title="Remove ' + escapeHtml(k) + '">'
+      + '<span class="szl">' + escapeHtml(k) + '</span><span class="x">&#10005;</span></button>';
+  }).join('') + '<button type="button" class="sellink" onclick="reportSelectAll()">Clear</button></div>';
 }
 
 function onReportSearch(v) {
