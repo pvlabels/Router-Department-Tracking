@@ -3046,7 +3046,7 @@ function hoursSince() {
   var from = state.runsFrom ? parseLocalDate(state.runsFrom) : null;
   return (from && from > HOURS_LOG_START) ? from : HOURS_LOG_START;
 }
-var estimator = { size: '', qty: 50 };     // time-estimator inputs (Size report)
+var estimator = { size: '', qty: 1 };      // time-estimator inputs (Size report)
 var reportFilterQuery = '';                // live search text for the filter list
 
 function reportCfg() {
@@ -3304,6 +3304,14 @@ function onReportDate() {
 }
 function toggleReportFilter(key) {
   reportState.sel[key] = !reportState.sel[key];
+  // Picking a size is also asking about that size: the estimator follows it.
+  if (reportCfg().key === 'size') {
+    if (reportState.sel[key]) estimator.size = key;
+    else if (estimator.size === key) {
+      var still = Object.keys(reportState.sel).filter(function (k) { return reportState.sel[k]; });
+      if (still.length) estimator.size = still[still.length - 1];
+    }
+  }
   renderReport();
 }
 function reportSelectAll() {
@@ -3587,8 +3595,20 @@ function renderReportBody() {
       utilKpi
     ];
   } else {
+    // Size report: the runs tile also says the most sheets of the chosen
+    // size(s) that ever came off in one day this period — the ceiling a
+    // rush job can be planned against.
+    var peakSub = '';
+    if (cfg.key === 'size') {
+      var sbd = {};
+      recs.forEach(function (rec) { var k = dayKey(rec.when); sbd[k] = (sbd[k] || 0) + (rec.sheets || 0); });
+      var pk = Object.keys(sbd).sort(function (a, b) { return sbd[b] - sbd[a]; })[0];
+      if (pk && sbd[pk] > 0) {
+        peakSub = 'most in one day: ' + sbd[pk].toLocaleString() + ' sheets · ' + fmtDateShort(parseLocalDate(pk));
+      }
+    }
     kpis = [
-      { label: 'Total runs', value: totalRuns.toLocaleString(),
+      { label: 'Total runs', value: totalRuns.toLocaleString(), sub: peakSub,
         delta: showDeltas ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
       { label: 'Sheets', value: totalSheets.toLocaleString(),
         delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
