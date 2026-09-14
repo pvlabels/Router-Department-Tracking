@@ -1504,25 +1504,7 @@ function renderQueue() {
 
 var finPeriod = 'day';                    // mirrors the Summary's period control
 var finAnchor = startOfDay(new Date());
-var expandedFinished = {};                // job name -> true when its ticket is open
-
-/**
- * When a job finished. Manual/schedule completions carry a stamp; a job that
- * simply hit its target is dated by its last run.
- */
-/**
- * When the job was actually last cut — its most recent run, which is a real
- * event and matches what the Summary shows for that run. The completion stamp
- * (a manual "Mark complete" click, or the moment the schedule sync first saw
- * "Finished Cutting") is only a fallback for jobs with no runs to point at:
- * that stamp can trail the real cut by hours, so it's the wrong thing to date
- * the log by.
- */
-function finishedWhen(job) {
-  var runs = runsForJob(job);
-  if (runs.length) return runs[runs.length - 1].when;
-  return job.finishedAt ? new Date(job.finishedAt) : null;
-}
+var expandedFinished = {};                // "<job name>|<day>" -> true when that row's ticket is open
 
 /** A finished job's runs, oldest first. */
 function runsForJob(job) {
@@ -1532,36 +1514,83 @@ function runsForJob(job) {
     .sort(function (a, b) { return a.when - b.when; });
 }
 
+/**
+ * One entry per day a finished job was cut: { day, sheets, secs, when }. A
+ * standard press-sheet file like PS-A is cut again and again long after its
+ * tracked job closed, so the log reports each day's sheets on that day
+ * instead of rolling every run since the start date into one ever-growing
+ * total. Counts come from the whole-log daily aggregate, so days older than
+ * the runs list still show; `when` is the day's last run when we hold it,
+ * else the day itself.
+ */
+function cutDaysFor(job, range) {
+  var since = parseLocalDate(job.startDate || '2000-01-01');
+  var key = matchKeyFor(job);
+  var daily = state.daily || {}, byDay = {};
+  for (var k in daily) {
+    var d = parseLocalDate(k);
+    if (d < since || d < range.start || d >= range.end) continue;
+    var machs = daily[k];
+    for (var mach in machs) {
+      var jobs = machs[mach];
+      for (var name in jobs) {
+        if (!runMatchesJob(name, key)) continue;
+        var acc = byDay[k] || (byDay[k] = { day: k, sheets: 0, secs: 0, when: d });
+        acc.sheets += jobs[name].r;
+        acc.secs += jobs[name].s;
+      }
+    }
+  }
+  if (!Object.keys(byDay).length) return [];
+  state.runs.forEach(function (r) {
+    if (!runMatchesJob(r.job, key) || r.when < since) return;
+    var acc = byDay[dayKey(r.when)];
+    if (acc && r.when > acc.when) { acc.when = r.when; acc.timed = true; }
+  });
+  return Object.keys(byDay).sort().map(function (k) { return byDay[k]; });
+}
+
+/** Every sheet a finished job has cut, over the whole log. */
+function totalSheetsFor(job) {
+  var stat = jobStatFor(job.name, job.startDate);
+  if (stat) return stat.n;
+  return runsForJob(job).length;
+}
+
 function renderFinished() {
   var table = document.getElementById('fintable');
   var note = document.getElementById('finnote');
   if (!table) return;
 
-  var all = finishedJobs();
-  var rows = all.map(function (job) {
-    // Prefer the backend's totals: a job finished months ago still shows the
-    // sheets it cut, even though its runs are long out of the runs list.
-    var stat = jobStatFor(job.name, job.startDate);
-    if (!stat) {
-      var runs = runsForJob(job);
-      stat = { n: runs.length, s: runs.reduce(function (t, r) { return t + r.seconds; }, 0) };
-    }
-    return {
-      job: job,
-      when: finishedWhen(job),
-      sheets: stat.n,
-      avg: stat.n ? stat.s / stat.n : 0
-    };
-  });
-
   var range = rangeFor(finPeriod, finAnchor);
-  rows = rows.filter(function (r) { return r.when && r.when >= range.start && r.when < range.end; });
-  rows.sort(function (a, b) { return (b.when || 0) - (a.when || 0); });
+  var rows = [], jobsSeen = {};
+  finishedJobs().forEach(function (job) {
+    var days = cutDaysFor(job, range);
+    var total = totalSheetsFor(job);
+    if (!days.length && !total) {
+      // Marked complete without ever cutting a sheet: date it by the stamp so
+      // it still shows up somewhere. A job that did cut is listed on its cut
+      // days only, not again on the morning the schedule closed it.
+      var stamp = job.finishedAt ? new Date(job.finishedAt) : null;
+      if (stamp && stamp >= range.start && stamp < range.end) {
+        days = [{ day: dayKey(stamp), sheets: 0, secs: 0, when: stamp, timed: true }];
+      }
+    }
+    if (!days.length) return;
+    jobsSeen[job.name] = true;
+    days.forEach(function (d) {
+      rows.push({ job: job, day: d.day, when: d.when, timed: !!d.timed, sheets: d.sheets,
+                  avg: d.sheets ? d.secs / d.sheets : 0, total: total });
+    });
+  });
+  rows.sort(function (a, b) { return (b.when - a.when) || a.job.name.localeCompare(b.job.name); });
 
   document.getElementById('finlabel').textContent = range.label;
   document.getElementById('finnext').disabled = range.end > new Date();
+  var jobCount = Object.keys(jobsSeen).length;
   document.getElementById('finishedsub').textContent =
-    rows.length + ' job' + (rows.length === 1 ? '' : 's') + ' completed';
+    jobCount + ' job' + (jobCount === 1 ? '' : 's') + ' completed'
+    + (rows.length > jobCount ? ' · ' + rows.length + ' cut days' : '');
 
   if (!rows.length) {
     table.innerHTML = '';
@@ -1571,43 +1600,45 @@ function renderFinished() {
   note.innerHTML = '';
 
   // Caret goes last so the Date/Status column rules keep their positions.
-  var html = '<thead><tr><th>Job</th><th>Date finished</th><th>Time</th>'
+  var html = '<thead><tr><th>Job</th><th>Date cut</th><th>Time</th>'
     + '<th class="num">Sheets</th><th class="num">Avg run time</th><th>Status</th><th></th><th></th></tr></thead><tbody>';
   rows.forEach(function (r) {
     var job = r.job, company = companyFromNotes(job.notes);
-    var open = !!expandedFinished[job.name];
-    html += '<tr class="finrow' + (open ? ' open' : '') + '" onclick="toggleFinishedJob(' + jsStr(job.name) + ')" title="Click for details">'
+    var rowKey = job.name + '|' + r.day;
+    var open = !!expandedFinished[rowKey];
+    html += '<tr class="finrow' + (open ? ' open' : '') + '" onclick="toggleFinishedJob(' + jsStr(rowKey) + ')" title="Click for details">'
       + '<td><span class="jname">'
       +   escapeHtml(jobTitle(job)) + '</span>'
       +   (job.workOrders ? '<span class="jwo">' + escapeHtml(splitWorkOrders(job.workOrders).join(' · ')) + '</span>' : '')
       +   (company ? '<span class="jco">' + escapeHtml(company) + '</span>' : '') + '</td>'
-      + '<td>' + (r.when ? escapeHtml(fmtDate(r.when)) : '&mdash;') + '</td>'
-      + '<td>' + (r.when ? escapeHtml(fmtTime(r.when)) : '&mdash;') + '</td>'
-      + '<td class="num">' + r.sheets + ' / ' + (job.target || 0) + '</td>'
+      + '<td>' + escapeHtml(fmtDate(r.when)) + '</td>'
+      + '<td>' + (r.timed ? escapeHtml(fmtTime(r.when)) : '&mdash;') + '</td>'
+      + '<td class="num">' + r.sheets
+      +   (r.total > r.sheets ? ' <span class="jwo" title="Every sheet this job has cut">of ' + r.total + ' total</span>' : '') + '</td>'
       + '<td class="num">' + (r.sheets ? escapeHtml(fmtDur(r.avg)) : '&mdash;') + '</td>'
       + '<td><span class="done">Complete ✓</span></td>'
       + '<td class="num"><button class="small" onclick="event.stopPropagation();reopenJob(' + jsStr(job.name) + ')">Reopen</button></td>'
       + '<td class="num"><span class="fincaret">' + (open ? ICON.chevronDown(15) : ICON.chevronRight(15)) + '</span></td>'
       + '</tr>';
     if (open) {
-      html += '<tr class="findetail" data-for="' + escapeHtml(cssId(job.name)) + '"><td colspan="8"></td></tr>';
+      html += '<tr class="findetail" data-for="' + escapeHtml(cssId(rowKey)) + '"><td colspan="8"></td></tr>';
     }
   });
   table.innerHTML = html + '</tbody>';
 
-  // Tickets are DOM nodes, so they go in after the markup is in place.
+  // Tickets are DOM nodes, so they go in after the markup is in place. The
+  // ticket describes the whole job, whichever day's row opened it.
   rows.forEach(function (r) {
-    var job = r.job;
-    if (!expandedFinished[job.name]) return;
-    var host = table.querySelector('.findetail[data-for="' + cssId(job.name) + '"] td');
+    var job = r.job, rowKey = job.name + '|' + r.day;
+    if (!expandedFinished[rowKey]) return;
+    var host = table.querySelector('.findetail[data-for="' + cssId(rowKey) + '"] td');
     if (!host) return;
-    var runs = runsForJob(job);
-    host.appendChild(jobDetail(job, runs, r.sheets, Math.max(0, (job.target || 0) - r.sheets), true));
+    host.appendChild(jobDetail(job, runsForJob(job), r.total, Math.max(0, (job.target || 0) - r.total), true));
   });
 }
 
-function toggleFinishedJob(name) {
-  expandedFinished[name] = !expandedFinished[name];
+function toggleFinishedJob(rowKey) {
+  expandedFinished[rowKey] = !expandedFinished[rowKey];
   renderFinished();
 }
 
@@ -2480,7 +2511,9 @@ function setCompleteState(name, on, errMsg, newTarget) {
     else if (sheets > 0) j.target = sheets;
   }
   delete expandedJobs[name];
-  delete expandedFinished[name];
+  Object.keys(expandedFinished).forEach(function (k) {
+    if (k.indexOf(name + '|') === 0) delete expandedFinished[k];
+  });
   renderQueue();
   renderFinished();
   suppressReloadUntil = Date.now() + 6000;
