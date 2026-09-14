@@ -3594,21 +3594,38 @@ function renderReportBody() {
       machineTimeKpi,
       utilKpi
     ];
-  } else {
-    // Size report: the runs tile also says the most sheets of the chosen
-    // size(s) that ever came off in one day this period — the ceiling a
-    // rush job can be planned against.
-    var peakSub = '';
-    if (cfg.key === 'size') {
-      var sbd = {};
-      recs.forEach(function (rec) { var k = dayKey(rec.when); sbd[k] = (sbd[k] || 0) + (rec.sheets || 0); });
-      var pk = Object.keys(sbd).sort(function (a, b) { return sbd[b] - sbd[a]; })[0];
-      if (pk && sbd[pk] > 0) {
-        peakSub = 'most in one day: ' + sbd[pk].toLocaleString() + ' sheets · ' + fmtDateShort(parseLocalDate(pk));
-      }
-    }
+  } else if (cfg.key === 'size') {
+    // Size report. On the floor a "run" is one sheet through the router, so
+    // the first tile counts sheets, not schedule entries, and says the most
+    // that came off in one day — the ceiling a rush job is planned against.
+    // The second is what one sheet of the chosen size(s) took this period.
+    var sbd = {};
+    recs.forEach(function (rec) { var k = dayKey(rec.when); sbd[k] = (sbd[k] || 0) + (rec.sheets || 0); });
+    var pk = Object.keys(sbd).sort(function (a, b) { return sbd[b] - sbd[a]; })[0];
+    var peakSub = (pk && sbd[pk] > 0)
+      ? 'most in one day: ' + sbd[pk].toLocaleString() + ' · ' + fmtDateShort(parseLocalDate(pk))
+      : 'sheets through the router';
+    // time per sheet divides timed seconds by the sheets that carry a time
+    var timedSheets = function (a) {
+      return Object.keys(a.groups).reduce(function (t, k) { return t + a.groups[k].sheetsH; }, 0);
+    };
+    var tSheets = timedSheets(agg), tps = tSheets > 0 ? totalSecs / tSheets : 0;
+    var cSheets = cmp ? timedSheets(cmp) : 0, cTps = (cmp && cSheets > 0) ? cmp.totalSecs / cSheets : 0;
     kpis = [
-      { label: 'Total runs', value: totalRuns.toLocaleString(), sub: peakSub,
+      { label: 'Total runs', value: totalSheets.toLocaleString(), sub: peakSub,
+        delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
+      { label: 'Time / sheet', value: tps ? fmtDur(tps) : '—',
+        sub: tps ? 'from ' + tSheets.toLocaleString() + ' timed sheets' + (hoursPartial ? ' · Jun 17 on' : '') : 'needs run times',
+        delta: (showDeltas && hoursComparable && tps && cTps) ? deltaHtml(tps, cTps, true) : '',
+        prev: (hoursComparable && cTps) ? fmtDur(cTps) : '' },
+      machineTimeKpi,
+      { label: cfg.label, value: String(arr.length), sub: groupNoun,
+        delta: showDeltas ? deltaHtml(arr.length, Object.keys(cmp.groups).length) : '', prev: cmp ? String(Object.keys(cmp.groups).length) : '' },
+      utilKpi
+    ];
+  } else {
+    kpis = [
+      { label: 'Total runs', value: totalRuns.toLocaleString(),
         delta: showDeltas ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
       { label: 'Sheets', value: totalSheets.toLocaleString(),
         delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
