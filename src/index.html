@@ -4044,9 +4044,17 @@ function estimatorCard(allRecords) {
     o.sheets += (rec.sheets || 0);
     if (rec.seconds > 0) { o.secs += rec.seconds; o.sheetsH += (rec.sheets || 0); allSecs += rec.seconds; allSheetsH += (rec.sheets || 0); }
   });
-  var sizes = Object.keys(stats).sort(function (a, b) { return stats[b].sheets - stats[a].sheets; });
+  // Numeric order, smallest first (width, then height), so 4 x 1 leads and
+  // 36 x 24 closes the list — the way someone scanning for a size reads it.
+  var sizes = Object.keys(stats).sort(function (a, b) {
+    var da = sizeDims(a) || [0, 0], db = sizeDims(b) || [0, 0];
+    return (da[0] - db[0]) || (da[1] - db[1]) || a.localeCompare(b);
+  });
   if (!sizes.length) return '';
-  if (sizes.indexOf(estimator.size) < 0) estimator.size = sizes[0];
+  if (sizes.indexOf(estimator.size) < 0) {
+    // first visit: start on the busiest size rather than the smallest
+    estimator.size = Object.keys(stats).sort(function (a, b) { return stats[b].sheets - stats[a].sheets; })[0];
+  }
 
   var st = stats[estimator.size];
   var overallTps = allSheetsH > 0 ? allSecs / allSheetsH : 0;
