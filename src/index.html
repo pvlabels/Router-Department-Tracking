@@ -3461,6 +3461,15 @@ function renderReportBody() {
   var options = reportGroupsInRange(cache, allRecords);
   var sel = reportSelectedSet(options);
   var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  // The Size report is always measured in sheets — its tiles and cards are
+  // built around them — so it has no metric toggle.
+  if (cfg.key === 'size') {
+    if (metric !== 'sheets') reportState.metricBeforeSize = metric;   // handed back on leaving
+    reportState.metric = metric = 'sheets'; mInfo = REPORT_METRICS.sheets;
+  } else if (reportState.metricBeforeSize) {
+    reportState.metric = metric = reportState.metricBeforeSize; mInfo = REPORT_METRICS[metric];
+    delete reportState.metricBeforeSize;
+  }
   // What the report is narrowed to, said where the numbers are, not just in the sidebar.
   if (reportState.compare !== 'items') head += reportSelectionRow(cfg, options, sel);
 
@@ -3848,7 +3857,7 @@ function renderReportBody() {
       + escapeHtml(cfg.bucket) + '".</div></div>';
   }
 
-  main.innerHTML = head + sparseNote + kpiHtml + metricSeg
+  main.innerHTML = head + sparseNote + kpiHtml + (isSize ? '' : metricSeg)
     + '<div class="rtwo">' + pieCard + barCard + '</div>'
     + trendCard + hiCard + tableCard
     + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
