@@ -3026,9 +3026,9 @@ function showView(v) {
 
 // Display order matches usage: the default type (Size) leads the list.
 var REPORT_TYPES = [
-  { key: 'size',     label: 'Size',        desc: 'Runs grouped by piece size',           dim: 'size',     filterLabel: 'Sizes' },
-  { key: 'sheet',    label: 'Press Sheet', desc: 'Press-sheet files (PS-…) by sheet',    dim: 'sheet',    filterLabel: 'Press sheets' },
-  { key: 'customer', label: 'Customer',    desc: 'Runs, sheets & hours by customer',     dim: 'customer', filterLabel: 'Customers',   sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
+  { key: 'size',     label: 'Sign Size',   desc: 'Press sheets cut, by the size of sign on them', dim: 'size', filterLabel: 'Sign sizes' },
+  { key: 'sheet',    label: 'Press Sheet', desc: 'Full sheets cut into press sheets (PS-… files)',    dim: 'sheet',    filterLabel: 'Press sheets' },
+  { key: 'customer', label: 'Customer',    desc: 'Runs, press sheets & hours by customer',     dim: 'customer', filterLabel: 'Customers',   sparse: true, bucket: 'Unattributed', noun: 'a customer', hideBucket: true },
   { key: 'stock',    label: 'Stock Item',  desc: 'Runs grouped by stock item',           dim: 'stock',    filterLabel: 'Stock items', sparse: true, bucket: 'No stock item', noun: 'a stock item', hideBucket: true },
   { key: 'wo',       label: 'WO #',        desc: 'Runs grouped by work order',           dim: 'wo',       filterLabel: 'Work orders', sparse: true, bucket: 'No WO', noun: 'a work order', hideBucket: true }
 ];
@@ -3062,6 +3062,23 @@ var REPORT_METRICS = {
   hours:  { label: 'Hours',  noun: 'hours',  fmt: function (v) { return fmtHours(v); },        share: 'Share of run hours' }
 };
 function setReportMetric(m) { reportState.metric = m; renderReport(); }
+
+/*
+ * Vocabulary. A "sign" is one finished piece (a 14 x 10). It is cut from a
+ * "press sheet", which was itself cut from a 4' x 8' "full sheet". The
+ * schedule's sheet count is press sheets for every run except a PS- file,
+ * whose runs are full sheets being cut down.
+ */
+function sheetWord(cfg) { return cfg.key === 'sheet' ? 'full sheets' : 'press sheets'; }
+function sheetLabel(cfg) { var w = sheetWord(cfg); return w.charAt(0).toUpperCase() + w.slice(1); }
+function perSheetLabel(cfg) { return 'Time / ' + sheetWord(cfg).replace(/s$/, ''); }
+/** REPORT_METRICS entry with the sheet words spelled for this report. */
+function metricInfo(metric, cfg) {
+  var base = REPORT_METRICS[metric];
+  if (metric !== 'sheets') return base;
+  var w = sheetWord(cfg);
+  return { label: sheetLabel(cfg), noun: w, fmt: base.fmt, share: 'Share of ' + w };
+}
 
 /**
  * One record per production run for the year (from Production History, carrying
@@ -3461,14 +3478,14 @@ function renderReportBody() {
   var allRecords = buildReportRecords(cache);
   var options = reportGroupsInRange(cache, allRecords);
   var sel = reportSelectedSet(options);
-  var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  var dim = cfg.dim, metric = reportState.metric, mInfo = metricInfo(metric, cfg);
   // The Size report is always measured in sheets — its tiles and cards are
   // built around them — so it has no metric toggle.
   if (cfg.key === 'size') {
     if (metric !== 'sheets') reportState.metricBeforeSize = metric;   // handed back on leaving
-    reportState.metric = metric = 'sheets'; mInfo = REPORT_METRICS.sheets;
+    reportState.metric = metric = 'sheets'; mInfo = metricInfo('sheets', cfg);
   } else if (reportState.metricBeforeSize) {
-    reportState.metric = metric = reportState.metricBeforeSize; mInfo = REPORT_METRICS[metric];
+    reportState.metric = metric = reportState.metricBeforeSize; mInfo = metricInfo(metric, cfg);
     delete reportState.metricBeforeSize;
   }
   // What the report is narrowed to, said where the numbers are, not just in the sidebar.
@@ -3596,9 +3613,9 @@ function renderReportBody() {
       cmpPerDay = cwd ? cmp.totalSheets / cwd : cmp.totalSheets;
     }
     kpis = [
-      { label: "4' × 8' sheets", value: totalSheets.toLocaleString(), sub: 'cut this period',
+      { label: 'Full sheets', value: totalSheets.toLocaleString(), sub: "4' × 8' · cut this period",
         delta: cmp ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
-      { label: 'Sheets / day', value: (perDay % 1 ? perDay.toFixed(1) : String(perDay)), sub: 'working days cut',
+      { label: 'Full sheets / day', value: (perDay % 1 ? perDay.toFixed(1) : String(perDay)), sub: 'working days cut',
         delta: cmpPerDay !== null ? deltaHtml(perDay, cmpPerDay) : '', prev: cmpPerDay !== null ? (cmpPerDay % 1 ? cmpPerDay.toFixed(1) : String(cmpPerDay)) : '' },
       { label: 'Busiest day', value: peakDay ? sheetsByDay[peakDay].toLocaleString() : '—', sub: peakDay ? fmtDate(parseLocalDate(peakDay)) : '' },
       machineTimeKpi,
@@ -3614,7 +3631,7 @@ function renderReportBody() {
     var pk = Object.keys(sbd).sort(function (a, b) { return sbd[b] - sbd[a]; })[0];
     var peakSub = (pk && sbd[pk] > 0)
       ? 'most in one day: ' + sbd[pk].toLocaleString() + ' · ' + fmtDateShort(parseLocalDate(pk))
-      : 'sheets through the router';
+      : 'press sheets through the router';
     // time per sheet divides timed seconds by the sheets that carry a time
     var timedSheets = function (a) {
       return Object.keys(a.groups).reduce(function (t, k) { return t + a.groups[k].sheetsH; }, 0);
@@ -3624,8 +3641,8 @@ function renderReportBody() {
     kpis = [
       { label: 'Total runs', value: totalSheets.toLocaleString(), sub: peakSub,
         delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
-      { label: 'Time / sheet', value: tps ? fmtDur(tps) : '—',
-        sub: tps ? 'from ' + tSheets.toLocaleString() + ' timed sheets' + (hoursPartial ? ' · Jun 17 on' : '') : 'needs run times',
+      { label: 'Time / press sheet', value: tps ? fmtDur(tps) : '—',
+        sub: tps ? 'from ' + tSheets.toLocaleString() + ' timed press sheets' + (hoursPartial ? ' · Jun 17 on' : '') : 'needs run times',
         delta: (showDeltas && hoursComparable && tps && cTps) ? deltaHtml(tps, cTps, true) : '',
         prev: (hoursComparable && cTps) ? fmtDur(cTps) : '' },
       machineTimeKpi,
@@ -3637,7 +3654,7 @@ function renderReportBody() {
     kpis = [
       { label: 'Total runs', value: totalRuns.toLocaleString(),
         delta: showDeltas ? deltaHtml(totalRuns, cmp.totalRuns) : '', prev: cmp ? cmp.totalRuns.toLocaleString() : '' },
-      { label: 'Sheets', value: totalSheets.toLocaleString(),
+      { label: sheetLabel(cfg), value: totalSheets.toLocaleString(),
         delta: showDeltas ? deltaHtml(totalSheets, cmp.totalSheets) : '', prev: cmp ? cmp.totalSheets.toLocaleString() : '' },
       machineTimeKpi,
       { label: cfg.label, value: String(arr.length), sub: groupNoun,
@@ -3657,13 +3674,13 @@ function renderReportBody() {
     + '<span class="seclabel" style="margin:0">Measure by</span>'
     + '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
         return '<button class="' + (metric === m ? 'on' : '') + '" id="mm_' + m + '" aria-pressed="' + (metric === m) + '" onclick="setReportMetric(' + jsStr(m) + ')">'
-          + REPORT_METRICS[m].label + '</button>';
+          + metricInfo(m, cfg).label + '</button>';
       }).join('') + '</div>'
     + (metric === 'hours' && (hoursPartial || cmpHoursPartial)
         ? '<span class="sub" style="margin:0">Run times only exist from Jun 17 — '
-          + (hoursPartial ? 'earlier runs show 0 h. Use Runs or Sheets for the full year.'
+          + (hoursPartial ? 'earlier runs show 0 h. Use Runs or ' + sheetLabel(cfg) + ' for the full year.'
             : 'the comparison period predates them, so its hours read low.') + '</span>'
-        : '<span class="sub" style="margin:0">Runs &amp; sheets cover the full period; hours cover Jun 17 on.</span>')
+        : '<span class="sub" style="margin:0">Runs &amp; ' + sheetWord(cfg) + ' cover the full period; hours cover Jun 17 on.</span>')
     + (cmp && !attrComparable
         ? '<span class="sub" style="margin:0;flex-basis:100%;color:var(--delta-bad)">Only ' + Math.round(attrShareCur * 100) + '% of runs have '
           + escapeHtml(cfg.noun) + ' this period (' + Math.round(attrSharePrev * 100)
@@ -3684,7 +3701,7 @@ function renderReportBody() {
   }).join('');
   var centerNum = metric === 'hours' ? fmtHoursNum(shownTotal) : shownTotal.toLocaleString();
   var isSize = cfg.key === 'size';
-  var pieCard = '<div class="rcard"><h2>' + (isSize ? 'All sizes' : mInfo.share) + '</h2>'
+  var pieCard = '<div class="rcard"><h2>' + (isSize ? 'All sign sizes' : mInfo.share) + '</h2>'
     + '<div class="h2sub">' + (isSize ? 'share of ' + mInfo.noun : 'by ' + escapeHtml(groupNoun.replace(/s$/, ''))) + '</div>'
     + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
     + '<div style="position:relative;flex:none">' + donutSvg(segs, mInfo.share + ' by ' + groupNoun.replace(/s$/, '') + ' — donut chart; percentages listed beside it')
@@ -3713,8 +3730,8 @@ function renderReportBody() {
       + (cmp ? '<div class="track cmp"><div class="fill" style="width:' + ((cv / barMax) * 100).toFixed(1) + '%;background:var(--text-muted)"></div></div>' : '')
       + '</div>';
   }).join('');
-  var barCard = '<div class="rcard"><h2>' + (isSize ? 'Size totals' : mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, ''))) + '</h2>'
-    + '<div class="h2sub">' + (isSize ? 'sheets cut this period · ' : '') + 'top ' + Math.min(8, barGroups.length) + (isSize ? '' : ' this period')
+  var barCard = '<div class="rcard"><h2>' + (isSize ? 'Sign size totals' : mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, ''))) + '</h2>'
+    + '<div class="h2sub">' + (isSize ? 'press sheets cut this period · ' : '') + 'top ' + Math.min(8, barGroups.length) + (isSize ? '' : ' this period')
     + (cmp ? ' · grey bar = comparison period' : '') + '</div>' + barItems + '</div>';
 
   // trend: chosen metric per day across weekdays in range. The Size report
@@ -3754,7 +3771,7 @@ function renderReportBody() {
     hi.push('Top ' + groupNoun.replace(/s$/, '') + ' by ' + mInfo.noun + ': <strong>' + escapeHtml(top1.key)
       + '</strong> (' + Math.round(shownTotal ? (gVal(top1) / shownTotal) * 100 : 0) + '% of attributed ' + mInfo.noun + ', ' + mInfo.fmt(gVal(top1)) + ').');
     var mostRuns = shown.slice().sort(function (a, b) { return b.runs - a.runs; })[0];
-    hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs, ' + mostRuns.sheets.toLocaleString() + ' sheets.');
+    hi.push('Most active: <strong>' + escapeHtml(mostRuns.key) + '</strong> with ' + mostRuns.runs + ' runs, ' + mostRuns.sheets.toLocaleString() + ' ' + sheetWord(cfg) + '.');
   }
   if (!hoursPartial && totalSecs) hi.push('Router utilization ran at <strong>' + Math.round(util) + '%</strong>, leaving '
     + fmtHours(sched.downtime) + ' of idle time' + (machineCount > 1 ? ' across ' + machineCount + ' routers' : '') + ' during scheduled shifts.');
@@ -3828,7 +3845,7 @@ function renderReportBody() {
   }).length : 0;
   var tableCard = '<div class="rcard"><h2>Breakdown by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
     + '<div class="tablewrap"><table><thead><tr><th>' + escapeHtml(cfg.label)
-    + '</th><th class="num">Runs</th><th class="num">Sheets</th><th class="num">' + (perSheet ? 'Time / sheet' : 'Machine time') + '</th>'
+    + '</th><th class="num">Runs</th><th class="num">' + sheetLabel(cfg) + '</th><th class="num">' + (perSheet ? 'Time / press sheet' : 'Machine time') + '</th>'
     + (cmp ? '<th class="num">Prev ' + escapeHtml(mInfo.noun) + '</th><th class="num">Change</th>' : '')
     + '<th class="num">Share (' + escapeHtml(mInfo.noun) + ')</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
@@ -3861,7 +3878,7 @@ function renderReportBody() {
   main.innerHTML = head + sparseNote + kpiHtml + (isSize ? '' : metricSeg)
     + '<div class="rtwo">' + pieCard + barCard + '</div>'
     + trendCard + hiCard + tableCard
-    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
+    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; ' + sheetWord(cfg) + ' from the production schedule · hours from the router log (Jun 17 on)</div>';
 }
 
 /** Per-day machine seconds for the given runs (for scheduleStats downtime). */
@@ -3901,7 +3918,7 @@ function deltaPtsHtml(cur, prev) {
  * two items the tiles and table also show change badges.
  */
 function itemCompareHtml(cfg, records, range) {
-  var dim = cfg.dim, metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  var dim = cfg.dim, metric = reportState.metric, mInfo = metricInfo(metric, cfg);
   var items = reportState.items;
   if (items.length < 2) {
     return '<div class="rplaceholder"><div class="t">Nothing to compare</div>'
@@ -3927,7 +3944,7 @@ function itemCompareHtml(cfg, records, range) {
   }).join('<span class="sub" style="margin:0">vs</span>');
   var seg = '<div class="seg">' + ['runs', 'sheets', 'hours'].map(function (m) {
     return '<button class="' + (metric === m ? 'on' : '') + '" id="mm_' + m + '" aria-pressed="' + (metric === m) + '" onclick="setReportMetric(' + jsStr(m) + ')">'
-      + REPORT_METRICS[m].label + '</button>';
+      + metricInfo(m, cfg).label + '</button>';
   }).join('') + '</div>';
   var headRow = '<div class="rcard" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px">'
     + chips
@@ -3942,10 +3959,10 @@ function itemCompareHtml(cfg, records, range) {
   var allTps = its.every(function (it) { return it.tps > 0; });
   var tiles = [
     { label: 'Runs', get: function (it) { return it.agg.totalRuns; }, fmt: count, badge: two },
-    { label: 'Sheets', get: function (it) { return it.agg.totalSheets; }, fmt: count, badge: two },
+    { label: sheetLabel(cfg), get: function (it) { return it.agg.totalSheets; }, fmt: count, badge: two },
     { label: 'Machine time', get: function (it) { return it.agg.totalSecs; }, fmt: dur,
       badge: two && !hoursPartial && allSecs, sub: hoursPartial ? 'Jun 17 on' : '' },
-    { label: 'Time / sheet', get: function (it) { return it.tps; }, fmt: dur, invert: true,
+    { label: perSheetLabel(cfg), get: function (it) { return it.tps; }, fmt: dur, invert: true,
       badge: two && allTps, sub: 'lower is better' }
   ];
   var kpiHtml = '<div class="rcard rkpis">' + tiles.map(function (t) {
@@ -3995,7 +4012,7 @@ function itemCompareHtml(cfg, records, range) {
     var fast = timed.slice().sort(function (a, b) { return a.tps - b.tps; });
     if (Math.round(fast[0].tps) !== Math.round(fast[1].tps)) {
       hi.push('<strong>' + escapeHtml(fast[0].key) + '</strong> cuts fastest: ' + fmtDur(fast[0].tps)
-        + ' per sheet vs ' + fmtDur(fast[1].tps) + (two ? '' : ' for the next best') + '.');
+        + ' per ' + sheetWord(cfg).replace(/s$/, '') + ' vs ' + fmtDur(fast[1].tps) + (two ? '' : ' for the next best') + '.');
     }
   }
   var shareSum = its.reduce(function (t, it) { return t + it.share; }, 0);
@@ -4021,16 +4038,16 @@ function itemCompareHtml(cfg, records, range) {
       }).join('')
     + (two ? '<th class="num">Difference</th>' : '') + '</tr></thead><tbody>'
     + trow('Runs', function (it) { return it.agg.totalRuns; }, count)
-    + trow('Sheets', function (it) { return it.agg.totalSheets; }, count)
+    + trow(sheetLabel(cfg), function (it) { return it.agg.totalSheets; }, count)
     + trow('Machine time', function (it) { return it.agg.totalSecs; }, dur, false,
         (!hoursPartial && allSecs) ? undefined : '&mdash;')
-    + trow('Time / sheet', function (it) { return it.tps; }, dur, true, allTps ? undefined : '&mdash;')
+    + trow(perSheetLabel(cfg), function (it) { return it.tps; }, dur, true, allTps ? undefined : '&mdash;')
     + trow('Share of period ' + mInfo.noun, function (it) { return it.share; },
         function (v) { return Math.round(v) + '%'; }, false, two ? deltaPtsHtml(its[0].share, its[1].share) : undefined)
     + '</tbody></table></div></div>';
 
   return headRow + kpiHtml + trendCard + hiCard + tableCard
-    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; sheets from the production schedule · hours from the router log (Jun 17 on)</div>';
+    + '<div class="repfoot">Generated ' + escapeHtml(fmtDate(new Date())) + ' · Router Department production report · runs &amp; ' + sheetWord(cfg) + ' from the production schedule · hours from the router log (Jun 17 on)</div>';
 }
 
 /* ----- time estimator: pick a size + quantity, project a finish date ----- */
@@ -4080,16 +4097,16 @@ function estimatorCard(allRecords) {
   var daily = recentDailyCutSecs();
 
   var controls = '<div class="estrow">'
-    + '<div><label>Size</label><select id="est_size" onchange="onEstChange()">'
+    + '<div><label>Sign size</label><select id="est_size" onchange="onEstChange()">'
     +   sizes.map(function (s) { return '<option value="' + escapeHtml(s) + '"' + (s === estimator.size ? ' selected' : '') + '>' + escapeHtml(s) + '</option>'; }).join('')
     + '</select></div>'
-    + '<div><label>Sheets to cut</label><input id="est_qty" type="number" min="1" step="1" value="' + qty + '" oninput="onEstChange()"></div>'
+    + '<div><label>Press sheets to cut</label><input id="est_qty" type="number" min="1" step="1" value="' + qty + '" oninput="onEstChange()"></div>'
     + '</div>';
 
   var body;
   if (!qty || !tps || !daily) {
     body = '<div class="sub" style="padding:10px 2px">'
-      + (!qty ? 'Enter how many sheets need cutting.'
+      + (!qty ? 'Enter how many press sheets need cutting.'
         : !tps ? 'No run times recorded yet for any size — the estimate needs cutting history.'
         : 'No cutting activity in the last 14 days to base a pace on.') + '</div>';
   } else {
@@ -4108,15 +4125,15 @@ function estimatorCard(allRecords) {
       +   '<div class="v">' + escapeHtml(finishLabel) + '</div>'
       +   '<div class="s">' + workDays + ' working day' + (workDays === 1 ? '' : 's') + ' from today</div></div>'
       + '<div class="esttiles">'
-      +   '<div class="rkpi"><div class="label">Machine time</div><div class="value">' + fmtDur(needed) + '</div><div class="sub">' + qty.toLocaleString() + ' sheets</div></div>'
-      +   '<div class="rkpi"><div class="label">Time / sheet</div><div class="value">' + fmtDur(tps) + '</div><div class="sub">' + (usedFallback ? 'shop average — no history for this size' : 'from ' + st.sheetsH.toLocaleString() + ' timed sheets') + '</div></div>'
-      +   '<div class="rkpi"><div class="label">Sheets / day</div><div class="value">' + (sheetsPerDay >= 10 ? Math.round(sheetsPerDay) : sheetsPerDay.toFixed(1)) + '</div><div class="sub">at recent pace</div></div>'
+      +   '<div class="rkpi"><div class="label">Machine time</div><div class="value">' + fmtDur(needed) + '</div><div class="sub">' + qty.toLocaleString() + ' press sheets</div></div>'
+      +   '<div class="rkpi"><div class="label">Time / press sheet</div><div class="value">' + fmtDur(tps) + '</div><div class="sub">' + (usedFallback ? 'shop average — no history for this size' : 'from ' + st.sheetsH.toLocaleString() + ' timed press sheets') + '</div></div>'
+      +   '<div class="rkpi"><div class="label">Press sheets / day</div><div class="value">' + (sheetsPerDay >= 10 ? Math.round(sheetsPerDay) : sheetsPerDay.toFixed(1)) + '</div><div class="sub">at recent pace</div></div>'
       + '</div>'
       + '<div class="estnote">Pace = ' + fmtHours(daily) + ' of actual cutting per working day (all routers, last 14 days), so idle time and other jobs are already accounted for. Mon–Fri only.</div>';
   }
 
   return '<div class="rcard"><h2>Time estimator</h2>'
-    + '<div class="h2sub">how long a job of this size will take at the shop\'s recent pace</div>'
+    + '<div class="h2sub">how long a job of this sign size will take at the shop\'s recent pace</div>'
     + controls + body + '</div>';
 }
 
@@ -4388,7 +4405,7 @@ function shapeColorsFor(cfg, keysByValue, allRecords) {
 }
 
 function renderShapeChips(host, cfg, records) {
-  var metric = reportState.metric, mInfo = REPORT_METRICS[metric];
+  var metric = reportState.metric, mInfo = metricInfo(metric, cfg);
   var noun = cfg.filterLabel.toLowerCase();
   var totals = reportGroupTotals(records, metric);
   var options = Object.keys(totals);
