@@ -3707,7 +3707,7 @@ function renderReportBody() {
     + '<div style="position:relative;flex:none">' + donutSvg(segs, mInfo.share + ' by ' + groupNoun.replace(/s$/, '') + ' — donut chart; percentages listed beside it')
     + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">'
     + '<div style="font-size:20px;font-weight:600;letter-spacing:-0.02em">' + centerNum + '</div>'
-    + '<div style="color:var(--text-muted);font-size:11px">total ' + mInfo.noun + '</div></div></div>'
+    + '<div style="color:var(--text-muted);font-size:11px">' + escapeHtml(mInfo.noun) + '</div></div></div>'
     + '<div class="pielegend">' + pieLegend + '</div></div></div>';
 
   // bars: top 8 by the chosen metric (attributed groups only); when comparing,
