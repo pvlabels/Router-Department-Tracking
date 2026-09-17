@@ -3673,8 +3673,9 @@ function renderReportBody() {
       + '<span class="pct">' + Math.round(shownTotal ? (p.val / shownTotal) * 100 : 0) + '%</span></div>';
   }).join('');
   var centerNum = metric === 'hours' ? fmtHoursNum(shownTotal) : shownTotal.toLocaleString();
-  var pieCard = '<div class="rcard"><h2>' + mInfo.share + '</h2>'
-    + '<div class="h2sub">by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</div>'
+  var isSize = cfg.key === 'size';
+  var pieCard = '<div class="rcard"><h2>' + (isSize ? 'All sizes' : mInfo.share) + '</h2>'
+    + '<div class="h2sub">' + (isSize ? 'share of ' + mInfo.noun : 'by ' + escapeHtml(groupNoun.replace(/s$/, ''))) + '</div>'
     + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
     + '<div style="position:relative;flex:none">' + donutSvg(segs, mInfo.share + ' by ' + groupNoun.replace(/s$/, '') + ' — donut chart; percentages listed beside it')
     + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">'
@@ -3684,21 +3685,26 @@ function renderReportBody() {
 
   // bars: top 8 by the chosen metric (attributed groups only); when comparing,
   // a thin grey bar underneath shows the same group in the comparison period.
-  var cmpVal = function (key) { var c = cmp && cmp.groups[key]; return c ? gVal(c) : 0; };
-  var barMax = shown.slice(0, 8).reduce(function (m, g) {
-    return Math.max(m, gVal(g), cmp ? cmpVal(g.key) : 0);
+  // The Size report's bars always count sheets — "how many of that size did
+  // we cut" — whatever the metric toggle says; the other reports follow it.
+  var barVal = isSize ? function (g) { return g.sheets; } : gVal;
+  var barFmt = isSize ? function (v) { return v.toLocaleString(); } : mInfo.fmt;
+  var barGroups = isSize ? shown.slice().sort(function (a, b) { return barVal(b) - barVal(a); }) : shown;
+  var cmpVal = function (key) { var c = cmp && cmp.groups[key]; return c ? barVal(c) : 0; };
+  var barMax = barGroups.slice(0, 8).reduce(function (m, g) {
+    return Math.max(m, barVal(g), cmp ? cmpVal(g.key) : 0);
   }, 1);
-  var barItems = shown.slice(0, 8).map(function (g) {
+  var barItems = barGroups.slice(0, 8).map(function (g) {
     var cv = cmpVal(g.key);
     return '<div class="hbar"><div class="top"><span class="nm">' + escapeHtml(g.key) + '</span>'
-      + '<span class="val">' + mInfo.fmt(gVal(g))
-      + (cmp ? ' <span class="prev">vs ' + mInfo.fmt(cv) + '</span>' + (showDeltas ? ' ' + deltaHtml(gVal(g), cv) : '') : '') + '</span></div>'
-      + '<div class="track"><div class="fill" style="width:' + ((gVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div>'
+      + '<span class="val">' + barFmt(barVal(g))
+      + (cmp ? ' <span class="prev">vs ' + barFmt(cv) + '</span>' + (showDeltas ? ' ' + deltaHtml(barVal(g), cv) : '') : '') + '</span></div>'
+      + '<div class="track"><div class="fill" style="width:' + ((barVal(g) / barMax) * 100).toFixed(1) + '%;background:' + g.color + '"></div></div>'
       + (cmp ? '<div class="track cmp"><div class="fill" style="width:' + ((cv / barMax) * 100).toFixed(1) + '%;background:var(--text-muted)"></div></div>' : '')
       + '</div>';
   }).join('');
-  var barCard = '<div class="rcard"><h2>' + mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, '')) + '</h2>'
-    + '<div class="h2sub">top ' + Math.min(8, shown.length) + ' this period'
+  var barCard = '<div class="rcard"><h2>' + (isSize ? 'Size totals' : mInfo.label + ' by ' + escapeHtml(groupNoun.replace(/s$/, ''))) + '</h2>'
+    + '<div class="h2sub">' + (isSize ? 'sheets cut this period · ' : '') + 'top ' + Math.min(8, barGroups.length) + (isSize ? '' : ' this period')
     + (cmp ? ' · grey bar = comparison period' : '') + '</div>' + barItems + '</div>';
 
   // trend: chosen metric per day across weekdays in range. The Size report
