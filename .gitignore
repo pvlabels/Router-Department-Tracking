@@ -5,3 +5,15 @@ node_modules/
 # design handoffs (kept locally, not published)
 Router Department Redesign.zip
 *.zip
+
+# Local settings, credentials, and signing materials
+.claude/settings.local.json
+*.p12
+Laser/Panel/signing/
+
+# Private design handoffs and production samples (see PRODUCT.md)
+How it works/
+Router Department Redesign/
+Laser/*.pdf
+.impeccable/critique/
+.impeccable/hook.cache.json

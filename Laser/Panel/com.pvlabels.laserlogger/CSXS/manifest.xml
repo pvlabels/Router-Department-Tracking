@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    ExtensionBundleId="com.pvlabels.laserlogger"
+    ExtensionBundleVersion="1.0.0"
+    ExtensionBundleName="Laser Run Logger"
+    Version="9.0">
+  <ExtensionList>
+    <Extension Id="com.pvlabels.laserlogger.panel" Version="1.0.0"/>
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <Host Name="ILST" Version="[16.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="9.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.pvlabels.laserlogger.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./host.jsx</ScriptPath>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>Laser Run Logger</Menu>
+          <Geometry>
+            <Size>
+              <Height>560</Height>
+              <Width>340</Width>
+            </Size>
+            <MinSize>
+              <Height>380</Height>
+              <Width>240</Width>
+            </MinSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

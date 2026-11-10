@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Router Department — System Map</title>
+<style>
+  @page { size: 8.5in 11in; margin: 0.33in; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a; font-size: 9px; line-height: 1.35;
+  }
+  .mono { font-family: "Consolas", "SFMono-Regular", Menlo, monospace; }
+  h1 { font-size: 19px; margin: 0; letter-spacing: -0.02em; }
+  .sub { color: #475569; font-size: 9.5px; margin-top: 2px; }
+  .head { border-bottom: 2px solid #0057d9; padding-bottom: 5px; margin-bottom: 5px;
+    display: flex; align-items: flex-end; justify-content: space-between; }
+  .stamp { text-align: right; color: #64748b; font-size: 8px; }
+
+  svg { width: 90%; height: auto; display: block; margin: 2px auto 0; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 6px; }
+  .card { border: 1px solid #d5dde7; border-radius: 6px; padding: 5px 7px; }
+  .card.key { border-color: #9cc0ff; background: #f5f9ff; }
+  .card .t { font-weight: 700; font-size: 9.5px; }
+  .card .t .n { display: inline-block; background: #0057d9; color: #fff; border-radius: 50%;
+    width: 13px; height: 13px; text-align: center; line-height: 13px; font-size: 8px; margin-right: 4px; }
+  .card .r { color: #475569; margin: 1px 0 3px; }
+  .card .d { margin: 1px 0; }
+  .card .d b { color: #0f172a; font-weight: 600; }
+  .card .mono { font-size: 8px; color: #1e293b; word-break: break-all; }
+  .warn { background: #fff7ed; border-color: #f0c088; }
+  .warn .flag { color: #b45309; font-weight: 700; }
+
+  .recover { margin-top: 5px; border: 1px solid #0057d9; border-radius: 6px; background: #f5f9ff; padding: 5px 8px; }
+  .recover h2 { font-size: 10.5px; margin: 0 0 3px; color: #0b3ea8; }
+  .recover ul { margin: 0; padding-left: 15px; }
+  .recover li { margin: 1px 0; }
+  .recover li b { color: #0b3ea8; }
+  .foot { color: #94a3b8; font-size: 7.5px; margin-top: 4px; text-align: center; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div>
+      <h1>Router Department — System Map</h1>
+      <div class="sub">How cut data flows from the machines to the dashboard — and what to check if something breaks.</div>
+    </div>
+    <div class="stamp">Router Department Tracking<br>generated 2026-07-22</div>
+  </div>
+
+  <!-- ===================== DIAGRAM ===================== -->
+  <svg viewBox="0 0 800 452" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/>
+      </marker>
+      <marker id="arrowB" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#0057d9"/>
+      </marker>
+    </defs>
+
+    <!-- edges (drawn first, behind boxes) -->
+    <g stroke="#64748b" stroke-width="1.4" fill="none">
+      <!-- routers -> logger -->
+      <path d="M120,64 L165,92" marker-end="url(#arrow)"/>
+      <path d="M290,64 L245,92" marker-end="url(#arrow)"/>
+      <!-- logger -> raw sheet -->
+      <path d="M205,138 L205,168" marker-end="url(#arrow)"/>
+      <!-- raw sheet -> apps script -->
+      <path d="M210,228 L350,266" marker-end="url(#arrow)"/>
+      <!-- schedule -> apps script -->
+      <path d="M590,228 L470,266" marker-end="url(#arrow)"/>
+      <!-- apps script -> pages -->
+      <path d="M400,320 L400,352" marker-end="url(#arrow)"/>
+      <!-- pages -> users -->
+      <path d="M400,404 L400,436" marker-end="url(#arrow)"/>
+    </g>
+    <!-- deploy edges (cobalt) -->
+    <g stroke="#0057d9" stroke-width="1.4" fill="none" stroke-dasharray="4 3">
+      <path d="M628,300 L572,294" marker-end="url(#arrowB)"/>
+      <path d="M660,340 Q560,392 552,384" marker-end="url(#arrowB)"/>
+    </g>
+
+    <!-- edge labels -->
+    <g fill="#64748b" font-size="8.5">
+      <text x="212" y="156">writes run rows</text>
+      <text x="238" y="250">read server-side</text>
+      <text x="486" y="250">read server-side</text>
+      <text x="406" y="340">serves JSON (/exec)</text>
+      <text x="406" y="424">opened by</text>
+    </g>
+    <g fill="#0057d9" font-size="8">
+      <text x="500" y="286">deploy code (clasp)</text>
+      <text x="470" y="372">deploy page</text>
+    </g>
+
+    <!-- machines -->
+    <g>
+      <rect x="40" y="22" width="160" height="42" rx="6" fill="#fff" stroke="#334155" stroke-width="1.3"/>
+      <text x="120" y="40" text-anchor="middle" font-size="10" font-weight="700">MultiCam 3-202-R16</text>
+      <text x="120" y="54" text-anchor="middle" font-size="8.5" fill="#475569">router · #37137</text>
+
+      <rect x="210" y="22" width="160" height="42" rx="6" fill="#fff" stroke="#334155" stroke-width="1.3"/>
+      <text x="290" y="40" text-anchor="middle" font-size="10" font-weight="700">MultiCam 3-205-R16</text>
+      <text x="290" y="54" text-anchor="middle" font-size="8.5" fill="#475569">router · #41334</text>
+    </g>
+
+    <!-- logger -->
+    <rect x="70" y="92" width="270" height="46" rx="6" fill="#fff7ed" stroke="#f0c088" stroke-width="1.3"/>
+    <text x="205" y="110" text-anchor="middle" font-size="10" font-weight="700">Shop PC · MultiCam logger</text>
+    <text x="205" y="124" text-anchor="middle" font-size="8" fill="#b45309">⚠ upload path not in repo — verify &amp; note</text>
+
+    <!-- raw sheet -->
+    <rect x="60" y="168" width="300" height="60" rx="6" fill="#f5f9ff" stroke="#0057d9" stroke-width="1.6"/>
+    <text x="210" y="186" text-anchor="middle" font-size="10.5" font-weight="700">Google Sheet — RAW DATA</text>
+    <text x="210" y="200" text-anchor="middle" font-size="9" fill="#0b3ea8">“Press Sheet Tracking”</text>
+    <text x="210" y="214" text-anchor="middle" font-size="8" fill="#475569">Job Log · Dashboard Jobs · Production History</text>
+
+    <!-- schedule sheet -->
+    <rect x="460" y="168" width="300" height="60" rx="6" fill="#fff" stroke="#334155" stroke-width="1.3"/>
+    <text x="610" y="186" text-anchor="middle" font-size="10.5" font-weight="700">Google Sheet — SCHEDULE</text>
+    <text x="610" y="200" text-anchor="middle" font-size="9" fill="#334155">“Live Production Copy”</text>
+    <text x="610" y="214" text-anchor="middle" font-size="8" fill="#475569">production schedule (read-only)</text>
+
+    <!-- apps script -->
+    <rect x="230" y="266" width="340" height="54" rx="6" fill="#f5f9ff" stroke="#0057d9" stroke-width="1.6"/>
+    <text x="400" y="286" text-anchor="middle" font-size="10.5" font-weight="700">Apps Script web app</text>
+    <text x="400" y="300" text-anchor="middle" font-size="8.5" fill="#475569">reads both sheets → serves JSON + write API</text>
+    <text x="400" y="313" text-anchor="middle" font-size="8" fill="#0b3ea8">runs as stickersquicktesting@gmail.com</text>
+
+    <!-- github -->
+    <rect x="608" y="262" width="168" height="92" rx="6" fill="#fff" stroke="#334155" stroke-width="1.3"/>
+    <text x="692" y="282" text-anchor="middle" font-size="10" font-weight="700">GitHub</text>
+    <text x="692" y="296" text-anchor="middle" font-size="8.2" fill="#475569">repo + Actions</text>
+    <text x="692" y="311" text-anchor="middle" font-size="8" fill="#334155">source of truth</text>
+    <text x="692" y="324" text-anchor="middle" font-size="8" fill="#334155">auto-deploy on</text>
+    <text x="692" y="336" text-anchor="middle" font-size="8" fill="#334155">push to main</text>
+
+    <!-- pages -->
+    <rect x="250" y="352" width="300" height="52" rx="6" fill="#f5f9ff" stroke="#0057d9" stroke-width="1.6"/>
+    <text x="400" y="372" text-anchor="middle" font-size="10.5" font-weight="700">GitHub Pages — the dashboard</text>
+    <text x="400" y="386" text-anchor="middle" font-size="8" fill="#0b3ea8">pvlabels.github.io/Router-Department-Tracking</text>
+    <text x="400" y="398" text-anchor="middle" font-size="8" fill="#475569">fetches JSON from Apps Script (no Google login)</text>
+
+    <!-- users -->
+    <rect x="290" y="436" width="220" height="0.1" fill="none"/>
+    <rect x="288" y="410" width="224" height="40" rx="6" fill="#fff" stroke="#334155" stroke-width="1.3"/>
+    <text x="400" y="428" text-anchor="middle" font-size="10" font-weight="700">Shop browsers &amp; phones</text>
+    <text x="400" y="442" text-anchor="middle" font-size="8" fill="#475569">everyone views the live dashboard</text>
+  </svg>
+
+  <!-- ===================== REFERENCE ===================== -->
+  <div class="grid">
+    <div class="card">
+      <div class="t"><span class="n">1</span>MultiCam routers (×2)</div>
+      <div class="r">The two cutting machines. Names appear in the Job Log “Machine” column.</div>
+      <div class="d mono">MultiCam 3-202-R16 (37137)</div>
+      <div class="d mono">MultiCam 3-205-R16 (41334)</div>
+    </div>
+
+    <div class="card warn">
+      <div class="t"><span class="n">2</span>Shop PC · logger</div>
+      <div class="r">Software on the router PC appends each finished cut (date, start/end, job, machine, status) as a row in the Job Log.</div>
+      <div class="d"><span class="flag">⚠ Verify:</span> the exact logger software &amp; upload method are not recorded here — confirm on the shop PC and write it in.</div>
+      <div class="d">Note: its “Total Time” column runs +3 h high; the dashboard ignores it and uses End − Start.</div>
+    </div>
+
+    <div class="card key">
+      <div class="t"><span class="n">3</span>Raw Data Sheet — “Press Sheet Tracking”</div>
+      <div class="r">Where the machines write. Also holds the dashboard-owned tabs.</div>
+      <div class="d"><b>Owner:</b> pv51@pvlabels.com · shared with stickersquicktesting@gmail.com</div>
+      <div class="d"><b>Tabs:</b> Job Log (machine runs) · Dashboard Jobs · Production History</div>
+      <div class="d mono">1532iOs5fdQxJQyeQUatdDDq5jIEVKLYdYh-tRfXkXIc</div>
+      <div class="d mono">docs.google.com/spreadsheets/d/1532iOs5…XkXIc/edit</div>
+    </div>
+
+    <div class="card">
+      <div class="t"><span class="n">4</span>Schedule Sheet — “Live Production Copy”</div>
+      <div class="r">Read by Apps Script for the queue, sizes, quantities, work orders, and the full-year history backfill.</div>
+      <div class="d"><b>Owner:</b> pv51@pvlabels.com · shared (read) with stickersquicktesting@gmail.com</div>
+      <div class="d mono">1E0C4hanKBmYCrZw1V8DcknU60UxFtXAqMF48_XpDTik  (Sheet1 / gid 0)</div>
+      <div class="d mono">docs.google.com/spreadsheets/d/1E0C4h…DTik/edit</div>
+    </div>
+
+    <div class="card key">
+      <div class="t"><span class="n">5</span>Apps Script web app</div>
+      <div class="r">Reads both sheets server-side; serves the dashboard JSON and the write API. Access: Anyone (anonymous).</div>
+      <div class="d"><b>Account (owns/runs):</b> stickersquicktesting@gmail.com — the two sheets must stay shared with it.</div>
+      <div class="d mono"><b>script:</b> 1J7W2WMz5ewvHzaH976p7eHy4nwX91c0ooHKz0Qc8t_XfrreYQT7aF6tO</div>
+      <div class="d mono"><b>deployment:</b> AKfycbyO8LmIzyH1bw-axrpbrB98wsEVYZfCAJExR9vmBLoWcc9-WpvfsIhPW1FZ8Hl1dN1w3g</div>
+      <div class="d mono">script.google.com/macros/s/AKfycby…/exec   (add ?format=json)</div>
+    </div>
+
+    <div class="card">
+      <div class="t"><span class="n">6</span>GitHub — source &amp; auto-deploy</div>
+      <div class="r">The real source of truth. Push to <b>main</b> → Actions pushes code to Apps Script (clasp), redeploys the web app, and publishes Pages.</div>
+      <div class="d mono">github.com/pvlabels/Router-Department-Tracking  (public · acct pvlabels)</div>
+      <div class="d"><b>Files:</b> src/Code.js (backend) · src/index.html (dashboard) · .github/workflows/deploy.yml</div>
+      <div class="d"><b>Secret:</b> CLASPRC_JSON (clasp token) · <b>Var:</b> DEPLOYMENT_ID = the #5 deployment · clasp pinned @2.4.2</div>
+    </div>
+
+    <div class="card key">
+      <div class="t"><span class="n">7</span>GitHub Pages — the dashboard</div>
+      <div class="r">The page everyone opens. Serves src/index.html and fetches JSON from #5 without Google cookies, so Workspace’s block on script.google.com can’t interfere.</div>
+      <div class="d mono">https://pvlabels.github.io/Router-Department-Tracking/</div>
+      <div class="d">Desktop shortcut “Router Dashboard.url” points here.</div>
+    </div>
+
+    <div class="card">
+      <div class="t"><span class="n">8</span>Local dev</div>
+      <div class="r">Where the code is edited before pushing to GitHub.</div>
+      <div class="d mono">C:\Users\jperry\Desktop\AI Projects\Multicam Tracking</div>
+      <div class="d">Edit src/, commit, push to main — Actions does the rest. (This map: “Router Department System Map.html/.pdf”.)</div>
+    </div>
+  </div>
+
+  <!-- ===================== RECOVERY ===================== -->
+  <div class="recover">
+    <h2>If something’s down — start here</h2>
+    <ul>
+      <li><b>Dashboard blank or stale:</b> open <span class="mono">…/exec?format=json</span> (#5). If it errors, confirm sheets #3 and #4 are still shared with <span class="mono">stickersquicktesting@gmail.com</span>.</li>
+      <li><b>New cuts not appearing:</b> the shop logger (#2) isn’t writing to the Job Log — check the router PC / logging software.</li>
+      <li><b>Queue, sizes, or WOs wrong/empty:</b> the schedule sheet (#4) moved, was renamed, or lost read access for the Apps Script account.</li>
+      <li><b>A code change didn’t go live:</b> GitHub → <b>Actions</b> tab (#6) for a failed run. Pages OIDC hiccup → re-run with <b>“Run workflow” (workflow_dispatch)</b>, NOT “re-run failed jobs” (that duplicates the Pages artifact).</li>
+      <li><b>clasp / Apps Script login broke:</b> run <span class="mono">clasp login</span> with <span class="mono">@google/clasp@2.4.2</span>, then update the <span class="mono">CLASPRC_JSON</span> repo secret.</li>
+    </ul>
+  </div>
+
+  <div class="foot">Details verified against the repo (README, .clasp.json, deploy.yml) and the live dashboard. The one item not documented in code — how the machines physically upload (#2) — is flagged for you to confirm.</div>
+
+</body>
+</html>
