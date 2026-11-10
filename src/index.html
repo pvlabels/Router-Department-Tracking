@@ -1063,6 +1063,15 @@ var dragName = null;            // job being dragged
 var suppressReloadUntil = 0;    // pause auto-refresh briefly after a reorder
 var dataHash = null;            // hash of the build we hold, so polls can ask "still this?"
 var refreshOnShow = false;      // a refresh came due while the tab was hidden
+var activeLoad = null;          // coalesce repeated Refresh clicks and timer ticks
+var pendingWrites = 0;
+var loadAfterWrite = false;
+var SNAPSHOT_KEY = 'production-board:v1:' + API_BASE;
+var SNAPSHOT_MAX_AGE = 15 * 60 * 1000;
+var snapshotJson = null;        // raw server data, before UI/optimistic edits
+var snapshotTimer = null;
+var lastCheckedAt = null;
+var showingSnapshot = false;
 
 /* ---------- icons ---------- */
 
@@ -1108,19 +1117,99 @@ function toggleTheme() {
 /* ---------- data loading ---------- */
 
 function load() {
+  if (pendingWrites) { loadAfterWrite = true; return; }
+  if (activeLoad) return;
+  var request = { controller: typeof AbortController !== 'undefined' ? new AbortController() : null };
+  activeLoad = request;
+  document.getElementById('updated').textContent = showingSnapshot
+    ? 'saved ' + new Date(lastCheckedAt).toLocaleTimeString() + ' \u00b7 updating\u2026'
+    : (lastCheckedAt ? 'refreshing\u2026' : 'loading\u2026');
+  document.getElementById('livedot').className = 'dot stale';
+  function finish(data, err) {
+    if (activeLoad !== request) return; // a write made this response obsolete
+    clearTimeout(request.timer);
+    activeLoad = null;
+    if (err) { onError(err); return; }
+    try {
+      if (data && data.error) throw new Error(data.error);
+      onData(data);
+    } catch (e) { onError(e); }
+  }
+  request.timer = setTimeout(function () {
+    finish(null, new Error('The server took too long to respond. Try Refresh again.'));
+    if (request.controller) request.controller.abort();
+  }, 60000);
   if (typeof google !== 'undefined' && google.script) {
-    google.script.run.withSuccessHandler(onData).withFailureHandler(onError).getData();
+    google.script.run.withSuccessHandler(function (data) { finish(data); })
+      .withFailureHandler(function (err) { finish(null, err); }).getData(dataHash);
   } else if (location.protocol.indexOf('http') === 0) {
     // Tell the backend which build we already hold. If nothing has changed
     // since, it answers with a few dozen bytes instead of the whole board.
     var url = API_URL + (dataHash ? '&have=' + encodeURIComponent(dataHash) : '');
-    fetch(url)
+    fetch(url, request.controller ? { signal: request.controller.signal } : {})
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (data) { if (data && data.error) throw new Error(data.error); onData(data); })
-      .catch(onError);
+      .then(function (data) { finish(data); })
+      .catch(function (err) { finish(null, err); });
   } else {
-    onData(mockData());
+    finish(mockData());
   }
+}
+
+function validBoardData(data) {
+  return data && Array.isArray(data.runs) && Array.isArray(data.jobs)
+    && (!data.laser || Array.isArray(data.laser))
+    && (!data.history || Array.isArray(data.history));
+}
+
+// A recent snapshot makes reopening the board useful before Apps Script replies.
+// It is explicitly marked as saved data until the network confirms it.
+function restoreSnapshot() {
+  if (location.protocol.indexOf('http') !== 0) return;
+  try {
+    var raw = localStorage.getItem(SNAPSHOT_KEY);
+    var meta = JSON.parse(localStorage.getItem(SNAPSHOT_KEY + ':checked') || 'null');
+    if (!raw || !meta || !Number.isFinite(meta.at)) return;
+    var age = Date.now() - meta.at;
+    if (age < 0 || age > SNAPSHOT_MAX_AGE) return;
+    var data = JSON.parse(raw);
+    if (!validBoardData(data) || !data.hash || data.hash !== meta.hash) return;
+    var built = Date.parse(meta.builtAt || data.builtAt);
+    if (!Number.isFinite(built) || Date.now() - built > SNAPSHOT_MAX_AGE) return;
+    data.builtAt = new Date(built).toISOString();
+    onData(data, true);
+    snapshotJson = raw;
+    lastCheckedAt = meta.at;
+    showingSnapshot = true;
+    document.getElementById('updated').textContent = 'saved ' + new Date(meta.at).toLocaleTimeString() + ' \u00b7 updating\u2026';
+    document.getElementById('livedot').className = 'dot stale';
+  } catch (e) { /* corrupt, unavailable, or full storage must not block a live load */ }
+}
+
+function saveSnapshot() {
+  if (!snapshotJson || !dataHash || location.protocol.indexOf('http') !== 0) return;
+  clearTimeout(snapshotTimer);
+  var raw = snapshotJson, hash = dataHash, checkedAt = lastCheckedAt, builtAt = state.builtAt;
+  snapshotTimer = setTimeout(function () {
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, raw);
+      localStorage.setItem(SNAPSHOT_KEY + ':checked', JSON.stringify({ hash: hash, at: checkedAt, builtAt: builtAt }));
+    } catch (e) { /* storage is optional */ }
+  }, 0);
+}
+
+function invalidateSnapshot() {
+  clearTimeout(snapshotTimer);
+  snapshotJson = null;
+  dataHash = null;
+  if (activeLoad) {
+    clearTimeout(activeLoad.timer);
+    if (activeLoad.controller) activeLoad.controller.abort();
+    activeLoad = null;
+  }
+  try {
+    localStorage.removeItem(SNAPSHOT_KEY);
+    localStorage.removeItem(SNAPSHOT_KEY + ':checked');
+  } catch (e) { /* storage is optional */ }
 }
 
 function autoRefresh() {
@@ -1182,13 +1271,19 @@ function attachRunSizes() {
   });
 }
 
-function onData(data) {
+function onData(data, fromSnapshot) {
   // Nothing has changed since our last poll: no parse of the board, no
   // re-derivation, no repaint. Just show that we checked.
   if (data && data.unchanged) {
+    if (!dataHash || data.hash !== dataHash) throw new Error('The server returned an unrecognized data version.');
+    // Keep the build timestamp current even when the board contents match.
+    if (data.builtAt) state.builtAt = data.builtAt;
     markFresh();
+    saveSnapshot();
     return;
   }
+  if (!validBoardData(data)) throw new Error('The server returned incomplete board data.');
+  if (!fromSnapshot) snapshotJson = data.hash ? JSON.stringify(data) : null;
   dataHash = (data && data.hash) || null;
   state = data;
   state.laser = state.laser || [];        // absent on the local mock
@@ -1211,12 +1306,15 @@ function onData(data) {
     state.machines = unique(state.runs.map(function (r) { return r.machine; }).filter(Boolean)).sort();
   }
   populateMachineSelect();
-  markFresh();
+  if (!fromSnapshot) markFresh();
   render();
+  if (!fromSnapshot) saveSnapshot();
 }
 
 /** Clears the offline banner and stamps the header with the time we last checked. */
 function markFresh() {
+  lastCheckedAt = Date.now();
+  showingSnapshot = false;
   document.getElementById('banner').className = 'banner';
   document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   document.getElementById('livedot').className = 'dot';
@@ -1262,7 +1360,9 @@ function onMachineChange() {
 function onError(err) {
   var b = document.getElementById('banner');
   b.className = 'banner error';
-  b.innerHTML = '<strong>Could not load data.</strong> ' + escapeHtml(err && err.message || String(err));
+  b.innerHTML = '<strong>Could not ' + (lastCheckedAt ? 'refresh' : 'load') + ' data.</strong> '
+    + escapeHtml(err && err.message || String(err))
+    + (lastCheckedAt ? ' Showing data last checked at ' + new Date(lastCheckedAt).toLocaleString() + '.' : '');
   document.getElementById('livedot').className = 'dot stale';
   document.getElementById('updated').textContent = 'load failed';
 }
@@ -1934,7 +2034,7 @@ function laserRow(run) {
   var detail = document.createElement('div');
   detail.className = 'jobrow-detail' + (open ? '' : ' hidden');
   detail.style.paddingLeft = '16px';
-  detail.innerHTML = laserDetailHtml(run);
+  if (open) detail.innerHTML = laserDetailHtml(run);
   row.appendChild(detail);
 
   head.querySelector('[data-act="toggle"]').addEventListener('click', function (e) { e.stopPropagation(); toggleLaserRun(run.run); });
@@ -2223,7 +2323,7 @@ function jobRow(job, idx, total) {
 
   var detail = document.createElement('div');
   detail.className = 'jobrow-detail' + (open ? '' : ' hidden');
-  detail.appendChild(jobDetail(job, runs, completed, remaining));
+  if (open) detail.appendChild(jobDetail(job, runs, completed, remaining));
   row.appendChild(detail);
 
   // drag from the handle; click the row (or the chevron) for details
@@ -2461,7 +2561,15 @@ function toggleJob(name) {
   if (!row) return;
   var detail = row.querySelector('.jobrow-detail');
   var caret = row.querySelector('[data-act="toggle"]');
-  if (expandedJobs[name]) { detail.classList.remove('hidden'); caret.innerHTML = ICON.chevronDown(15); }
+  if (expandedJobs[name]) {
+    if (!detail.firstChild) {
+      var job = state.jobs.filter(function (j) { return j.name === name; })[0];
+      if (!job) return;
+      var runs = runsForJob(job);
+      detail.appendChild(jobDetail(job, runs, runs.length, Math.max(0, (job.target || 0) - runs.length)));
+    }
+    detail.classList.remove('hidden'); caret.innerHTML = ICON.chevronDown(15);
+  }
   else { detail.classList.add('hidden'); caret.innerHTML = ICON.chevronRight(15); }
 }
 function cssSelector(s) { return String(s).replace(/(["\\])/g, '\\$1'); }
@@ -2874,18 +2982,27 @@ function clearFilters() {
 /* ---------- job form + write API ---------- */
 
 function api(payload, cb) {
+  // Never persist an optimistic edit or let an earlier read overwrite a write.
+  invalidateSnapshot();
+  pendingWrites++;
+  function done(result) {
+    pendingWrites--;
+    try { cb(result); }
+    finally {
+      if (!pendingWrites && loadAfterWrite) { loadAfterWrite = false; load(); }
+    }
+  }
   if (typeof google !== 'undefined' && google.script) {
     google.script.run
-      .withSuccessHandler(cb)
-      .withFailureHandler(function (e) { cb({ error: (e && e.message) || String(e) }); })
+      .withSuccessHandler(done)
+      .withFailureHandler(function (e) { done({ error: (e && e.message) || String(e) }); })
       .apiCall(payload);
   } else if (location.protocol.indexOf('http') === 0) {
     fetch(API_BASE, { method: 'POST', body: JSON.stringify(payload) })
       .then(function (r) { return r.json(); })
-      .then(cb)
-      .catch(function (e) { cb({ error: (e && e.message) || String(e) }); });
+      .then(done, function (e) { done({ error: (e && e.message) || String(e) }); });
   } else {
-    cb({ ok: true, mock: true });
+    done({ ok: true, mock: true });
   }
 }
 
@@ -4515,6 +4632,7 @@ document.addEventListener('keydown', function (e) {
   } catch (e) { /* malformed hash — open normally */ }
 })();
 
+restoreSnapshot();
 load();
 // Jittered, so a room full of tabs opened at the same time doesn't line up and
 // hit the backend on the same second every minute.

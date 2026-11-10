@@ -365,8 +365,8 @@ function rebuildPayloadColdStart() {
  * Object form of the payload, for the Apps Script-served page
  * (google.script.run). The GitHub Pages front end goes through doGet instead.
  */
-function getData() {
-  return JSON.parse(servePayload(null));
+function getData(have) {
+  return JSON.parse(servePayload(have));
 }
 
 /* ---------- read ---------- */
@@ -548,15 +548,25 @@ function startDateMs(s) {
  * the log rather than the windowed list the browser gets.
  */
 function statsPerJob(all, jobs) {
+  // Index once instead of scanning the entire log for every tracked job.
+  // A numeric revision belongs to its exact name and its immediate base;
+  // TR-42-02-01 must not also count toward TR-42.
+  var byFile = Object.create(null);
+  all.forEach(function (r) {
+    var key = stripExtName(r.job).toLowerCase();
+    (byFile[key] || (byFile[key] = [])).push(r);
+    var revision = /^(.*)-\d+$/.exec(key);
+    if (revision) (byFile[revision[1]] || (byFile[revision[1]] = [])).push(r);
+  });
   var out = {};
   (jobs || []).forEach(function (j) {
-    var key = j.cutFile || j.name;
+    var key = stripExtName(j.cutFile || j.name).toLowerCase();
+    var matching = byFile[key] || [];
     var since = startDateMs(j.startDate || '2000-01-01');
     var n = 0, s = 0;
-    for (var i = 0; i < all.length; i++) {
-      var r = all[i];
+    for (var i = 0; i < matching.length; i++) {
+      var r = matching[i];
       if (r._t < since) continue;
-      if (!runBelongsToJob(r.job, key)) continue;
       n++;
       s += r.seconds || 0;
     }
@@ -1021,6 +1031,7 @@ function syncProductionQueue() {
       if (status === CONFIG.PROD_DONE_STATUS) {
         if (have && have.source === 'production' && have.active) {
           sheet.getRange(have.row, col['Active'] + 1).setValue(false);
+          values[have.row - 1][col['Active']] = false;
           // The schedule finishing a run is a completion, not an abandonment —
           // stamp it so it shows up in the Finished log like a manual one.
           var doneMeta = getJobMeta();
@@ -1060,7 +1071,9 @@ function syncProductionQueue() {
         added++;
       } else if (have.source === 'production') {
         // keep notes / target fresh, but never force a manually stopped job back on
-        var cur = sheet.getRange(have.row, 1, 1, Math.max(sheet.getLastColumn(), JOBS_HEADER.length)).getValues()[0];
+        // Already read under this lock. Re-reading every row makes an unchanged
+        // schedule pay one spreadsheet round trip per production job.
+        var cur = values[have.row - 1].slice();
         var curCut = String(cur[col['Cut File']] || '').trim();
         if (String(cur[col['Notes']] || '') !== notes ||
             Number(cur[col['Sheets to Cut']]) !== sheetsQty || !curCut ||
@@ -1076,6 +1089,7 @@ function syncProductionQueue() {
           cur[col['Qty']] = qty;
           if (!curCut) cur[col['Cut File']] = cutFile;   // backfill the cut-file link
           sheet.getRange(have.row, 1, 1, cur.length).setValues([cur]);
+          values[have.row - 1] = cur;
           updated++;
         }
       }

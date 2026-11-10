@@ -47,8 +47,13 @@ and how each field on a sheet label feeds the reports.
 ## Notes
 
 - The board auto-refreshes every 60 seconds.
+- Reopening the board previews a saved copy from the last 15 minutes while
+  checking for updates. The header labels saved data until the server replies;
+  edits clear the saved copy, and failed refreshes keep the last loaded board visible.
 - Anyone with the link can view **and** edit tracked jobs — there is no
   sign-in, deliberately, so nobody on the floor is locked out. The page is
   public; keep the link to a trusted audience.
 - Opening `src/index.html` directly in a browser shows the UI with mock data.
 - Pushes to `main` deploy automatically.
+- Run the loading and job-count regression checks with
+  `node --test tests/performance.test.cjs`.
